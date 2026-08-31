@@ -1,6 +1,8 @@
 import type {
   DiscrepancyReviewDto,
+  InboundOrderDetailDto,
   Paged,
+  ReturnOrderDetailDto,
   ShipmentDetailDto,
   ShipmentDto,
   ShipmentItemCreateInput,
@@ -111,4 +113,42 @@ export function approveReview(id: string): Promise<DiscrepancyReviewDto> {
 /** 集货方拒绝差异修订（附理由，仓库可修改重提）。 */
 export function rejectReview(id: string, reason: string): Promise<DiscrepancyReviewDto> {
   return apiPost<DiscrepancyReviewDto>(`/api/v1/reviews/${id}/reject`, { reason });
+}
+
+// ── 确认收货与发货退货（ck-07）────────────────────────────────────────────────
+
+export interface ConfirmReceiptLineInput {
+  shipmentItemId: string;
+  batchNo?: string | null;
+}
+
+export interface ConfirmReceiptInput {
+  remark?: string | null;
+  photoFileIds?: string[];
+  items?: ConfirmReceiptLineInput[];
+}
+
+export interface ReturnCreateItemInput {
+  shipmentItemId: string;
+  qty: string | number;
+  reason?: string | null;
+}
+
+export interface ReturnCreateInput {
+  items: ReturnCreateItemInput[];
+  reason?: string | null;
+  note?: string | null;
+  photoFileIds?: string[];
+  returnCarrier?: string | null;
+  returnTrackingNo?: string | null;
+}
+
+/** 仓库确认收货：READY → 自动建档 DRAFT 入库单，发货单 INBOUNDED。 */
+export function confirmReceipt(id: string, input: ConfirmReceiptInput): Promise<InboundOrderDetailDto> {
+  return apiPost<InboundOrderDetailDto>(`/api/v1/shipments/${id}/confirm-receipt`, input);
+}
+
+/** 仓库发起发货退货（拒收）：READY → RETURN_PENDING，生成退货单。 */
+export function createReturn(id: string, input: ReturnCreateInput): Promise<ReturnOrderDetailDto> {
+  return apiPost<ReturnOrderDetailDto>(`/api/v1/shipments/${id}/returns`, input);
 }

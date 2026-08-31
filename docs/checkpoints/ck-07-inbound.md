@@ -26,3 +26,9 @@
 
 ## 参考
 design.md：§5.2/§5.3、§4.2 batches/inbound/return、§8.2 并发、附录 B。
+
+## 完成情况
+- 验证结果：`pnpm -r typecheck`、`pnpm -r test`、`pnpm -r build` 全部通过（shared 16 / db 8 / api 90 / web 40 用例；api 新增 inbound.test.ts 6 例 + returns.test.ts 8 例）。
+- 实现要点：确认收货 → DRAFT 入库单（行按 物品+生产日+到期日 归并，unit_cost=发货价加权平均快照，批号自动 `${shipmentNo}-B{n}` 或按 shipmentItemId 用户指定）；POST → 建档 batches → upsert stock → 写 INBOUND_SHIPMENT movements，POST 后单据/行只读。发货退货：WAREHOUSE 发起（READY→RETURN_PENDING，PENDING 单）→ COLLECTOR/ADMIN 处理（accept 全退→RETURNED / 部分→INBOUNDED+剩余入 DRAFT 入库单；reject→REJECTED 且发货单回 READY）。
+- 遗留/建议：手动入库（source_type=MANUAL）留待 ck-08a；退货被拒后无「修改重提」端点（仓库重建退货单）；RETURN_PENDING 期间未阻止重复发起退货（依赖业务约束）；已 POST 入库单仅可加照片/附件，无编辑端点。
+- 权限：INBOUND_CONFIRM=WAREHOUSE；SHIPMENT_RETURNS_CREATE=WAREHOUSE；SHIPMENT_RETURNS_HANDLE=COLLECTOR/ADMIN；scope 校验参照 ck-06 的 canXxx 模式（发货方/收货方业务单元匹配）。

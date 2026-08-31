@@ -1,6 +1,8 @@
 import type {
+  ConfirmReceiptRepoInput,
   CreateFileInput,
   CreateItemInput,
+  CreateReturnRepoInput,
   CreateReviewInput,
   CreateShipmentInput,
   CreateUnitInput,
@@ -9,12 +11,22 @@ import type {
   DiscrepancyReviewRecord,
   FileRecord,
   FileRepository,
+  InboundListQuery,
+  InboundListResult,
+  InboundOrderItemRecord,
+  InboundOrderRecord,
+  InboundRepository,
   ItemImageRecord,
   ItemListQuery,
   ItemListResult,
   ItemRecord,
   ItemRepository,
   Repos,
+  ReturnListQuery,
+  ReturnListResult,
+  ReturnOrderItemRecord,
+  ReturnOrderRecord,
+  ReturnRepository,
   SaveCountResult,
   ShipmentCountRepoInput,
   ShipmentItemRecord,
@@ -32,6 +44,7 @@ import type {
   UserRecord,
   UserRepository,
 } from '../types';
+import { mergeInboundLines, qtyEqual, type MergedInboundLine } from './inbound-lines';
 
 // 内存实现：供单元测试/本地无 DB 联调使用；生产必须走 Drizzle（见 repos/sql.ts 注释）。
 
@@ -360,6 +373,12 @@ const COUNT_LINE_INVALID_MESSAGE = 'COUNT_LINE_INVALID: count line does not belo
 const REVIEW_ALREADY_PROCESSED_MESSAGE =
   'REVIEW_ALREADY_PROCESSED: review already processed or pending review exists';
 const REVIEW_NO_DIFFERENCE_MESSAGE = 'REVIEW_NO_DIFFERENCE: no discrepancy to review';
+// ck-07：确认入库 / 发货退货业务信号（路由层映射为对应错误码）。
+const SHIPMENT_NOT_READY_MESSAGE = 'SHIPMENT_NOT_READY: shipment is not READY or lines mismatch';
+const INBOUND_STATE_CONFLICT_MESSAGE = 'INBOUND_STATE_CONFLICT: only DRAFT inbound orders can be posted';
+const RETURN_STATE_CONFLICT_MESSAGE = 'RETURN_STATE_CONFLICT: shipment is not READY for return';
+const RETURN_ALREADY_PROCESSED_MESSAGE = 'RETURN_ALREADY_PROCESSED: return order already processed';
+const RETURN_LINE_INVALID_MESSAGE = 'RETURN_LINE_INVALID: return line is invalid';
 
 /** 单据编号 §8.4：SH-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号）。 */
 function shipmentNoDate(now: Date): string {
@@ -790,6 +809,13 @@ class MemoryShipmentRepository implements ShipmentRepository {
     }
     return { ...cloneReview(nextReview), items: this.reviewItemsFor(id) };
   }
+
+  /** 内部状态流转：入库/退货仓储复用，直接覆盖发货单状态（ck-07）。 */
+  transitionTo(id: string, status: ShipmentRecord['status']): void {
+    const shipment = this.rows.get(id);
+    if (!shipment) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
+    this.rows.set(id, cloneShipment({ ...shipment, status, updatedAt: new Date() }));
+  }
 }
 
 function cloneShipment(row: ShipmentRecord): ShipmentRecord {
@@ -827,6 +853,504 @@ function cloneReview(row: DiscrepancyReviewRecord): DiscrepancyReviewRecord {
   };
 }
 
+// ── ck-07 内存实现：确认入库 + 发货退货。 ────────────────────────────────────
+
+/** 供测试断言用的内存批次快照。 */
+export interface MemoryBatchRecord {
+  id: string;
+  itemId: string;
+  batchNo: string | null;
+  productionDate: string | null;
+  expiryDate: string | null;
+  sourceType: string;
+  sourceOrderId: string | null;
+  createdBy: string | null;
+}
+
+/** 供测试断言用的内存库存快照。 */
+export interface MemoryStockRecord {
+  unitId: string;
+  itemId: string;
+  batchId: string;
+  qty: number;
+  avgCost: number;
+  version: number;
+}
+
+/** 供测试断言用的内存台账快照。 */
+export interface MemoryStockMovementRecord {
+  unitId: string;
+  itemId: string;
+  batchId: string;
+  type: string;
+  qtyDelta: number;
+  qtyBefore: number;
+  qtyAfter: number;
+  unitCost: number;
+  orderType: string;
+  orderId: string;
+  refNo: string;
+  operatorId: string | null;
+}
+
+function cloneInbound(row: InboundOrderRecord): InboundOrderRecord {
+  return {
+    ...row,
+    photoFileIds: [...row.photoFileIds],
+    postedAt: row.postedAt ? new Date(row.postedAt) : null,
+    createdAt: new Date(row.createdAt),
+    updatedAt: new Date(row.updatedAt),
+  };
+}
+
+function cloneInboundItem(row: InboundOrderItemRecord): InboundOrderItemRecord {
+  return { ...row, createdAt: new Date(row.createdAt) };
+}
+
+function cloneReturn(row: ReturnOrderRecord): ReturnOrderRecord {
+  return {
+    ...row,
+    photoFileIds: [...row.photoFileIds],
+    processedAt: row.processedAt ? new Date(row.processedAt) : null,
+    createdAt: new Date(row.createdAt),
+    updatedAt: new Date(row.updatedAt),
+  };
+}
+
+function cloneReturnItem(row: ReturnOrderItemRecord): ReturnOrderItemRecord {
+  return { ...row, createdAt: new Date(row.createdAt) };
+}
+
+class MemoryInboundRepository implements InboundRepository {
+  private rows = new Map<string, InboundOrderRecord>();
+  private items = new Map<string, InboundOrderItemRecord[]>();
+  private dailyCounters = new Map<string, number>();
+
+  /** 测试可检查的批次 / 库存 / 台账快照。 */
+  readonly batches = new Map<string, MemoryBatchRecord>();
+  readonly stock = new Map<string, MemoryStockRecord>();
+  readonly movements: MemoryStockMovementRecord[] = [];
+
+  constructor(
+    private readonly shipmentRepo: MemoryShipmentRepository,
+    seed: { inbounds?: InboundOrderRecord[]; inboundItems?: InboundOrderItemRecord[] } = {},
+  ) {
+    for (const row of seed.inbounds ?? []) this.rows.set(row.id, cloneInbound(row));
+    for (const row of seed.inboundItems ?? []) {
+      const list = this.items.get(row.inboundOrderId) ?? [];
+      list.push(cloneInboundItem(row));
+      this.items.set(row.inboundOrderId, list);
+    }
+  }
+
+  private nextInboundNo(): string {
+    const key = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const next = (this.dailyCounters.get(key) ?? 0) + 1;
+    this.dailyCounters.set(key, next);
+    return `IB-${key}-${String(next).padStart(4, '0')}`;
+  }
+
+  private stockKey(unitId: string, itemId: string, batchId: string): string {
+    return `${unitId}|${itemId}|${batchId}`;
+  }
+
+  /**
+   * 内部入库建档：按 qtyFor 计算各发货行入库数量 → mergeInboundLines 归并 →
+   * 建 DRAFT 入库单 + 明细；并（可选）翻转发货单状态。partial（部分退货剩余）不翻转。
+   */
+  private async createDraftFromShipment(params: {
+    shipment: ShipmentRecord;
+    shipmentItems: ShipmentItemRecord[];
+    qtyFor: (item: ShipmentItemRecord) => string | null;
+    batchNoFor: (item: ShipmentItemRecord) => string | null;
+    createdBy: string;
+    remark: string | null;
+    photoFileIds: string[];
+    flipShipmentStatus: boolean;
+  }): Promise<InboundOrderRecord> {
+    const merged = mergeInboundLines(
+      params.shipmentItems,
+      params.qtyFor,
+      params.batchNoFor,
+      params.shipment.shipmentNo,
+    );
+    if (merged.length === 0) throw new Error(SHIPMENT_NOT_READY_MESSAGE);
+
+    const now = new Date();
+    const inbound: InboundOrderRecord = {
+      id: uuid(),
+      inboundNo: this.nextInboundNo(),
+      sourceType: 'SHIPMENT',
+      shipmentId: params.shipment.id,
+      warehouseUnitId: params.shipment.receiverUnitId,
+      counterpartyUnitId: params.shipment.shipperUnitId,
+      status: 'DRAFT',
+      remark: normalizeEmpty(params.remark),
+      photoFileIds: [...params.photoFileIds],
+      postedBy: null,
+      postedAt: null,
+      createdBy: params.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(inbound.id, cloneInbound(inbound));
+    const itemRows: InboundOrderItemRecord[] = merged.map((line) => ({
+      id: uuid(),
+      inboundOrderId: inbound.id,
+      itemId: line.itemId,
+      batchId: null,
+      qty: line.qty,
+      unitCost: line.unitCost,
+      lineNote: null,
+      productionDate: normalizeEmpty(line.productionDate),
+      expiryDate: normalizeEmpty(line.expiryDate),
+      batchNo: normalizeEmpty(line.batchNo),
+      createdAt: now,
+    }));
+    this.items.set(inbound.id, itemRows.map(cloneInboundItem));
+
+    if (params.flipShipmentStatus) {
+      this.shipmentRepo.transitionTo(inbound.shipmentId!, 'INBOUNDED');
+    }
+    return cloneInbound(inbound);
+  }
+
+  async list(query: InboundListQuery): Promise<InboundListResult> {
+    const all = [...this.rows.values()]
+      .filter((row) => (query.status ? row.status === query.status : true))
+      .filter((row) => (query.warehouseUnitId ? row.warehouseUnitId === query.warehouseUnitId : true))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+    const page = Math.max(query.page ?? 1, 1);
+    const start = (page - 1) * size;
+    return { items: all.slice(start, start + size).map(cloneInbound), total: all.length, page, size };
+  }
+
+  async findById(id: string): Promise<InboundOrderRecord | null> {
+    const row = this.rows.get(id);
+    return row ? cloneInbound(row) : null;
+  }
+
+  async listItems(inboundOrderId: string): Promise<InboundOrderItemRecord[]> {
+    return (this.items.get(inboundOrderId) ?? []).map(cloneInboundItem);
+  }
+
+  async confirmReceipt(
+    shipmentId: string,
+    input: ConfirmReceiptRepoInput,
+  ): Promise<InboundOrderRecord> {
+    const shipment = await this.shipmentRepo.findById(shipmentId);
+    if (!shipment) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
+    if (shipment.status !== 'READY') throw new Error(SHIPMENT_NOT_READY_MESSAGE);
+
+    const shipmentItems = await this.shipmentRepo.listItems(shipmentId);
+    if (shipmentItems.length === 0) throw new Error(SHIPMENT_NOT_READY_MESSAGE);
+    for (const item of shipmentItems) {
+      if (!item.itemId) throw new Error(SHIPMENT_NOT_READY_MESSAGE);
+      if (item.actualQty === null || item.actualQty === '' || !qtyEqual(item.actualQty, item.expectedQty)) {
+        throw new Error(SHIPMENT_NOT_READY_MESSAGE);
+      }
+    }
+    const validIds = new Set(shipmentItems.map((i) => i.id));
+    for (const line of input.lines) {
+      if (!validIds.has(line.shipmentItemId)) throw new Error(SHIPMENT_NOT_READY_MESSAGE);
+    }
+    const batchNoByItem = new Map(input.lines.map((l) => [l.shipmentItemId, l.batchNo ?? null]));
+
+    return this.createDraftFromShipment({
+      shipment,
+      shipmentItems,
+      qtyFor: (item) => item.actualQty,
+      batchNoFor: (item) => batchNoByItem.get(item.id) ?? null,
+      createdBy: input.createdBy,
+      remark: input.remark,
+      photoFileIds: input.photoFileIds,
+      flipShipmentStatus: true,
+    });
+  }
+
+  /** 部分退货接受时，按剩余数量建档 DRAFT 入库单（不翻转发货单状态）。 */
+  async confirmReceiptRemainder(
+    shipmentId: string,
+    qtyFor: (item: ShipmentItemRecord) => string | null,
+    createdBy: string,
+  ): Promise<InboundOrderRecord | null> {
+    const shipment = await this.shipmentRepo.findById(shipmentId);
+    if (!shipment) return null;
+    const shipmentItems = await this.shipmentRepo.listItems(shipmentId);
+    const merged = mergeInboundLines(shipmentItems, qtyFor, () => null, shipment.shipmentNo);
+    if (merged.length === 0) return null;
+    return this.createDraftFromShipment({
+      shipment,
+      shipmentItems,
+      qtyFor,
+      batchNoFor: () => null,
+      createdBy,
+      remark: null,
+      photoFileIds: [],
+      flipShipmentStatus: false,
+    });
+  }
+
+  async post(id: string, postedBy: string): Promise<InboundOrderRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'DRAFT') throw new Error(INBOUND_STATE_CONFLICT_MESSAGE);
+
+    const now = new Date();
+    const itemRows = (this.items.get(id) ?? []).map((row) => {
+      const batch: MemoryBatchRecord = {
+        id: uuid(),
+        itemId: row.itemId,
+        batchNo: row.batchNo,
+        productionDate: row.productionDate,
+        expiryDate: row.expiryDate,
+        sourceType: existing.sourceType,
+        sourceOrderId: existing.shipmentId,
+        createdBy: postedBy,
+      };
+      this.batches.set(batch.id, batch);
+
+      const inQty = Number(row.qty);
+      const inCost = Number(row.unitCost);
+      const key = this.stockKey(existing.warehouseUnitId, row.itemId, batch.id);
+      const before = this.stock.get(key);
+      const qtyBefore = before ? before.qty : 0;
+      const qtyAfter = qtyBefore + inQty;
+      const avgCost =
+        qtyAfter > 0 ? (qtyBefore * (before ? before.avgCost : 0) + inQty * inCost) / qtyAfter : 0;
+      this.stock.set(key, {
+        unitId: existing.warehouseUnitId,
+        itemId: row.itemId,
+        batchId: batch.id,
+        qty: round2(qtyAfter),
+        avgCost: round2(avgCost),
+        version: (before ? before.version : 0) + 1,
+      });
+      this.movements.push({
+        unitId: existing.warehouseUnitId,
+        itemId: row.itemId,
+        batchId: batch.id,
+        type: 'INBOUND_SHIPMENT',
+        qtyDelta: round2(inQty),
+        qtyBefore: round2(qtyBefore),
+        qtyAfter: round2(qtyAfter),
+        unitCost: inCost,
+        orderType: 'inbound',
+        orderId: existing.id,
+        refNo: existing.inboundNo,
+        operatorId: postedBy,
+      });
+      return { ...row, batchId: batch.id };
+    });
+    this.items.set(id, itemRows.map(cloneInboundItem));
+
+    const next: InboundOrderRecord = {
+      ...existing,
+      status: 'POSTED',
+      postedBy,
+      postedAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(id, cloneInbound(next));
+    return cloneInbound(next);
+  }
+}
+
+class MemoryReturnRepository implements ReturnRepository {
+  private rows = new Map<string, ReturnOrderRecord>();
+  private items = new Map<string, ReturnOrderItemRecord[]>();
+  private dailyCounters = new Map<string, number>();
+
+  constructor(
+    private readonly shipmentRepo: MemoryShipmentRepository,
+    private readonly inboundRepo: MemoryInboundRepository,
+    seed: { returns?: ReturnOrderRecord[]; returnItems?: ReturnOrderItemRecord[] } = {},
+  ) {
+    for (const row of seed.returns ?? []) this.rows.set(row.id, cloneReturn(row));
+    for (const row of seed.returnItems ?? []) {
+      const list = this.items.get(row.returnOrderId) ?? [];
+      list.push(cloneReturnItem(row));
+      this.items.set(row.returnOrderId, list);
+    }
+  }
+
+  private nextReturnNo(): string {
+    const key = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const next = (this.dailyCounters.get(key) ?? 0) + 1;
+    this.dailyCounters.set(key, next);
+    return `RT-${key}-${String(next).padStart(4, '0')}`;
+  }
+
+  async list(query: ReturnListQuery): Promise<ReturnListResult> {
+    const all = [...this.rows.values()]
+      .filter((row) => (query.status ? row.status === query.status : true))
+      .filter((row) =>
+        query.scopeUnitId
+          ? row.fromUnitId === query.scopeUnitId || row.toUnitId === query.scopeUnitId
+          : true,
+      )
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+    const page = Math.max(query.page ?? 1, 1);
+    const start = (page - 1) * size;
+    return { items: all.slice(start, start + size).map(cloneReturn), total: all.length, page, size };
+  }
+
+  async findById(id: string): Promise<ReturnOrderRecord | null> {
+    const row = this.rows.get(id);
+    return row ? cloneReturn(row) : null;
+  }
+
+  async listItems(returnOrderId: string): Promise<ReturnOrderItemRecord[]> {
+    return (this.items.get(returnOrderId) ?? []).map(cloneReturnItem);
+  }
+
+  async createReturn(input: CreateReturnRepoInput): Promise<ReturnOrderRecord> {
+    const shipment = await this.shipmentRepo.findById(input.shipmentId);
+    if (!shipment) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
+    if (shipment.status !== 'READY') throw new Error(RETURN_STATE_CONFLICT_MESSAGE);
+
+    const shipmentItems = await this.shipmentRepo.listItems(shipment.id);
+    const byId = new Map(shipmentItems.map((i) => [i.id, i]));
+    const lines: { shipmentItemId: string; itemId: string; qty: string; reason: string | null }[] = [];
+    for (const line of input.lines) {
+      const item = byId.get(line.shipmentItemId);
+      if (!item || !item.itemId) throw new Error(RETURN_LINE_INVALID_MESSAGE);
+      const qty = Number(line.qty);
+      if (!Number.isFinite(qty) || qty <= 0 || qty > Number(item.expectedQty)) {
+        throw new Error(RETURN_LINE_INVALID_MESSAGE);
+      }
+      lines.push({
+        shipmentItemId: item.id,
+        itemId: item.itemId,
+        qty: qty.toFixed(2),
+        reason: normalizeEmpty(line.reason),
+      });
+    }
+    if (lines.length === 0) throw new Error(RETURN_LINE_INVALID_MESSAGE);
+
+    const now = new Date();
+    const order: ReturnOrderRecord = {
+      id: uuid(),
+      returnNo: this.nextReturnNo(),
+      sourceType: 'SHIPMENT',
+      shipmentId: shipment.id,
+      fromUnitId: shipment.receiverUnitId,
+      toUnitId: shipment.shipperUnitId,
+      status: 'PENDING',
+      reason: normalizeEmpty(input.reason),
+      note: normalizeEmpty(input.note),
+      photoFileIds: [...input.photoFileIds],
+      returnCarrier: normalizeEmpty(input.returnCarrier),
+      returnTrackingNo: normalizeEmpty(input.returnTrackingNo),
+      createdBy: input.createdBy,
+      processedBy: null,
+      processedAt: null,
+      processedNote: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(order.id, cloneReturn(order));
+    const itemRows: ReturnOrderItemRecord[] = lines.map((line) => ({
+      id: uuid(),
+      returnOrderId: order.id,
+      itemId: line.itemId,
+      shipmentItemId: line.shipmentItemId,
+      qty: line.qty,
+      originalBatchId: null,
+      reason: line.reason,
+      createdAt: now,
+    }));
+    this.items.set(order.id, itemRows.map(cloneReturnItem));
+
+    this.shipmentRepo.transitionTo(shipment.id, 'RETURN_PENDING');
+    return cloneReturn(order);
+  }
+
+  async accept(
+    id: string,
+    processedBy: string,
+    note: string | null,
+  ): Promise<ReturnOrderRecord | null> {
+    const order = this.rows.get(id);
+    if (!order) return null;
+    if (order.status !== 'PENDING') throw new Error(RETURN_ALREADY_PROCESSED_MESSAGE);
+    if (!order.shipmentId) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
+    const shipment = await this.shipmentRepo.findById(order.shipmentId);
+    if (!shipment) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
+
+    const returnItems = (this.items.get(id) ?? []).map(cloneReturnItem);
+    const shipmentItems = await this.shipmentRepo.listItems(shipment.id);
+    const returnedByShipmentItem = new Map<string, number>();
+    for (const ri of returnItems) {
+      if (ri.shipmentItemId) {
+        returnedByShipmentItem.set(
+          ri.shipmentItemId,
+          (returnedByShipmentItem.get(ri.shipmentItemId) ?? 0) + Number(ri.qty),
+        );
+      }
+    }
+    const fullReturn = shipmentItems.every(
+      (si) => si.itemId !== null && (returnedByShipmentItem.get(si.id) ?? 0) >= Number(si.expectedQty),
+    );
+
+    let shipmentStatus: 'RETURNED' | 'INBOUNDED';
+    if (fullReturn) {
+      shipmentStatus = 'RETURNED';
+    } else {
+      await this.inboundRepo.confirmReceiptRemainder(
+        shipment.id,
+        (si) => {
+          const returned = returnedByShipmentItem.get(si.id) ?? 0;
+          const remaining = Number(si.expectedQty) - returned;
+          return remaining > 0 ? remaining.toFixed(2) : null;
+        },
+        processedBy,
+      );
+      shipmentStatus = 'INBOUNDED';
+    }
+
+    const now = new Date();
+    const next: ReturnOrderRecord = {
+      ...order,
+      status: 'CLOSED',
+      processedBy,
+      processedAt: now,
+      processedNote: normalizeEmpty(note),
+      updatedAt: now,
+    };
+    this.rows.set(id, cloneReturn(next));
+    this.shipmentRepo.transitionTo(shipment.id, shipmentStatus);
+    return cloneReturn(next);
+  }
+
+  async reject(id: string, processedBy: string, note: string): Promise<ReturnOrderRecord | null> {
+    const order = this.rows.get(id);
+    if (!order) return null;
+    if (order.status !== 'PENDING') throw new Error(RETURN_ALREADY_PROCESSED_MESSAGE);
+
+    const now = new Date();
+    const next: ReturnOrderRecord = {
+      ...order,
+      status: 'REJECTED',
+      processedBy,
+      processedAt: now,
+      processedNote: note,
+      updatedAt: now,
+    };
+    this.rows.set(id, cloneReturn(next));
+    if (order.shipmentId) {
+      this.shipmentRepo.transitionTo(order.shipmentId, 'READY');
+    }
+    return cloneReturn(next);
+  }
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 /** 数量比较：null/undefined 按 0 处理，返回 -1/0/1。 */
 function compareQty(a: string | null | undefined, b: string | null | undefined): number {
   const na = Number(a ?? 0);
@@ -843,17 +1367,32 @@ export function createMemoryRepos(seed?: {
   shipmentTrackings?: ShipmentTrackingRecord[];
   shipmentItems?: ShipmentItemRecord[];
   reviews?: DiscrepancyReviewRecord[];
+  inbounds?: InboundOrderRecord[];
+  inboundItems?: InboundOrderItemRecord[];
+  returns?: ReturnOrderRecord[];
+  returnItems?: ReturnOrderItemRecord[];
 }): Repos {
+  const shipmentRepo = new MemoryShipmentRepository({
+    shipments: seed?.shipments,
+    trackings: seed?.shipmentTrackings,
+    items: seed?.shipmentItems,
+    reviews: seed?.reviews,
+  });
+  const inboundRepo = new MemoryInboundRepository(shipmentRepo, {
+    inbounds: seed?.inbounds,
+    inboundItems: seed?.inboundItems,
+  });
+  const returnRepo = new MemoryReturnRepository(shipmentRepo, inboundRepo, {
+    returns: seed?.returns,
+    returnItems: seed?.returnItems,
+  });
   return {
     users: new MemoryUserRepository(seed?.users),
     units: new MemoryUnitRepository(seed?.units),
     items: new MemoryItemRepository(seed?.items),
     files: new MemoryFileRepository(seed?.files),
-    shipments: new MemoryShipmentRepository({
-      shipments: seed?.shipments,
-      trackings: seed?.shipmentTrackings,
-      items: seed?.shipmentItems,
-      reviews: seed?.reviews,
-    }),
+    shipments: shipmentRepo,
+    inbounds: inboundRepo,
+    returns: returnRepo,
   };
 }

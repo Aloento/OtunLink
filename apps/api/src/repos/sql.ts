@@ -1,8 +1,10 @@
 import type { SqlExecutor } from '@otunlink/db';
 
 import type {
+  ConfirmReceiptRepoInput,
   CreateFileInput,
   CreateItemInput,
+  CreateReturnRepoInput,
   CreateReviewInput,
   CreateShipmentInput,
   CreateUnitInput,
@@ -10,11 +12,19 @@ import type {
   DiscrepancyReviewItemRecord,
   DiscrepancyReviewRecord,
   FileRecord,
+  InboundListQuery,
+  InboundListResult,
+  InboundOrderItemRecord,
+  InboundOrderRecord,
   ItemImageRecord,
   ItemListQuery,
   ItemListResult,
   ItemRecord,
   Repos,
+  ReturnListQuery,
+  ReturnListResult,
+  ReturnOrderItemRecord,
+  ReturnOrderRecord,
   SaveCountResult,
   ShipmentCountRepoInput,
   ShipmentItemRecord,
@@ -29,6 +39,7 @@ import type {
   UpdateUserInput,
   UserRecord,
 } from '../types';
+import { mergeInboundLines, qtyEqual, type MergedInboundLine } from './inbound-lines';
 
 // SQL 数据访问实现（stopgap）。
 // 说明：生产最终应使用 Drizzle 查询构建（db.select().from(schema.users)...）走
@@ -62,6 +73,13 @@ const COUNT_LINE_INVALID = 'COUNT_LINE_INVALID: count line does not belong to th
 const REVIEW_ALREADY_PROCESSED =
   'REVIEW_ALREADY_PROCESSED: review already processed or pending review exists';
 const REVIEW_NO_DIFFERENCE = 'REVIEW_NO_DIFFERENCE: no discrepancy to review';
+// ck-07：确认入库 / 发货退货业务信号（路由层映射为对应错误码）。
+const SHIPMENT_NOT_READY = 'SHIPMENT_NOT_READY: shipment is not READY or lines mismatch';
+const INBOUND_STATE_CONFLICT = 'INBOUND_STATE_CONFLICT: only DRAFT inbound orders can be posted';
+const RETURN_STATE_CONFLICT = 'RETURN_STATE_CONFLICT: shipment is not READY for return';
+const RETURN_ALREADY_PROCESSED =
+  'RETURN_ALREADY_PROCESSED: return order already processed';
+const RETURN_LINE_INVALID = 'RETURN_LINE_INVALID: return line is invalid';
 
 function mapUser(row: Record<string, unknown>): UserRecord {
   return {
@@ -220,6 +238,118 @@ function mapDiscrepancyReview(row: Record<string, unknown>): DiscrepancyReviewRe
     createdAt: new Date(String(row.created_at)),
     updatedAt: new Date(String(row.updated_at)),
   };
+}
+
+function mapInbound(row: Record<string, unknown>): InboundOrderRecord {
+  return {
+    id: String(row.id),
+    inboundNo: String(row.inbound_no),
+    sourceType: (row.source_type as InboundOrderRecord['sourceType']) ?? 'SHIPMENT',
+    shipmentId: row.shipment_id ? String(row.shipment_id) : null,
+    warehouseUnitId: String(row.warehouse_unit_id),
+    counterpartyUnitId: row.counterparty_unit_id ? String(row.counterparty_unit_id) : null,
+    status: (row.status as InboundOrderRecord['status']) ?? 'DRAFT',
+    remark: row.remark ? String(row.remark) : null,
+    photoFileIds: parsePhotoIds(row.photo_file_ids),
+    postedBy: row.posted_by ? String(row.posted_by) : null,
+    postedAt: row.posted_at ? new Date(String(row.posted_at)) : null,
+    createdBy: row.created_by ? String(row.created_by) : null,
+    createdAt: new Date(String(row.created_at)),
+    updatedAt: new Date(String(row.updated_at)),
+  };
+}
+
+function mapInboundItem(row: Record<string, unknown>): InboundOrderItemRecord {
+  return {
+    id: String(row.id),
+    inboundOrderId: String(row.inbound_order_id),
+    itemId: String(row.item_id),
+    batchId: row.batch_id ? String(row.batch_id) : null,
+    qty: row.qty != null ? String(row.qty) : '0',
+    unitCost: row.unit_cost != null ? String(row.unit_cost) : '0',
+    lineNote: row.line_note ? String(row.line_note) : null,
+    productionDate: row.production_date ? String(row.production_date).slice(0, 10) : null,
+    expiryDate: row.expiry_date ? String(row.expiry_date).slice(0, 10) : null,
+    batchNo: row.batch_no ? String(row.batch_no) : null,
+    createdAt: new Date(String(row.created_at)),
+    itemName: row.item_name ? String(row.item_name) : null,
+    spec: row.spec ? String(row.spec) : null,
+  };
+}
+
+function mapReturn(row: Record<string, unknown>): ReturnOrderRecord {
+  return {
+    id: String(row.id),
+    returnNo: String(row.return_no),
+    sourceType: (row.source_type as ReturnOrderRecord['sourceType']) ?? 'SHIPMENT',
+    shipmentId: row.shipment_id ? String(row.shipment_id) : null,
+    fromUnitId: String(row.from_unit_id),
+    toUnitId: String(row.to_unit_id),
+    status: (row.status as ReturnOrderRecord['status']) ?? 'PENDING',
+    reason: row.reason ? String(row.reason) : null,
+    note: row.note ? String(row.note) : null,
+    photoFileIds: parsePhotoIds(row.photo_file_ids),
+    returnCarrier: row.return_carrier ? String(row.return_carrier) : null,
+    returnTrackingNo: row.return_tracking_no ? String(row.return_tracking_no) : null,
+    createdBy: row.created_by ? String(row.created_by) : null,
+    processedBy: row.processed_by ? String(row.processed_by) : null,
+    processedAt: row.processed_at ? new Date(String(row.processed_at)) : null,
+    processedNote: row.processed_note ? String(row.processed_note) : null,
+    createdAt: new Date(String(row.created_at)),
+    updatedAt: new Date(String(row.updated_at)),
+  };
+}
+
+function mapReturnItem(row: Record<string, unknown>): ReturnOrderItemRecord {
+  return {
+    id: String(row.id),
+    returnOrderId: String(row.return_order_id),
+    itemId: String(row.item_id),
+    shipmentItemId: row.shipment_item_id ? String(row.shipment_item_id) : null,
+    qty: row.qty != null ? String(row.qty) : '0',
+    originalBatchId: row.original_batch_id ? String(row.original_batch_id) : null,
+    reason: row.reason ? String(row.reason) : null,
+    createdAt: new Date(String(row.created_at)),
+    itemName: row.item_name ? String(row.item_name) : null,
+  };
+}
+
+/** IB-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号，唯一索引兜底顺延）。 */
+async function nextInboundNo(exec: SqlExecutor): Promise<string> {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const prefix = `IB-${date}-`;
+  const countResult = await exec.query(
+    `SELECT count(*)::int AS n FROM inbound_orders WHERE inbound_no LIKE ${quote(`${prefix}%`)}`,
+  );
+  const base = Number(countResult.rows[0]?.n ?? 0) + 1;
+  let no = `${prefix}${String(base).padStart(4, '0')}`;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const exists = await exec.query(
+      `SELECT count(*)::int AS n FROM inbound_orders WHERE inbound_no = ${quote(no)}`,
+    );
+    if (Number(exists.rows[0]?.n ?? 0) === 0) break;
+    no = `${prefix}${String(base + attempt + 1).padStart(4, '0')}`;
+  }
+  return no;
+}
+
+/** RT-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号，唯一索引兜底顺延）。 */
+async function nextReturnNo(exec: SqlExecutor): Promise<string> {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const prefix = `RT-${date}-`;
+  const countResult = await exec.query(
+    `SELECT count(*)::int AS n FROM return_orders WHERE return_no LIKE ${quote(`${prefix}%`)}`,
+  );
+  const base = Number(countResult.rows[0]?.n ?? 0) + 1;
+  let no = `${prefix}${String(base).padStart(4, '0')}`;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const exists = await exec.query(
+      `SELECT count(*)::int AS n FROM return_orders WHERE return_no = ${quote(no)}`,
+    );
+    if (Number(exists.rows[0]?.n ?? 0) === 0) break;
+    no = `${prefix}${String(base + attempt + 1).padStart(4, '0')}`;
+  }
+  return no;
 }
 
 export function createSqlRepos(exec: SqlExecutor): Repos {
@@ -877,7 +1007,463 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  return { users, units, items, files, shipments };
+  // ── 确认入库与发货退货（ck-07）───────────────────────────────────────────────
+  // 入库单 / 退货单复用同一 SqlExecutor；确认收货与退货接受跨表事务在此实现。
+
+  /** 在事务内插入 DRAFT 入库单 + 明细；返回入库单记录（调用方负责 COMMIT/ROLLBACK）。 */
+  async function insertDraftInbound(params: {
+    inboundNo: string;
+    shipmentId: string | null;
+    warehouseUnitId: string;
+    counterpartyUnitId: string | null;
+    remark: string | null;
+    photoFileIds: string[];
+    createdBy: string | null;
+    lines: MergedInboundLine[];
+  }): Promise<InboundOrderRecord> {
+    const { rows } = await exec.query(
+      `INSERT INTO inbound_orders
+         (inbound_no, source_type, shipment_id, warehouse_unit_id, counterparty_unit_id,
+          status, remark, photo_file_ids, created_by)
+       VALUES (${quote(params.inboundNo)}, 'SHIPMENT', ${quote(params.shipmentId)},
+              ${quote(params.warehouseUnitId)}, ${quote(params.counterpartyUnitId)},
+              'DRAFT', ${quote(nn(params.remark))}, ${photoArray(params.photoFileIds)},
+              ${quote(params.createdBy)})
+       RETURNING *`,
+    );
+    const inbound = mapInbound(rows[0]);
+    for (const line of params.lines) {
+      await exec.query(
+        `INSERT INTO inbound_order_items
+           (inbound_order_id, item_id, qty, unit_cost, production_date, expiry_date, batch_no)
+         VALUES (${quote(inbound.id)}, ${quote(line.itemId)}, ${quote(line.qty)},
+                ${quote(line.unitCost)}, ${quote(nn(line.productionDate))},
+                ${quote(nn(line.expiryDate))}, ${quote(nn(line.batchNo))})`,
+      );
+    }
+    return inbound;
+  }
+
+  /** 写入批次 → 库存（加权平均）→ 台账；调用方负责事务。 */
+  async function postInboundLine(
+    inbound: InboundOrderRecord,
+    line: InboundOrderItemRecord,
+    operatorId: string | null,
+  ): Promise<string> {
+    const { rows: batchRows } = await exec.query(
+      `INSERT INTO batches
+         (item_id, batch_no, production_date, expiry_date, source_type, source_order_id, created_by)
+       VALUES (${quote(line.itemId)}, ${quote(nn(line.batchNo))}, ${quote(nn(line.productionDate))},
+              ${quote(nn(line.expiryDate))}, ${quote(inbound.sourceType)},
+              ${quote(inbound.shipmentId)}, ${quote(operatorId)})
+       RETURNING id`,
+    );
+    const batchId = String(batchRows[0].id);
+    await exec.query(
+      `UPDATE inbound_order_items SET batch_id = ${quote(batchId)} WHERE id = ${quote(line.id)}`,
+    );
+
+    const inQty = Number(line.qty);
+    const inCost = Number(line.unitCost);
+    const { rows: stockRows } = await exec.query(
+      `SELECT qty, avg_cost FROM stock
+        WHERE unit_id = ${quote(inbound.warehouseUnitId)}
+          AND item_id = ${quote(line.itemId)}
+          AND batch_id = ${quote(batchId)}
+        FOR UPDATE`,
+    );
+    const qtyBefore = stockRows[0] ? Number(String(stockRows[0].qty ?? '0')) : 0;
+    const qtyAfter = qtyBefore + inQty;
+    if (stockRows[0]) {
+      const oldAvg = Number(String(stockRows[0].avg_cost ?? '0'));
+      const newAvg = qtyAfter > 0 ? (qtyBefore * oldAvg + inQty * inCost) / qtyAfter : 0;
+      await exec.query(
+        `UPDATE stock SET qty = ${quote(qtyAfter.toFixed(2))}, avg_cost = ${quote(newAvg.toFixed(2))},
+           version = version + 1, updated_at = now()
+         WHERE unit_id = ${quote(inbound.warehouseUnitId)}
+           AND item_id = ${quote(line.itemId)}
+           AND batch_id = ${quote(batchId)}`,
+      );
+    } else {
+      await exec.query(
+        `INSERT INTO stock (unit_id, item_id, batch_id, qty, avg_cost, version)
+         VALUES (${quote(inbound.warehouseUnitId)}, ${quote(line.itemId)}, ${quote(batchId)},
+                ${quote(qtyAfter.toFixed(2))}, ${quote(line.unitCost)}, 1)`,
+      );
+    }
+    await exec.query(
+      `INSERT INTO stock_movements
+         (unit_id, item_id, batch_id, type, qty_delta, qty_before, qty_after, unit_cost,
+          order_type, order_id, ref_no, operator_id)
+       VALUES (${quote(inbound.warehouseUnitId)}, ${quote(line.itemId)}, ${quote(batchId)},
+              'INBOUND_SHIPMENT', ${quote(inQty.toFixed(2))}, ${quote(qtyBefore.toFixed(2))},
+              ${quote(qtyAfter.toFixed(2))}, ${quote(line.unitCost)}, 'inbound',
+              ${quote(inbound.id)}, ${quote(inbound.inboundNo)}, ${quote(operatorId)})`,
+    );
+    return batchId;
+  }
+
+  const inbounds = {
+    async list(query: InboundListQuery): Promise<InboundListResult> {
+      const where = (alias: string): string => {
+        const parts: string[] = [];
+        if (query.status) parts.push(`${alias}status = ${quote(query.status)}`);
+        if (query.warehouseUnitId) parts.push(`${alias}warehouse_unit_id = ${quote(query.warehouseUnitId)}`);
+        return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
+      };
+      const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+      const page = Math.max(query.page ?? 1, 1);
+      const offset = (page - 1) * size;
+      const totalResult = await exec.query(
+        `SELECT count(*)::int AS n FROM inbound_orders${where('')}`,
+      );
+      const total = Number(totalResult.rows[0]?.n ?? 0);
+      const { rows } = await exec.query(
+        `SELECT io.*, bu.name AS warehouse_name, cp.name AS counterparty_name, s.shipment_no
+         FROM inbound_orders io
+         LEFT JOIN business_units bu ON bu.id = io.warehouse_unit_id
+         LEFT JOIN business_units cp ON cp.id = io.counterparty_unit_id
+         LEFT JOIN shipments s ON s.id = io.shipment_id
+         ${where('io.')} ORDER BY io.created_at DESC, io.id ASC LIMIT ${size} OFFSET ${offset}`,
+      );
+      return { items: rows.map(mapInbound), total, page, size };
+    },
+    async findById(id: string): Promise<InboundOrderRecord | null> {
+      const { rows } = await exec.query(
+        `SELECT * FROM inbound_orders WHERE id = ${quote(id)} LIMIT 1`,
+      );
+      return rows[0] ? mapInbound(rows[0]) : null;
+    },
+    async listItems(inboundOrderId: string): Promise<InboundOrderItemRecord[]> {
+      const { rows } = await exec.query(
+        `SELECT ioi.*, i.name AS item_name, i.spec_unit AS spec
+         FROM inbound_order_items ioi
+         LEFT JOIN items i ON i.id = ioi.item_id
+         WHERE ioi.inbound_order_id = ${quote(inboundOrderId)}
+         ORDER BY ioi.created_at ASC, ioi.id ASC`,
+      );
+      return rows.map(mapInboundItem);
+    },
+    async confirmReceipt(
+      shipmentId: string,
+      input: ConfirmReceiptRepoInput,
+    ): Promise<InboundOrderRecord> {
+      const shipment = await shipments.findById(shipmentId);
+      if (!shipment) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
+      if (shipment.status !== 'READY') throw new Error(SHIPMENT_NOT_READY);
+
+      const shipmentItems = await shipments.listItems(shipmentId);
+      if (shipmentItems.length === 0) throw new Error(SHIPMENT_NOT_READY);
+      for (const item of shipmentItems) {
+        if (!item.itemId) throw new Error(SHIPMENT_NOT_READY);
+        if (item.actualQty === null || item.actualQty === '' || !qtyEqual(item.actualQty, item.expectedQty)) {
+          throw new Error(SHIPMENT_NOT_READY);
+        }
+      }
+      const validIds = new Set(shipmentItems.map((i) => i.id));
+      for (const line of input.lines) {
+        if (!validIds.has(line.shipmentItemId)) throw new Error(SHIPMENT_NOT_READY);
+      }
+      const batchNoByItem = new Map(input.lines.map((l) => [l.shipmentItemId, l.batchNo ?? null]));
+      const merged = mergeInboundLines(
+        shipmentItems,
+        (item) => item.actualQty,
+        (item) => batchNoByItem.get(item.id) ?? null,
+        shipment.shipmentNo,
+      );
+      if (merged.length === 0) throw new Error(SHIPMENT_NOT_READY);
+
+      const inboundNo = await nextInboundNo(exec);
+      await exec.query('BEGIN');
+      try {
+        const inbound = await insertDraftInbound({
+          inboundNo,
+          shipmentId: shipment.id,
+          warehouseUnitId: shipment.receiverUnitId,
+          counterpartyUnitId: shipment.shipperUnitId,
+          remark: input.remark,
+          photoFileIds: input.photoFileIds,
+          createdBy: input.createdBy,
+          lines: merged,
+        });
+        await exec.query(
+          `UPDATE shipments SET status = 'INBOUNDED', updated_at = now()
+           WHERE id = ${quote(shipment.id)} AND status = 'READY'`,
+        );
+        await exec.query('COMMIT');
+        return inbound;
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async post(id: string, postedBy: string): Promise<InboundOrderRecord | null> {
+      await exec.query('BEGIN');
+      try {
+        const { rows: locked } = await exec.query(
+          `SELECT * FROM inbound_orders WHERE id = ${quote(id)} FOR UPDATE`,
+        );
+        if (!locked[0]) {
+          await exec.query('ROLLBACK');
+          return null;
+        }
+        const inbound = mapInbound(locked[0]);
+        if (inbound.status !== 'DRAFT') throw new Error(INBOUND_STATE_CONFLICT);
+
+        const { rows: itemRows } = await exec.query(
+          `SELECT * FROM inbound_order_items WHERE inbound_order_id = ${quote(id)}
+           ORDER BY created_at ASC, id ASC`,
+        );
+        const items = itemRows.map(mapInboundItem);
+        for (const line of items) {
+          await postInboundLine(inbound, line, postedBy);
+        }
+        const { rows: updated } = await exec.query(
+          `UPDATE inbound_orders
+           SET status = 'POSTED', posted_by = ${quote(postedBy)}, posted_at = now(), updated_at = now()
+           WHERE id = ${quote(id)} AND status = 'DRAFT' RETURNING *`,
+        );
+        if (!updated[0]) throw new Error(INBOUND_STATE_CONFLICT);
+        await exec.query('COMMIT');
+        return mapInbound(updated[0]);
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+  };
+
+  const returns = {
+    async list(query: ReturnListQuery): Promise<ReturnListResult> {
+      const where = (alias: string): string => {
+        const parts: string[] = [];
+        if (query.status) parts.push(`${alias}status = ${quote(query.status)}`);
+        if (query.scopeUnitId) {
+          parts.push(
+           `(${alias}from_unit_id = ${quote(query.scopeUnitId)} OR ${alias}to_unit_id = ${quote(query.scopeUnitId)})`,
+          );
+        }
+        return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
+      };
+      const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+      const page = Math.max(query.page ?? 1, 1);
+      const offset = (page - 1) * size;
+      const totalResult = await exec.query(
+        `SELECT count(*)::int AS n FROM return_orders${where('')}`,
+      );
+      const total = Number(totalResult.rows[0]?.n ?? 0);
+      const { rows } = await exec.query(
+        `SELECT ro.*, fu.name AS from_unit_name, tu.name AS to_unit_name, s.shipment_no
+         FROM return_orders ro
+         LEFT JOIN business_units fu ON fu.id = ro.from_unit_id
+         LEFT JOIN business_units tu ON tu.id = ro.to_unit_id
+         LEFT JOIN shipments s ON s.id = ro.shipment_id
+         ${where('ro.')} ORDER BY ro.created_at DESC, ro.id ASC LIMIT ${size} OFFSET ${offset}`,
+      );
+      return { items: rows.map(mapReturn), total, page, size };
+    },
+    async findById(id: string): Promise<ReturnOrderRecord | null> {
+      const { rows } = await exec.query(
+        `SELECT * FROM return_orders WHERE id = ${quote(id)} LIMIT 1`,
+      );
+      return rows[0] ? mapReturn(rows[0]) : null;
+    },
+    async listItems(returnOrderId: string): Promise<ReturnOrderItemRecord[]> {
+      const { rows } = await exec.query(
+        `SELECT roi.*, i.name AS item_name
+         FROM return_order_items roi
+         LEFT JOIN items i ON i.id = roi.item_id
+         WHERE roi.return_order_id = ${quote(returnOrderId)}
+         ORDER BY roi.created_at ASC, roi.id ASC`,
+      );
+      return rows.map(mapReturnItem);
+    },
+    async createReturn(input: CreateReturnRepoInput): Promise<ReturnOrderRecord> {
+      const shipment = await shipments.findById(input.shipmentId);
+      if (!shipment) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
+      if (shipment.status !== 'READY') throw new Error(RETURN_STATE_CONFLICT);
+
+      const shipmentItems = await shipments.listItems(shipment.id);
+      const byId = new Map(shipmentItems.map((i) => [i.id, i]));
+      const lines: { shipmentItemId: string; itemId: string; qty: string; reason: string | null }[] = [];
+      for (const line of input.lines) {
+        const item = byId.get(line.shipmentItemId);
+        if (!item || !item.itemId) throw new Error(RETURN_LINE_INVALID);
+        const qty = Number(line.qty);
+        if (!Number.isFinite(qty) || qty <= 0 || qty > Number(item.expectedQty)) {
+          throw new Error(RETURN_LINE_INVALID);
+        }
+        lines.push({
+          shipmentItemId: item.id,
+          itemId: item.itemId,
+          qty: qty.toFixed(2),
+          reason: line.reason,
+        });
+      }
+      if (lines.length === 0) throw new Error(RETURN_LINE_INVALID);
+
+      const returnNo = await nextReturnNo(exec);
+      await exec.query('BEGIN');
+      try {
+        const { rows } = await exec.query(
+          `INSERT INTO return_orders
+            (return_no, source_type, shipment_id, from_unit_id, to_unit_id, status,
+             reason, note, photo_file_ids, return_carrier, return_tracking_no, created_by)
+           VALUES (${quote(returnNo)}, 'SHIPMENT', ${quote(shipment.id)},
+                  ${quote(shipment.receiverUnitId)}, ${quote(shipment.shipperUnitId)}, 'PENDING',
+                  ${quote(nn(input.reason))}, ${quote(nn(input.note))}, ${photoArray(input.photoFileIds)},
+                  ${quote(nn(input.returnCarrier))}, ${quote(nn(input.returnTrackingNo))},
+                  ${quote(input.createdBy)})
+           RETURNING *`,
+        );
+        const order = mapReturn(rows[0]);
+        for (const line of lines) {
+          await exec.query(
+           `INSERT INTO return_order_items
+              (return_order_id, item_id, shipment_item_id, qty, reason)
+            VALUES (${quote(order.id)}, ${quote(line.itemId)}, ${quote(line.shipmentItemId)},
+                    ${quote(line.qty)}, ${quote(nn(line.reason))})`,
+          );
+        }
+        await exec.query(
+          `UPDATE shipments SET status = 'RETURN_PENDING', updated_at = now()
+           WHERE id = ${quote(shipment.id)} AND status = 'READY'`,
+        );
+        await exec.query('COMMIT');
+        return order;
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async accept(
+      id: string,
+      processedBy: string,
+      note: string | null,
+    ): Promise<ReturnOrderRecord | null> {
+      await exec.query('BEGIN');
+      try {
+        const { rows: locked } = await exec.query(
+          `SELECT * FROM return_orders WHERE id = ${quote(id)} FOR UPDATE`,
+        );
+        if (!locked[0]) {
+          await exec.query('ROLLBACK');
+          return null;
+        }
+        const order = mapReturn(locked[0]);
+        if (order.status !== 'PENDING') throw new Error(RETURN_ALREADY_PROCESSED);
+
+        const shipment = order.shipmentId ? await shipments.findById(order.shipmentId) : null;
+        if (!shipment) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
+
+        const { rows: itemRows } = await exec.query(
+          `SELECT * FROM return_order_items WHERE return_order_id = ${quote(id)} ORDER BY id ASC`,
+        );
+        const returnItems = itemRows.map(mapReturnItem);
+        const shipmentItems = await shipments.listItems(shipment.id);
+        const returnedByShipmentItem = new Map<string, number>();
+        for (const ri of returnItems) {
+          if (ri.shipmentItemId) {
+           returnedByShipmentItem.set(
+             ri.shipmentItemId,
+             (returnedByShipmentItem.get(ri.shipmentItemId) ?? 0) + Number(ri.qty),
+           );
+          }
+        }
+        const fullReturn = shipmentItems.every(
+          (si) =>
+           si.itemId !== null &&
+           (returnedByShipmentItem.get(si.id) ?? 0) >= Number(si.expectedQty),
+        );
+        let shipmentStatus: 'RETURNED' | 'INBOUNDED';
+        if (fullReturn) {
+          shipmentStatus = 'RETURNED';
+        } else {
+          // 部分拒收：剩余数量自动建档 DRAFT 入库单（等待仓库 POST 过账）。
+          const merged = mergeInboundLines(
+           shipmentItems,
+           (si) => {
+             const returned = returnedByShipmentItem.get(si.id) ?? 0;
+             const remaining = Number(si.expectedQty) - returned;
+             return remaining > 0 ? remaining.toFixed(2) : null;
+           },
+           () => null,
+           shipment.shipmentNo,
+          );
+          if (merged.length > 0) {
+           const inboundNo = await nextInboundNo(exec);
+           await insertDraftInbound({
+             inboundNo,
+             shipmentId: shipment.id,
+             warehouseUnitId: shipment.receiverUnitId,
+             counterpartyUnitId: shipment.shipperUnitId,
+             remark: null,
+             photoFileIds: [],
+             createdBy: processedBy,
+             lines: merged,
+           });
+          }
+          shipmentStatus = 'INBOUNDED';
+        }
+
+        const { rows: updated } = await exec.query(
+          `UPDATE return_orders
+           SET status = 'CLOSED', processed_by = ${quote(processedBy)},
+               processed_at = now(), processed_note = ${quote(nn(note))}, updated_at = now()
+           WHERE id = ${quote(id)} AND status = 'PENDING' RETURNING *`,
+        );
+        if (!updated[0]) throw new Error(RETURN_ALREADY_PROCESSED);
+        await exec.query(
+          `UPDATE shipments SET status = ${quote(shipmentStatus)}, updated_at = now()
+           WHERE id = ${quote(shipment.id)} AND status = 'RETURN_PENDING'`,
+        );
+        await exec.query('COMMIT');
+        return mapReturn(updated[0]);
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async reject(
+      id: string,
+      processedBy: string,
+      note: string,
+    ): Promise<ReturnOrderRecord | null> {
+      await exec.query('BEGIN');
+      try {
+        const { rows: locked } = await exec.query(
+          `SELECT * FROM return_orders WHERE id = ${quote(id)} FOR UPDATE`,
+        );
+        if (!locked[0]) {
+          await exec.query('ROLLBACK');
+          return null;
+        }
+        const order = mapReturn(locked[0]);
+        if (order.status !== 'PENDING') throw new Error(RETURN_ALREADY_PROCESSED);
+
+        const { rows: updated } = await exec.query(
+          `UPDATE return_orders
+           SET status = 'REJECTED', processed_by = ${quote(processedBy)},
+               processed_at = now(), processed_note = ${quote(note)}, updated_at = now()
+           WHERE id = ${quote(id)} AND status = 'PENDING' RETURNING *`,
+        );
+        if (!updated[0]) throw new Error(RETURN_ALREADY_PROCESSED);
+        if (order.shipmentId) {
+          await exec.query(
+           `UPDATE shipments SET status = 'READY', updated_at = now()
+             WHERE id = ${quote(order.shipmentId)} AND status = 'RETURN_PENDING'`,
+          );
+        }
+        await exec.query('COMMIT');
+        return mapReturn(updated[0]);
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+  };
+
+  return { users, units, items, files, shipments, inbounds, returns };
 }
 
 // 将 undefined/空字符串归一化为 null（写入 DB 的 NULL）。

@@ -11,7 +11,9 @@ import { adminUnitsRouter } from './routes/admin-units';
 import { adminUsersRouter } from './routes/admin-users';
 import { authRouter } from './routes/auth';
 import { filesRouter } from './routes/files';
+import { inboundOrdersRouter } from './routes/inbound-orders';
 import { itemsRouter } from './routes/items';
+import { returnOrdersRouter } from './routes/return-orders';
 import { reviewsRouter } from './routes/reviews';
 import { shipmentsRouter } from './routes/shipments';
 import { unitsRouter } from './routes/units';
@@ -66,6 +68,14 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // 差异修订审批（登录用户，RBAC 见各路由）
   app.use('/api/v1/reviews/*', requireToken);
   app.route('/api/v1/reviews', reviewsRouter());
+
+  // 入库单（登录用户，RBAC 见各路由）
+  app.use('/api/v1/inbound-orders/*', requireToken);
+  app.route('/api/v1/inbound-orders', inboundOrdersRouter());
+
+  // 发货退货单（登录用户，RBAC 见各路由）
+  app.use('/api/v1/return-orders/*', requireToken);
+  app.route('/api/v1/return-orders', returnOrdersRouter());
 
   // 图片上传 / 预签名 URL（登录用户，RBAC 见各路由）
   app.use('/api/v1/files/*', requireToken);

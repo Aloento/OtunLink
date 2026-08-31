@@ -1,5 +1,9 @@
 import type {
+  InboundSourceType,
+  InboundStatus,
   ItemStatus,
+  ReturnSourceType,
+  ReturnStatus,
   ReviewStatus,
   ShipmentStatus,
   SpecUnit,
@@ -428,12 +432,174 @@ export interface ShipmentCountRepoInput {
   lines: { shipmentItemId: string; actualQty: string }[];
 }
 
+// ── 确认入库与发货退货（ck-07）──────────────────────────────────────────────
+// 对应 packages/db schema.ts inbound_orders / inbound_order_items / return_orders /
+// return_order_items / batches / stock / stock_movements。
+
+export interface InboundOrderRecord {
+  id: string;
+  inboundNo: string;
+  sourceType: InboundSourceType;
+  shipmentId: string | null;
+  warehouseUnitId: string;
+  counterpartyUnitId: string | null;
+  status: InboundStatus;
+  remark: string | null;
+  photoFileIds: string[];
+  postedBy: string | null;
+  postedAt: Date | null;
+  createdBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface InboundOrderItemRecord {
+  id: string;
+  inboundOrderId: string;
+  itemId: string;
+  batchId: string | null;
+  qty: string;
+  unitCost: string;
+  lineNote: string | null;
+  productionDate: string | null;
+  expiryDate: string | null;
+  batchNo: string | null;
+  createdAt: Date;
+  /** 联表带出（列表/详情展示用）。 */
+  itemName?: string | null;
+  spec?: string | null;
+}
+
+export interface ReturnOrderRecord {
+  id: string;
+  returnNo: string;
+  sourceType: ReturnSourceType;
+  shipmentId: string | null;
+  fromUnitId: string;
+  toUnitId: string;
+  status: ReturnStatus;
+  reason: string | null;
+  note: string | null;
+  photoFileIds: string[];
+  returnCarrier: string | null;
+  returnTrackingNo: string | null;
+  createdBy: string | null;
+  processedBy: string | null;
+  processedAt: Date | null;
+  processedNote: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ReturnOrderItemRecord {
+  id: string;
+  returnOrderId: string;
+  itemId: string;
+  shipmentItemId: string | null;
+  qty: string;
+  originalBatchId: string | null;
+  reason: string | null;
+  createdAt: Date;
+  /** 联表带出（列表/详情展示用）。 */
+  itemName?: string | null;
+}
+
+/** 确认收货（POST /shipments/:id/confirm-receipt）仓库入参。 */
+export interface ConfirmReceiptRepoInput {
+  remark: string | null;
+  photoFileIds: string[];
+  createdBy: string;
+  lines: { shipmentItemId: string; batchNo: string | null }[];
+}
+
+/** 发起发货退货（POST /shipments/:id/returns）仓库入参。 */
+export interface CreateReturnRepoInput {
+  shipmentId: string;
+  reason: string | null;
+  note: string | null;
+  photoFileIds: string[];
+  returnCarrier: string | null;
+  returnTrackingNo: string | null;
+  createdBy: string;
+  lines: { shipmentItemId: string; qty: string; reason: string | null }[];
+}
+
+export interface InboundListQuery {
+  page?: number;
+  size?: number;
+  status?: InboundStatus;
+  /** 数据范围：仅返回该仓库的入库单。 */
+  warehouseUnitId?: string;
+}
+
+export interface InboundListResult {
+  items: InboundOrderRecord[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface ReturnListQuery {
+  page?: number;
+  size?: number;
+  status?: ReturnStatus;
+  /** 数据范围：from 或 to 命中即返回。 */
+  scopeUnitId?: string;
+}
+
+export interface ReturnListResult {
+  items: ReturnOrderRecord[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface InboundRepository {
+  list(query: InboundListQuery): Promise<InboundListResult>;
+  findById(id: string): Promise<InboundOrderRecord | null>;
+  listItems(inboundOrderId: string): Promise<InboundOrderItemRecord[]>;
+  /**
+   * 确认收货：发货单 READY → INBOUNDED，自动创建 DRAFT 入库单 + 明细
+   * （批次信息随行捕获；成本价 = 发货单行 unit_price）。非 READY 或存在差异
+   * 行抛 SHIPMENT_NOT_READY 信号。
+   */
+  confirmReceipt(shipmentId: string, input: ConfirmReceiptRepoInput): Promise<InboundOrderRecord>;
+  /**
+   * 入库过账：DRAFT → POSTED；按行建档批次、写 stock + stock_movements
+   * （INBOUND_SHIPMENT）。非 DRAFT 抛 INBOUND_STATE_CONFLICT 信号。
+   */
+  post(id: string, postedBy: string): Promise<InboundOrderRecord | null>;
+}
+
+export interface ReturnRepository {
+  list(query: ReturnListQuery): Promise<ReturnListResult>;
+  findById(id: string): Promise<ReturnOrderRecord | null>;
+  listItems(returnOrderId: string): Promise<ReturnOrderItemRecord[]>;
+  /**
+   * 发起拒收：发货单 READY → RETURN_PENDING，创建 PENDING 退货单 + 明细。
+   * 非 READY 抛 RETURN_STATE_CONFLICT；行非法抛 RETURN_LINE_INVALID 信号。
+   */
+  createReturn(input: CreateReturnRepoInput): Promise<ReturnOrderRecord>;
+  /**
+   * 接受退货：PENDING → CLOSED；全拒 → 发货单 RETURNED，部分 → 剩余自动建档
+   * DRAFT 入库单 + 发货单 INBOUNDED。非 PENDING 抛 RETURN_ALREADY_PROCESSED 信号。
+   */
+  accept(id: string, processedBy: string, note: string | null): Promise<ReturnOrderRecord | null>;
+  /**
+   * 拒绝退货：PENDING → REJECTED；发货单 → READY（可调整后重新发起）。
+   * 非 PENDING 抛 RETURN_ALREADY_PROCESSED 信号。
+   */
+  reject(id: string, processedBy: string, note: string): Promise<ReturnOrderRecord | null>;
+}
+
 export interface Repos {
   users: UserRepository;
   units: UnitRepository;
   items: ItemRepository;
   files: FileRepository;
   shipments: ShipmentRepository;
+  inbounds: InboundRepository;
+  returns: ReturnRepository;
 }
 
 export interface AuthState {

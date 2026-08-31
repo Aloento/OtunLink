@@ -204,6 +204,48 @@ export const reviewRejectSchema = z.object({
   reason: z.string().trim().min(1).max(4096),
 });
 
+// ── 确认入库与发货退货（ck-07）─────────────────────────────────────────────────
+
+/** 确认收货（POST /shipments/:id/confirm-receipt）行级批次号（可选，缺省自动生成）。 */
+export const confirmReceiptLineSchema = z.object({
+  shipmentItemId: z.uuid(),
+  batchNo: z.string().trim().min(1).max(64).optional().nullable(),
+});
+
+/** 确认收货：仓库对 READY 发货单确认，自动建档 DRAFT 入库单。 */
+export const confirmReceiptSchema = z.object({
+  remark: z.string().trim().max(4096).optional().nullable(),
+  photoFileIds: z.array(z.uuid()).max(9).optional(),
+  items: z.array(confirmReceiptLineSchema).max(500).optional(),
+});
+
+/** 发货退货行（POST /shipments/:id/returns）：逐行拒收数量与原因。 */
+export const returnCreateItemSchema = z.object({
+  shipmentItemId: z.uuid(),
+  qty: shipmentQty,
+  reason: z.string().trim().max(2000).optional().nullable(),
+});
+
+/** 发起发货退货（拒收）：WAREHOUSE 对 READY 发货单部分/全部拒收。 */
+export const returnCreateSchema = z.object({
+  items: z.array(returnCreateItemSchema).min(1).max(500),
+  reason: z.string().trim().max(4096).optional().nullable(),
+  note: z.string().trim().max(4096).optional().nullable(),
+  photoFileIds: z.array(z.uuid()).max(9).optional(),
+  returnCarrier: z.string().trim().max(64).optional().nullable(),
+  returnTrackingNo: z.string().trim().max(128).optional().nullable(),
+});
+
+/** 集货方接受退货（POST /return-orders/:id/accept）：处理备注可选。 */
+export const returnAcceptSchema = z.object({
+  note: z.string().trim().max(4096).optional().nullable(),
+});
+
+/** 集货方拒绝退货（POST /return-orders/:id/reject）：处理备注必填。 */
+export const returnRejectSchema = z.object({
+  note: z.string().trim().min(1).max(4096),
+});
+
 export type UserSelfPatchInput = z.infer<typeof userSelfPatchSchema>;
 export type AdminUserCreateInput = z.infer<typeof adminUserCreateSchema>;
 export type AdminUserPatchInput = z.infer<typeof adminUserPatchSchema>;
@@ -221,3 +263,9 @@ export type ShipmentCountInput = z.infer<typeof shipmentCountSchema>;
 export type ShipmentReviewItemInput = z.infer<typeof shipmentReviewItemSchema>;
 export type ShipmentReviewCreateInput = z.infer<typeof shipmentReviewCreateSchema>;
 export type ReviewRejectInput = z.infer<typeof reviewRejectSchema>;
+export type ConfirmReceiptLineInput = z.infer<typeof confirmReceiptLineSchema>;
+export type ConfirmReceiptInput = z.infer<typeof confirmReceiptSchema>;
+export type ReturnCreateItemInput = z.infer<typeof returnCreateItemSchema>;
+export type ReturnCreateInput = z.infer<typeof returnCreateSchema>;
+export type ReturnAcceptInput = z.infer<typeof returnAcceptSchema>;
+export type ReturnRejectInput = z.infer<typeof returnRejectSchema>;

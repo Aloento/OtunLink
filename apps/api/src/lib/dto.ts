@@ -2,8 +2,12 @@ import type {
   DiscrepancyReviewItemRecord,
   DiscrepancyReviewRecord,
   FileRecord,
+  InboundOrderItemRecord,
+  InboundOrderRecord,
   ItemImageRecord,
   ItemRecord,
+  ReturnOrderItemRecord,
+  ReturnOrderRecord,
   ShipmentItemRecord,
   ShipmentRecord,
   ShipmentTrackingRecord,
@@ -184,5 +188,101 @@ export function discrepancyReviewDto(review: DiscrepancyReviewRecord) {
     createdAt: review.createdAt.toISOString(),
     updatedAt: review.updatedAt.toISOString(),
     items: (review.items ?? []).map(discrepancyReviewItemDto),
+  };
+}
+
+// ── 确认入库与发货退货 DTO（ck-07）─────────────────────────────────────────────
+
+export function inboundItemDto(item: InboundOrderItemRecord) {
+  return {
+    id: item.id,
+    inboundOrderId: item.inboundOrderId,
+    itemId: item.itemId,
+    batchId: item.batchId,
+    qty: item.qty,
+    unitCost: item.unitCost,
+    lineNote: item.lineNote,
+    productionDate: item.productionDate,
+    expiryDate: item.expiryDate,
+    batchNo: item.batchNo,
+    createdAt: item.createdAt.toISOString(),
+    itemName: item.itemName ?? null,
+    spec: item.spec ?? null,
+  };
+}
+
+export function inboundDto(
+  inbound: InboundOrderRecord,
+  options: {
+    warehouseName: string | null;
+    counterpartyName: string | null;
+    shipmentNo: string | null;
+  },
+) {
+  return {
+    id: inbound.id,
+    inboundNo: inbound.inboundNo,
+    sourceType: inbound.sourceType,
+    shipmentId: inbound.shipmentId,
+    warehouseUnitId: inbound.warehouseUnitId,
+    counterpartyUnitId: inbound.counterpartyUnitId,
+    warehouseName: options.warehouseName,
+    counterpartyName: options.counterpartyName,
+    shipmentNo: options.shipmentNo,
+    status: inbound.status,
+    remark: inbound.remark,
+    photoFileIds: inbound.photoFileIds,
+    postedBy: inbound.postedBy,
+    postedAt: inbound.postedAt ? inbound.postedAt.toISOString() : null,
+    createdBy: inbound.createdBy,
+    createdAt: inbound.createdAt.toISOString(),
+    updatedAt: inbound.updatedAt.toISOString(),
+  };
+}
+
+export function returnItemDto(item: ReturnOrderItemRecord) {
+  return {
+    id: item.id,
+    returnOrderId: item.returnOrderId,
+    itemId: item.itemId,
+    shipmentItemId: item.shipmentItemId,
+    qty: item.qty,
+    originalBatchId: item.originalBatchId,
+    reason: item.reason,
+    createdAt: item.createdAt.toISOString(),
+    itemName: item.itemName ?? null,
+  };
+}
+
+export function returnDto(
+  order: ReturnOrderRecord,
+  options: {
+    fromUnitName: string | null;
+    toUnitName: string | null;
+    shipmentNo: string | null;
+  },
+) {
+  return {
+    id: order.id,
+    returnNo: order.returnNo,
+    sourceType: order.sourceType,
+    shipmentId: order.shipmentId,
+    fromUnitId: order.fromUnitId,
+    toUnitId: order.toUnitId,
+    fromUnitName: options.fromUnitName,
+    toUnitName: options.toUnitName,
+    shipmentNo: options.shipmentNo,
+    status: order.status,
+    reason: order.reason,
+    note: order.note,
+    photoFileIds: order.photoFileIds,
+    returnCarrier: order.returnCarrier,
+    returnTrackingNo: order.returnTrackingNo,
+    createdBy: order.createdBy,
+    processedBy: order.processedBy,
+    processedAt: order.processedAt ? order.processedAt.toISOString() : null,
+    processedNote: order.processedNote,
+    createdAt: order.createdAt.toISOString(),
+    updatedAt: order.updatedAt.toISOString(),
   };
 }

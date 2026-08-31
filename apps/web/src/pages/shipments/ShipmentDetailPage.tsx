@@ -17,6 +17,8 @@ import { useSession } from '../../auth/SessionProvider';
 import { errorI18nKey, isApiError } from '../../api/http';
 import { getShipment, sendShipment, startCounting } from '../../api/shipments';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { ConfirmReceiptPanel } from '../../components/shipments/ConfirmReceiptPanel';
+import { ReturnCreatePanel } from '../../components/shipments/ReturnCreatePanel';
 import { ShipmentCountPanel } from '../../components/shipments/ShipmentCountPanel';
 import { ShipmentReviewsSection } from '../../components/shipments/ShipmentReviewsSection';
 
@@ -50,6 +52,12 @@ export function ShipmentDetailPage() {
   const canApproveReview =
     hasPermission(me?.role, Permissions.REVIEWS_APPROVE) &&
     (!me?.scopeUnitId || me.scopeUnitId === data?.shipperUnitId);
+  const canConfirmReceipt =
+    hasPermission(me?.role, Permissions.INBOUND_CONFIRM) &&
+    (!me?.scopeUnitId || me.scopeUnitId === data?.receiverUnitId);
+  const canCreateReturn =
+    hasPermission(me?.role, Permissions.SHIPMENT_RETURNS_CREATE) &&
+    (!me?.scopeUnitId || me.scopeUnitId === data?.receiverUnitId);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['shipments', id] });
 
@@ -226,6 +234,10 @@ export function ShipmentDetailPage() {
         canSubmitReview={canSubmitReview}
         onRefresh={refresh}
       />
+
+      <ConfirmReceiptPanel shipment={data} canConfirm={canConfirmReceipt} onRefresh={refresh} />
+
+      <ReturnCreatePanel shipment={data} canCreate={canCreateReturn} onRefresh={refresh} />
 
       <ShipmentReviewsSection
         shipment={data}

@@ -341,6 +341,10 @@ export const inboundOrderItems = pgTable(
     qty: numeric('qty', { precision: 12, scale: 2 }).notNull(),
     unitCost: numeric('unit_cost', { precision: 12, scale: 2 }).notNull(),
     lineNote: text('line_note'),
+    // 确认收货（DRAFT）时捕获的批次信息；POST 后据此建档并回填 batch_id。
+    productionDate: date('production_date', { mode: 'date' }),
+    expiryDate: date('expiry_date', { mode: 'date' }),
+    batchNo: varchar('batch_no', { length: 64 }),
     createdAt: createdAt(),
   },
   (table) => [index('inbound_order_items_order_idx').on(table.inboundOrderId)],
@@ -491,6 +495,10 @@ export const returnOrders = pgTable(
     returnCarrier: varchar('return_carrier', { length: 64 }),
     returnTrackingNo: varchar('return_tracking_no', { length: 128 }),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    // 集货方接受/拒绝的处理记录（SHIPMENT 来源退货闭环）。
+    processedBy: uuid('processed_by').references(() => users.id, { onDelete: 'set null' }),
+    processedAt: timestamp('processed_at', { withTimezone: true, mode: 'date' }),
+    processedNote: text('processed_note'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -511,6 +519,10 @@ export const returnOrderItems = pgTable(
     itemId: uuid('item_id')
       .notNull()
       .references(() => items.id),
+    // SHIPMENT 来源退货：关联到被拒收的发货清单行（入库前尚无批次，仅能定位到行）。
+    shipmentItemId: uuid('shipment_item_id').references(() => shipmentItems.id, {
+      onDelete: 'set null',
+    }),
     qty: numeric('qty', { precision: 12, scale: 2 }).notNull(),
     originalBatchId: uuid('original_batch_id').references(() => batches.id, {
       onDelete: 'set null',
@@ -518,7 +530,10 @@ export const returnOrderItems = pgTable(
     reason: text('reason'),
     createdAt: createdAt(),
   },
-  (table) => [index('return_order_items_order_idx').on(table.returnOrderId)],
+  (table) => [
+    index('return_order_items_order_idx').on(table.returnOrderId),
+    index('return_order_items_shipment_item_idx').on(table.shipmentItemId),
+  ],
 );
 
 // ── 付款 payments ─────────────────────────────────────────────────────────────

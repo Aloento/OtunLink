@@ -113,6 +113,24 @@ export function requirePermission(...permissions: Permission[]): MiddlewareHandl
   };
 }
 
+/**
+ * 要求已登录、ACTIVE 且具备给定权限中的任意一个（OR 语义）。
+ * 用于多岗位可读的列表（如退货单：WAREHOUSE 发起方 / COLLECTOR 处理方均可查看）。
+ */
+export function requireAnyPermission(...permissions: Permission[]): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const user = c.get('auth').user;
+    if (!user) return notProvisioned(c);
+    if (user.status !== 'ACTIVE') {
+      return forbidden(c, '账号未激活，请联系管理员分配岗位');
+    }
+    if (!permissions.some((permission) => hasPermission(user.role, permission))) {
+      return forbidden(c, `缺少权限（任一）: ${permissions.join(', ')}`);
+    }
+    await next();
+  };
+}
+
 /** 数据范围：scope_unit_id 为空 = 全量；非空 = 仅该单元（返回查询过滤条件）。 */
 export function unitScopeFilter(auth: AuthState): { unitId: string } | null {
   const unitId = auth.user?.scopeUnitId ?? null;

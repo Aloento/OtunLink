@@ -1,6 +1,8 @@
 import {
   ErrorCodes,
   Permissions,
+  confirmReceiptSchema,
+  returnCreateSchema,
   shipmentCountSchema,
   shipmentCreateSchema,
   shipmentPatchSchema,
@@ -12,14 +14,26 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 
 import { requirePermission, unitScopeFilter } from '../auth/middleware';
-import { discrepancyReviewDto, shipmentDto, shipmentItemDto } from '../lib/dto';
+import {
+  discrepancyReviewDto,
+  inboundDto,
+  inboundItemDto,
+  returnDto,
+  returnItemDto,
+  shipmentDto,
+  shipmentItemDto,
+} from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
 import type {
   AppEnv,
+  ConfirmReceiptRepoInput,
+  CreateReturnRepoInput,
   CreateReviewLineInput,
   CreateShipmentInput,
   CreateShipmentItemInput,
+  InboundOrderRecord,
   Repos,
+  ReturnOrderRecord,
   ShipmentCountRepoInput,
   ShipmentRecord,
   UpdateShipmentInput,
@@ -285,6 +299,102 @@ export function shipmentsRouter(): Hono<AppEnv> {
     }
   });
 
+  // ── 确认收货 → 入库建档（ck-07）───────────────────────────────────────────────
+  // 仅收货方仓库；READY → 自动建 DRAFT 入库单 + 发货单 INBOUNDED。
+
+  const inboundConfirm = requirePermission(Permissions.INBOUND_CONFIRM);
+
+  router.post('/:id/confirm-receipt', inboundConfirm, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const existing = await repos.shipments.findById(c.req.param('id'));
+    if (!existing) return notFound(c, '发货单不存在');
+
+    const user = c.get('auth').user!;
+    if (!scopeAllowsReceiver(user.scopeUnitId, existing)) {
+      return forbidden(c, '数据范围越界（只能由本仓库确认收货）');
+    }
+
+    const body = await readJson(c);
+    if (body === undefined) return validationError(c, '请求体不是合法 JSON');
+
+    const parsed = confirmReceiptSchema.safeParse(body);
+    if (!parsed.success) return validationError(c, '参数不合法', parsed.error.flatten());
+
+    const input: ConfirmReceiptRepoInput = {
+      remark: parsed.data.remark ?? null,
+      photoFileIds: parsed.data.photoFileIds ?? [],
+      createdBy: user.id,
+      lines: (parsed.data.items ?? []).map((l) => ({
+        shipmentItemId: l.shipmentItemId,
+        batchNo: l.batchNo ?? null,
+      })),
+    };
+
+    try {
+      const inbound = await repos.inbounds.confirmReceipt(existing.id, input);
+      return ok(c, await inboundDetailOf(repos, inbound), 201);
+    } catch (cause) {
+      if (isShipmentNotReady(cause)) {
+        return error(c, 409, ErrorCodes.SHIPMENT_NOT_READY, '发货单未就绪（需 READY 且点货无差异）');
+      }
+      throw cause;
+    }
+  });
+
+  // ── 发货退货（拒收）发起（ck-07）──────────────────────────────────────────────
+  // 仅收货方仓库；READY → 创建 PENDING 退货单 + 发货单 RETURN_PENDING。
+
+  const returnCreate = requirePermission(Permissions.SHIPMENT_RETURNS_CREATE);
+
+  router.post('/:id/returns', returnCreate, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const existing = await repos.shipments.findById(c.req.param('id'));
+    if (!existing) return notFound(c, '发货单不存在');
+
+    const user = c.get('auth').user!;
+    if (!scopeAllowsReceiver(user.scopeUnitId, existing)) {
+      return forbidden(c, '数据范围越界（只能由本仓库发起退货）');
+    }
+
+    const body = await readJson(c);
+    if (body === undefined) return validationError(c, '请求体不是合法 JSON');
+
+    const parsed = returnCreateSchema.safeParse(body);
+    if (!parsed.success) return validationError(c, '参数不合法', parsed.error.flatten());
+
+    const input: CreateReturnRepoInput = {
+      shipmentId: existing.id,
+      reason: parsed.data.reason ?? null,
+      note: parsed.data.note ?? null,
+      photoFileIds: parsed.data.photoFileIds ?? [],
+      returnCarrier: parsed.data.returnCarrier ?? null,
+      returnTrackingNo: parsed.data.returnTrackingNo ?? null,
+      createdBy: user.id,
+      lines: parsed.data.items.map((l) => ({
+        shipmentItemId: l.shipmentItemId,
+        qty: l.qty,
+        reason: l.reason ?? null,
+      })),
+    };
+
+    try {
+      const order = await repos.returns.createReturn(input);
+      return ok(c, await returnDetailOf(repos, order), 201);
+    } catch (cause) {
+      if (isReturnStateConflict(cause)) {
+        return error(c, 409, ErrorCodes.RETURN_STATE_CONFLICT, '仅 READY 状态的发货单可发起退货');
+      }
+      if (isReturnLineInvalid(cause)) {
+        return error(c, 400, ErrorCodes.RETURN_LINE_INVALID, '退货行不合法（数量或清单行不存在）');
+      }
+      throw cause;
+    }
+  });
+
   router.post('/:id/reviews', reviewSubmit, async (c) => {
     const repos = c.get('repos');
     if (!repos) return dbUnavailable(c);
@@ -453,6 +563,42 @@ async function hydrateList(repos: Repos, rows: ShipmentRecord[]) {
   );
 }
 
+// 入库单详情：仓库/往来方名称 + 发货单号 + 明细（含物品名/规格）。
+async function inboundDetailOf(repos: Repos, inbound: InboundOrderRecord) {
+  const [warehouse, counterparty, shipment, items] = await Promise.all([
+    repos.units.findById(inbound.warehouseUnitId),
+    inbound.counterpartyUnitId ? repos.units.findById(inbound.counterpartyUnitId) : Promise.resolve(null),
+    inbound.shipmentId ? repos.shipments.findById(inbound.shipmentId) : Promise.resolve(null),
+    repos.inbounds.listItems(inbound.id),
+  ]);
+  return {
+    ...inboundDto(inbound, {
+      warehouseName: warehouse?.name ?? null,
+      counterpartyName: counterparty?.name ?? null,
+      shipmentNo: shipment?.shipmentNo ?? null,
+    }),
+    items: items.map(inboundItemDto),
+  };
+}
+
+// 退货单详情：发起/接收方名称 + 发货单号 + 明细（含物品名）。
+async function returnDetailOf(repos: Repos, order: ReturnOrderRecord) {
+  const [from, to, shipment, items] = await Promise.all([
+    repos.units.findById(order.fromUnitId),
+    repos.units.findById(order.toUnitId),
+    order.shipmentId ? repos.shipments.findById(order.shipmentId) : Promise.resolve(null),
+    repos.returns.listItems(order.id),
+  ]);
+  return {
+    ...returnDto(order, {
+      fromUnitName: from?.name ?? null,
+      toUnitName: to?.name ?? null,
+      shipmentNo: shipment?.shipmentNo ?? null,
+    }),
+    items: items.map(returnItemDto),
+  };
+}
+
 // 详情：物流单号 + 清单 + 差异修订记录 + 名称。
 async function detailOf(repos: Repos, shipment: ShipmentRecord) {
   const [shipper, receiver, trackings, items, reviews] = await Promise.all([
@@ -495,4 +641,16 @@ function isReviewAlreadyProcessed(cause: unknown): boolean {
 
 function isReviewNoDifference(cause: unknown): boolean {
   return cause instanceof Error && cause.message.includes('REVIEW_NO_DIFFERENCE');
+}
+
+function isShipmentNotReady(cause: unknown): boolean {
+  return cause instanceof Error && cause.message.includes('SHIPMENT_NOT_READY');
+}
+
+function isReturnStateConflict(cause: unknown): boolean {
+  return cause instanceof Error && cause.message.includes('RETURN_STATE_CONFLICT');
+}
+
+function isReturnLineInvalid(cause: unknown): boolean {
+  return cause instanceof Error && cause.message.includes('RETURN_LINE_INVALID');
 }
