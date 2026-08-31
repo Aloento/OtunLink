@@ -14,16 +14,15 @@
 
 | 阶段 | Checkpoint | 状态 |
 | ---- | ---------- | ---- |
-| P0-P8a | ck-00 ~ ck-08a | ✅ 全部完成（ck-08a 提交 1629d67，已推送 origin/main） |
-| P8b | ck-08b 报损 + 效期预警 + 零售价 | ⏳ 下一步 |
-| P9a | ck-09a 销售单 + 请货 + FEFO | 待启动 |
+| P0-P8b | ck-00 ~ ck-08b | ✅ 全部完成（ck-08b 提交 8bdb2bf，已推送 origin/main） |
+| P9a | ck-09a 销售单 + 请货 + FEFO | ⏳ 下一步 |
 | P9b | ck-09b 零售售后退货闭环 | 待启动 |
 | P10 | ck-10 通知/审计/邮件桥/上线 | 待启动 |
 
-## 下一步（ck-08b）
+## 下一步（ck-09a）
 
-- 依据 [docs/checkpoints/ck-08b-loss.md](docs/checkpoints/ck-08b-loss.md) 与 design.md §5.4/附录 B 实现：
-  - 报损单（OUTBOUND_LOSS 类型出库单：损失原因 + 附图）
-  - 效期预警（快过期/已过期批次提示）
-  - 零售价（仓库自由修改独立零售价，入库原价始终记录不可改）
+- 依据 [docs/checkpoints/ck-09a-sales.md](docs/checkpoints/ck-09a-sales.md) 与 design.md §5.5/§8.2 实现：
+  - 销售单（仓库→零售，送货方式：自提/快递等；行级改价 + 整体百分比折扣）
+  - 零售方查看仓库库存与零售价；零售请货
+  - POST 后立即扣库存（OUTBOUND_SALE 流水）
 - 由子 agent 实现（模型 `deepseek/deepseek-v4-flash-vision-exp`），完成后主对话审查验收并提交。
