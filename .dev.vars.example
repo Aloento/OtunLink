@@ -1,0 +1,9 @@
+# 本地开发用：复制为 apps/api/.dev.vars（已被 .gitignore 忽略，勿提交真实值）。
+# wrangler dev 会自动读取 apps/api/.dev.vars。
+
+# ── 本地 PostgreSQL（ck-01 起使用；ck-00 的 health 端点不需要）────────────
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/otunlink
+
+# ── Azure AD / Entra ID（ck-02 起使用）─────────────────────────────────────
+ENTRA_TENANT_ID=
+ENTRA_CLIENT_ID=

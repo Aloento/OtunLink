@@ -29,3 +29,16 @@
 
 ## 参考
 design.md：§2.2 技术选型、§2.3 域名/仓库、§6.3 Monorepo 结构、§10 P0。
+
+---
+
+## 完成情况
+
+- ✅ **完成**：pnpm workspaces Monorepo（`apps/web`、`apps/api`、`packages/shared`、`packages/db`）+ 根 `package.json`/`pnpm-workspace.yaml`/`tsconfig.base.json`（paths 指向 packages）。
+- ✅ **完成**：`apps/web` Vite+React+TS 占位首页，依赖齐备（Fluent UI v9、Tailwind v4、react-i18next、MSAL、TanStack Query、zod）；`vite.config.ts`、`tsconfig.json`、`src/`（App/入口/测试）。
+- ✅ **完成**：`apps/api` Hono Worker，`GET /api/v1/health` 返回 `{"ok":true}`；`wrangler.toml` 含 hyperdrive/kv/r2 占位注释；`src/index.ts` + 测试。
+- ✅ **完成**：`packages/shared`（常量/错误码占位）、`packages/db`（Drizzle 空 schema + `drizzle.config.ts`）。
+- ✅ **完成**：`.github/workflows/ci.yml`（install→typecheck→test→build）+ `deploy.yml`（workflow_dispatch 占位）。
+- ✅ **完成**：`.env.example`、`.dev.vars.example`、`.gitignore` 已覆盖构建产物/`.dev.vars`/`.wrangler` 等。
+- ✅ **验证**：`pnpm install` ✅；`pnpm -r typecheck` ✅；`pnpm -r test` ✅（4 包 6 用例全通过）；`pnpm -r build` ✅（web 产出 dist，api 经 `wrangler deploy --dry-run` 产出 worker 构建）；`wrangler dev` 起 api 后 `curl http://127.0.0.1:8787/api/v1/health` 返回 `{"ok":true}`（HTTP 200）。
+- ⚠️ **说明**：pnpm 11 需在 `pnpm-workspace.yaml` 中通过 `onlyBuiltDependencies` 显式放行 `esbuild`/`sharp`/`workerd` 的安装脚本（首次 install 会因 ignored builds 退出，已配置并 `pnpm rebuild` 解决）。`deploy.yml` 为占位，真实 Pages/Workers 部署待后续 checkpoint 接入。

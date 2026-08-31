@@ -29,3 +29,18 @@ pnpm -r typecheck
 pnpm -r test
 pnpm -r build
 ```
+
+## 本地开发
+
+```bash
+# 前端（Vite dev server，默认 http://localhost:5173）
+pnpm dev:web
+
+# API（Wrangler dev，默认 http://localhost:8787）
+pnpm dev:api
+# 健康检查
+curl http://localhost:8787/api/v1/health   # => {"ok":true}
+```
+
+环境变量模板见 `.env.example`（根级）与 `.dev.vars.example`（复制为
+`apps/api/.dev.vars`，wrangler dev 自动读取，已被 git 忽略）。

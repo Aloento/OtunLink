@@ -1,0 +1,33 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm -r build
+
+      # ── 占位：真实部署在后续 checkpoint 接入（需 CLOUDFLARE_API_TOKEN 等 secrets）──
+      # - name: Deploy Web (Pages)
+      #   run: pnpm --filter @otunlink/web exec wrangler pages deploy dist
+      # - name: Deploy API (Workers)
+      #   run: pnpm --filter @otunlink/api exec wrangler deploy
+      - name: Placeholder
+        run: echo "deploy.yml placeholder — 仅 workflow_dispatch，暂不执行真实部署"

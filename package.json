@@ -1,0 +1,13 @@
+{
+  "name": "otunlink",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build",
+    "dev:api": "pnpm --filter @otunlink/api dev",
+    "dev:web": "pnpm --filter @otunlink/web dev"
+  }
+}
