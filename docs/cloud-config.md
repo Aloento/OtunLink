@@ -9,7 +9,7 @@
 | --- | --- |
 | 账户 Account ID | `6597a89c745d8a5c698ffe521e15580e` |
 | 域名 | `otun.musi.land`（CNAME → `otun.pages.dev`） |
-| Pages 项目 | 项目名 **`otunlink`**（项目域 `otun.pages.dev`）；自定义域 `otun.musi.land` status=active、`app.otun.musi.land` 已登记（initializing，待 CNAME）；部署方式：`wrangler pages deploy apps/web/dist --project-name otunlink`（GitHub Actions `deploy.yml` 自动执行；未用 CF Git 集成，monorepo 无法解析工作区包） |
+| Pages 项目 | 项目名 **`otunlink`**（项目域 `otun.pages.dev`）；自定义域 `otun.musi.land` status=active；部署方式：`wrangler pages deploy apps/web/dist --project-name otunlink`（GitHub Actions `deploy.yml` 自动执行；未用 CF Git 集成，monorepo 无法解析工作区包） |
 | API Token | 存于 `C:\Codes\OtunLink\.cf\api-token.txt`（gitignored；权限：Worker/Pages/KV/Hyperdrive 编辑） |
 | API Worker | `otunlink-api` 已部署（2026-08-31）；自定义域 `api.otun.musi.land`（自动创建 CNAME+证书）与 workers.dev 子域 `otunlink-api.soarcraft.workers.dev` 均已启用 |
 
@@ -51,7 +51,7 @@
 | 目录（租户）ID | `9ed42989-9bdb-439d-80e7-c709641d1f08` |
 | 应用程序（客户端）ID | `0edca98e-17df-41f2-b254-a579095ffcb7` |
 | API 暴露范围（scope） | `https://SoarCraft.onmicrosoft.com/OtunLink/API`（发布者域形式；token `aud` 即此 URI） |
-| 注册 | 见 `docs/auth-setup.md`；Redirect URI 需含 `https://app.otun.musi.land/auth/callback` |
+| 注册 | 见 `docs/auth-setup.md`；Redirect URI 需含 `https://otun.musi.land/auth/callback` |
 | 本地配置 | `apps/api/.dev.vars`：`ENTRA_TENANT_ID/CLIENT_ID/AUDIENCE`（AUDIENCE 已设为真实 scope）；`apps/web/.env.local`：`VITE_ENTRA_*` + `VITE_API_SCOPE`（已设为真实 scope） |
 
 ## 5. 本地开发配置
@@ -80,8 +80,8 @@ npx wrangler deploy
 
 1. **Hyperdrive 确认**：控制台确认 `d3f06050a92846ca950561f5d37f1232` 指向 `otunlink` 库；
    并在私有 PG（164.30.21.203）防火墙放行 CF 出口 IP（Hyperdrive 会给出 IP 范围）
-2. **域名**：`api.otun.musi.land`（API Worker 自定义域，已 active）；`otun.musi.land`（Pages 自定义域，已 active）；
-   `app.otun.musi.land` 已配 CNAME → `otun.pages.dev`（如需作为 SPA 主域，在 Pages 项目追加该自定义域并改 Entra Redirect URI）
+2. **域名**：`otun.musi.land`（Pages 自定义域，已 active，SPA 主站）；`api.otun.musi.land`（API Worker 自定义域，已 active）；
+   无需额外 `app.` 子域（SPA 直接跑在 otun.musi.land）
 3. **Entra App Registration**：按 `docs/auth-setup.md` 完成注册并配置 Redirect URI（见第 4 节）
 4. **OBS 策略**：确认 bucket 允许 Programmatic 访问（AK/SK 已给；如跨域/策略需放行）
 

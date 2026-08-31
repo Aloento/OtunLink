@@ -6,8 +6,8 @@ describe('buildMsalConfig', () => {
   const input = {
     tenantId: 'tenant-1',
     clientId: 'client-1',
-    redirectUri: 'https://app.otun.musi.land/auth/callback',
-    postLogoutRedirectUri: 'https://app.otun.musi.land',
+    redirectUri: 'https://otun.musi.land/auth/callback',
+    postLogoutRedirectUri: 'https://otun.musi.land',
     apiScope: 'api://client-1/OtunLink.API',
   };
 
@@ -15,7 +15,7 @@ describe('buildMsalConfig', () => {
     const { msal } = buildMsalConfig(input);
     expect(msal.auth.authority).toBe('https://login.microsoftonline.com/tenant-1');
     expect(msal.auth.clientId).toBe('client-1');
-    expect(msal.auth.redirectUri).toBe('https://app.otun.musi.land/auth/callback');
+    expect(msal.auth.redirectUri).toBe('https://otun.musi.land/auth/callback');
   });
 
   it('登录 scopes 包含 openid/profile/email 与 API scope（供 access token）', () => {

@@ -93,7 +93,7 @@
                 │ HTTPS (api.otun.musi.land)
 ┌───────────────▼──────────────────────────────────────────────┐
 │ Cloudflare（边缘，后端只做严格校验与轻计算）                     │
-│  CF Pages: app.otun.musi.land        CF Workers: api.otun.musi.land  │
+│  CF Pages: otun.musi.land            CF Workers: api.otun.musi.land  │
 │   - 认证中间件(JWT/RBAC)  - 业务路由(REST /api/v1/*)           │
 │   - 文件校验+S3 写入（无图像处理）  - 邮件适配器(HTTP 调用)       │
 │   - Hyperdrive 绑定(连接池+查询缓存)  - KV(JWKS 缓存等)          │
@@ -129,9 +129,9 @@
 
 ### 2.3 域名、代码仓库与产物
 
-- `app.otun.musi.land` —— CF Pages（静态 SPA）
+- `otun.musi.land` —— CF Pages（静态 SPA，主站点）
 - `api.otun.musi.land` —— CF Workers（Hono）
-- Auth 回调：`https://app.otun.musi.land/auth/callback`
+- Auth 回调：`https://otun.musi.land/auth/callback`
 - **代码仓库：`C:\Codes\OtunLink`**（新仓库，P0 初始化；本设计文档作为仓库 README/`docs/design.md` 一并落地）
 
 ### 2.4 成本
@@ -154,7 +154,7 @@
 ### 3.1 Azure AD (Entra ID) OAuth 流程
 
 1. 公司 Entra ID 租户注册**单租户**应用 `OtunLink`
-   - Platform: Web；Redirect URI: `https://app.otun.musi.land/auth/callback`（本地加 `http://localhost:5173/auth/callback`）
+   - Platform: Web；Redirect URI: `https://otun.musi.land/auth/callback`（本地加 `http://localhost:5173/auth/callback`）
    - 开放 `openid profile email`；API scope `api://<app-id>/OtunLink.API`
 2. 前端 `@azure/msal-browser` 授权码 + PKCE；access token 1h（MSAL 自动续期）
 3. **首次登录自动开户**：`GET /api/v1/auth/me` 校验 JWT → 查 `users`
