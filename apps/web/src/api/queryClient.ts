@@ -6,7 +6,7 @@ import { createStore, del, get, set } from 'idb-keyval';
 // 白名单（前缀匹配）：items / units / dict / notifications / dashboard。
 // TTL：24h（maxAge）；buster 用于升级缓存结构时整体失效。
 
-const CACHE_BUSTER = 'ck-03';
+const CACHE_BUSTER = 'ck-08';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const WHITELIST_PREFIXES = ['items', 'units', 'dict', 'notifications', 'dashboard'];
 
@@ -40,7 +40,10 @@ export async function initQueryPersistence(queryClient: QueryClient): Promise<vo
       maxAge: MAX_AGE_MS,
       buster: CACHE_BUSTER,
       dehydrateOptions: {
-        shouldDehydrateQuery: (query) => inWhitelist(query.queryKey[0] as string),
+        shouldDehydrateQuery: (query) =>
+          // 仅持久化已成功的查询：避免把 fetching/pending 查询脱水成 Promise 导致
+          // idb-keyval 结构克隆报 DataCloneError，也避免恢复「pending 查询」在引导期重新触发请求。
+          inWhitelist(query.queryKey[0] as string) && query.state.status === 'success',
       },
     });
   } catch {

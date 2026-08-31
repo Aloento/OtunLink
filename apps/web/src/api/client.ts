@@ -40,13 +40,23 @@ export async function acquireAccessToken(
   }
 }
 
-/** 调用 GET /api/v1/auth/me。 */
+/** 调用 GET /api/v1/auth/me。失败时抛出带 HTTP 状态码的错误（供调用方区分鉴权失败与服务器错误）。 */
 export async function fetchMe(baseUrl: string, token: string): Promise<MeUser> {
   const res = await fetch(`${baseUrl}/api/v1/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
-    throw new Error(`/auth/me 请求失败：HTTP ${res.status}`);
+    const err = new Error(`/auth/me 请求失败：HTTP ${res.status}`) as Error & {
+      status: number;
+      body?: string;
+    };
+    err.status = res.status;
+    try {
+      err.body = await res.text();
+    } catch {
+      // 忽略读取失败。
+    }
+    throw err;
   }
   const body = (await res.json()) as MeResponse;
   return body.data;

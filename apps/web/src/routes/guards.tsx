@@ -1,14 +1,15 @@
 import { useIsAuthenticated } from '@azure/msal-react';
-import { Spinner } from '@fluentui/react-components';
+import { Body1, Button, Title3 } from '@fluentui/react-components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 
 import type { Permission } from '@otunlink/shared';
 
+import { useSession } from '../auth/SessionProvider';
+import { FullPageSpinner } from '../components/FullPageSpinner';
 import { ForbiddenPage } from '../components/ForbiddenPage';
 import { PendingPage } from '../pages/PendingPage';
-import { useSession } from '../auth/SessionProvider';
 import { canAccessPermissions } from './access';
 import { LOGIN_PATH } from './routes';
 
@@ -16,15 +17,6 @@ import { LOGIN_PATH } from './routes';
 // RequireAuth：未登录 → /login。
 // RequireActive：已登录但非 ACTIVE（PENDING/DISABLED）→ 引导页。
 // RequirePermission：ACTIVE 但岗位能力不满足 → 403 占位页。
-
-function FullPageSpinner() {
-  const { t } = useTranslation();
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Spinner label={t('common.loading')} />
-    </div>
-  );
-}
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const authenticated = useIsAuthenticated();
@@ -34,10 +26,28 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function SessionErrorPage({ onRetry }: { onRetry: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+      <Title3>{t('session.errorTitle')}</Title3>
+      <Body1>{t('session.errorBody')}</Body1>
+      <Button appearance="primary" onClick={onRetry}>
+        {t('session.retry')}
+      </Button>
+    </div>
+  );
+}
+
 export function RequireActive({ children }: { children: ReactNode }) {
-  const { me, loading, reload } = useSession();
+  const { me, loading, error, reload } = useSession();
   if (loading) return <FullPageSpinner />;
-  if (!me) return <Navigate to={LOGIN_PATH} replace />;
+  if (!me) {
+    // 会话仍在（authenticated=true）但 /auth/me 因服务器/网络失败：展示可重试错误页，
+    // 避免与 LoginPage 的「已登录即回首页」守卫互相导航导致死循环。
+    if (error === 'server') return <SessionErrorPage onRetry={reload} />;
+    return <Navigate to={LOGIN_PATH} replace />;
+  }
   if (me.status !== 'ACTIVE') return <PendingPage me={me} onRefresh={reload} />;
   return <>{children}</>;
 }

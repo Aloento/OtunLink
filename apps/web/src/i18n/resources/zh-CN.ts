@@ -22,6 +22,11 @@ export const zhCN = {
     unconfigured:
       '未配置 Entra ID 环境变量（VITE_ENTRA_TENANT_ID / VITE_ENTRA_CLIENT_ID），请参考 docs/auth-setup.md。',
   },
+  session: {
+    errorTitle: '暂时无法连接',
+    errorBody: '获取账号信息失败（服务器或网络异常），请稍后重试。',
+    retry: '重试',
+  },
   pending: {
     title: '等待管理员分配岗位',
     waiting: '您的账号尚未分配岗位，请等待管理员在「用户管理」中完成分配后刷新。',

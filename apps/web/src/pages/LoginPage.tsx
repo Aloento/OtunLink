@@ -5,25 +5,29 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { envAuthConfig } from '../auth/msalConfig';
+import { useSession } from '../auth/SessionProvider';
 
 export function LoginPage() {
   const { instance } = useMsal();
   const authenticated = useIsAuthenticated();
+  const { me } = useSession();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const config = envAuthConfig();
 
   const login = () => {
     if (!config) return;
-    // redirectStartPage：回调后 MSAL 回跳到登录发起页；直接回首页，
-    // 由 RequireActive 决定进系统还是 PENDING 引导页。
-    instance.loginRedirect({ scopes: config.loginScopes, redirectStartPage: '/' });
+    // msalConfig 设 system.navigateToLoginRequestUrl = false，MSAL 在回调页当场完成兑换，
+    // 不再回跳到登录发起页；登录成功后由 CallbackPage 跳转首页，由 RequireActive 决定
+    // 进系统还是 PENDING 引导页。
+    instance.loginRedirect({ scopes: config.loginScopes });
   };
 
-  // 已登录时（例如用户手动访问 /login）自动进入系统。
+  // 已登录且会话可用时（例如用户手动访问 /login）自动进入系统。
+  // 仅凭 authenticated 就回首页会在「有 account 但 /auth/me 失败」时与 RequireActive 互相导航。
   useEffect(() => {
-    if (authenticated) navigate('/', { replace: true });
-  }, [authenticated, navigate]);
+    if (authenticated && me !== null) navigate('/', { replace: true });
+  }, [authenticated, me, navigate]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4">

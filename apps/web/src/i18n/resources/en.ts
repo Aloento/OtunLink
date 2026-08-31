@@ -24,6 +24,11 @@ export const en: TranslationSchema = {
     unconfigured:
       'Entra ID environment variables are not configured (VITE_ENTRA_TENANT_ID / VITE_ENTRA_CLIENT_ID). See docs/auth-setup.md.',
   },
+  session: {
+    errorTitle: 'Unable to connect right now',
+    errorBody: 'Failed to load your account (server or network error). Please try again.',
+    retry: 'Retry',
+  },
   pending: {
     title: 'Awaiting role assignment',
     waiting:

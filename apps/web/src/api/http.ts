@@ -122,7 +122,9 @@ export function setUnauthorizedHandler(fn: UnauthorizedHandler): void {
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await tokenProvider();
   if (!token) {
-    unauthorizedHandler();
+    // 无 token 并不等同于「服务端会话失效」：引导早期或持久化查询重取时，MSAL 可能尚未就绪，
+    // 此时若走 unauthorizedHandler() 会清空仍有效的 MSAL 缓存，把刚登录的会话抹掉（历史死循环根因）。
+    // 这里仅抛出未授权错误交由调用方/守卫处理，不触碰会话。
     throw new ApiError('未登录', { code: ErrorCodes.UNAUTHORIZED, status: 401 });
   }
 

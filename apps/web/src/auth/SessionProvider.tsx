@@ -24,36 +24,61 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
 
   const [me, setMe] = useState<MeUser | null>(null);
-  const [loading, setLoading] = useState(false);
+  // 初始为 true：登录成功回跳 / 后，在 /auth/me 返回前先展示 loading，避免先闪现到 /login。
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 会话失效：清空 MSAL 缓存使 authenticated 变为 false，从而由 RequireAuth 引导回登录页。
+  const expireSession = useCallback(async () => {
+    setMe(null);
+    setError('session');
+    try {
+      await instance.clearCache();
+    } catch {
+      // 清缓存失败仍视为会话失效，由守卫引导回登录。
+    }
+  }, [instance]);
 
   const loadMe = useCallback(async () => {
     const config = envAuthConfig();
     if (!config) {
       setMe(null);
-      setLoading(false);
       setError('unconfigured');
       return;
     }
     setLoading(true);
-    const token = await acquireAccessToken(instance, [config.apiScope]);
-    if (!token) {
-      setMe(null);
-      setLoading(false);
-      setError('token');
-      return;
-    }
     try {
-      const user = await fetchMe(apiBaseUrl(), token);
-      setMe(user);
-      setError(null);
-    } catch (e) {
-      setMe(null);
-      setError(e instanceof Error ? e.message : String(e));
+      const token = await acquireAccessToken(instance, [config.apiScope]);
+      if (!token) {
+        // MSAL 有 account 但无法获取有效 token：会话不可用，清缓存。
+        setMe(null);
+        setError('token');
+        try {
+          await instance.clearCache();
+        } catch {
+          // 忽略
+        }
+        return;
+      }
+      try {
+        const user = await fetchMe(apiBaseUrl(), token);
+        setMe(user);
+        setError(null);
+      } catch (e) {
+        const status = (e as { status?: number }).status ?? 0;
+        if (status === 401 || status === 403) {
+          // 令牌被服务端拒绝（aud/签名/过期等）：清会话，避免守卫无限互踢。
+          await expireSession();
+        } else {
+          // 服务器/网络错误：保留会话，展示可重试的错误页。
+          setMe(null);
+          setError('server');
+        }
+      }
     } finally {
       setLoading(false);
     }
-  }, [instance]);
+  }, [instance, expireSession]);
 
   // 注入请求层：令牌提供者 + 401 处理。
   useEffect(() => {
@@ -63,14 +88,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       return acquireAccessToken(instance, [config.apiScope]);
     });
     setUnauthorizedHandler(() => {
-      setMe(null);
+      void expireSession();
       navigate(LOGIN_FALLBACK, { replace: true });
     });
     return () => {
       setTokenProvider(async () => null);
       setUnauthorizedHandler(() => undefined);
     };
-  }, [instance, navigate]);
+  }, [instance, navigate, expireSession]);
 
   useEffect(() => {
     if (authenticated && accounts.length > 0) {
