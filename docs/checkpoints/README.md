@@ -13,10 +13,10 @@
 | [ck-06](ck-06-counting.md)  | P6   | 收货点货与差异协商（✅ 完成）                 | §5.1/附录A     | ck-05  |
 | [ck-07](ck-07-inbound.md)   | P7   | 确认入库（批次建档）+发货退货（✅ 完成：确认收货自动建档批次、POST 建批次/库存/流水、发货退货闭环，含 API/仓储/前端/测试） | §5.2/§5.3      | ck-06  |
 | [ck-08a](ck-08a-stock.md)   | P8a  | 库存台账+手动出入库（✅ 完成：只读台账（仓库×物品×批次+流水）、手动入库/出库单创建-过账、FEFO/指定批次扣减、负库存与状态冲突错误码、权限与本单元 scope、API/内存仓储测试/前端/i18n） | §4.3/§8.2      | ck-07  |
-| [ck-08b](ck-08b-loss.md)    | P8b  | 报损+效期预警+零售价                         | §5.4/附录B     | ck-08a |
-| [ck-09a](ck-09a-sales.md)   | P9a  | 销售单+请货+FEFO 分配                        | §5.5/§8.2      | ck-08b |
-| [ck-09b](ck-09b-returns.md) | P9b  | 零售售后退货闭环                             | §5.2/§5.5      | ck-09a |
-| [ck-10](ck-10-polish.md)    | P10  | 通知/审计/邮件桥/上线                        | §8.5/§8.8/§9   | ck-09b |
+| [ck-08b](ck-08b-loss.md)    | P8b  | 报损+效期预警+零售价（✅ 完成：报损单原因/附图/批次必填+OUTBOUND_LOSS、/stock/batches/expired、每日 Cron 效期通知、retail_prices+历史、原价只读） | §5.4/附录B     | ck-08a |
+| [ck-09a](ck-09a-sales.md)   | P9a  | 销售单+请货+FEFO 分配（✅ 完成：请货/主动送货、行改价+整单折扣、send 后 FEFO/手工分配+OUTBOUND_SALE、取消回补、支付/确认收货、零售只读无成本） | §5.5/§8.2      | ck-08b |
+| [ck-09b](ck-09b-returns.md) | P9b  | 零售售后退货闭环（✅ 完成：发起→审核→收货，原批次优先/待检批次兜底 RETURN_IN，部分退货，迁移 0005） | §5.2/§5.5      | ck-09a |
+| [ck-10](ck-10-polish.md)    | P10  | 通知/审计/邮件桥/上线（✅ 完成：通知中心+工作台待办、audit_logs+查询、EmailProvider+mail-bridge+email_logs(迁移 0006)+test-email、deploy.md/go-live-checklist、vitest 全链路冒烟） | §8.5/§8.8/§9   | ck-09b |
 
 ## 每轮统一要求
 

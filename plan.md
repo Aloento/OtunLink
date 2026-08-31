@@ -14,13 +14,10 @@
 
 | 阶段 | Checkpoint | 状态 |
 | ---- | ---------- | ---- |
-| P0-P9b | ck-00 ~ ck-09b | ✅ 全部完成（ck-09b 提交 f61e824，已推送 origin/main） |
-| P10 | ck-10 通知/审计/邮件桥/上线打磨 | ⏳ 下一步 |
+| P0-P10 | ck-00 ~ ck-10 | ✅ **全部完成**（ck-10 提交 3a22028，已推送 origin/main，共 200 用例全绿） |
 
-## 下一步（ck-10，收官）
+## 状态
 
-- 依据 [docs/checkpoints/ck-10-polish.md](docs/checkpoints/ck-10-polish.md) 与 design.md §8.5/§8.8/§10 实现：
-  - 站内通知接入关键事件 + 工作台待办聚合；audit_logs 完善与查询
-  - EmailProvider 接口 + mail-bridge 适配器（infra/mail-bridge 轻量 Node 服务，可降级仅站内通知）
-  - docs/deploy.md + go-live-checklist.md；冒烟（复用现有 vitest 全链路，不新增 Playwright）
-- 由子 agent 实现（模型 `deepseek/deepseek-v4-flash-vision-exp`），完成后主对话审查验收并提交。
+**P0→P10 共 12 个 checkpoint 全部实现并提交**，主流程贯通：集货发货单（多物流单号/箱数/物品清单/缩略图）→ 仓库点货差异协商 → 确认收货转入库单 → 库存台账（手动出入库/报损/效期预警）→ 零售价管理 → 销售单（请货/FEFO/折扣/支付/确认收货）→ 售后退货闭环 → 通知中心/审计/邮件桥（infra/mail-bridge）→ 部署文档（docs/deploy.md + go-live-checklist.md）。
+
+**后续迭代候选（§11 风险 9 与 design.md 后续章节）**：盘点/库位/报表/汇率/B2C、数据导入（CK-10 已跳过）、邮件桥真实 SMTP 联调、Playwright 端到端。
