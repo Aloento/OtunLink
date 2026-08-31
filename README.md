@@ -18,7 +18,7 @@
 ## 技术栈（详见 design.md §2）
 
 - 前端：Vite + React + TypeScript + Fluent UI v9 + Tailwind + react-i18next + MSAL + TanStack Query
-- 后端：Hono（Cloudflare Workers）+ Drizzle ORM + Hyperdrive（私有 PostgreSQL）+ R2（图片）+ KV（JWKS 缓存）
+- 后端：Hono（Cloudflare Workers）+ Drizzle ORM + Hyperdrive（私有 PostgreSQL）+ S3 兼容 OBS（图片）+ KV（JWKS 缓存）
 - 部署：Cloudflare Pages（前端）/ Workers（API）；CI：GitHub Actions
 
 ## 快速开始

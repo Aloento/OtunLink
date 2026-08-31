@@ -10,7 +10,7 @@
 2. 名称：`OtunLink`。
 3. 受支持的帐户类型：**仅此组织目录中的帐户（单租户）**。
 4. 重定向 URI（平台选 **单页应用程序 (SPA)**）：
-   - 生产：`https://app.otunlink.com/auth/callback`
+   - 生产：`https://app.otun.musi.land/auth/callback`
    - 本地开发：`http://localhost:5173/auth/callback`
 5. 点击**注册**。
 
@@ -58,7 +58,7 @@ ENTRA_CLIENT_ID=<CLIENT_ID>
 ```bash
 VITE_ENTRA_TENANT_ID=<TENANT_ID>
 VITE_ENTRA_CLIENT_ID=<CLIENT_ID>
-# 可选：覆盖默认重定向地址（生产 https://app.otunlink.com/auth/callback；开发 http://localhost:5173/auth/callback）
+# 可选：覆盖默认重定向地址（生产 https://app.otun.musi.land/auth/callback；开发 http://localhost:5173/auth/callback）
 # VITE_REDIRECT_URI=
 # 可选：覆盖默认 API scope api://<CLIENT_ID>/OtunLink.API
 # VITE_API_SCOPE=

@@ -1,8 +1,8 @@
-﻿# OtunLink 仓储库存 ERP 系统设计文档
+# OtunLink 仓储库存 ERP 系统设计文档
 
 > 版本：v1.1 · 状态：待评审 · 定位：公司内部供应链协同系统（多集货部 → 多欧洲仓 → 多零售门店）
 > 代码仓库：`C:\Codes\OtunLink`（P0 时初始化）
-> 技术栈：Vite + React + TypeScript + Tailwind + Fluent UI (CF Pages) ｜ Hono + Drizzle (Cloudflare Workers + Hyperdrive + PostgreSQL) ｜ Azure AD (Entra ID) 免费版 OAuth ｜ R2 图片存储 ｜ 自建域名邮箱
+> 技术栈：Vite + React + TypeScript + Tailwind + Fluent UI (CF Pages) ｜ Hono + Drizzle (Cloudflare Workers + Hyperdrive + PostgreSQL) ｜ Azure AD (Entra ID) 免费版 OAuth ｜ S3 兼容对象存储（华为云 OBS）｜ 自建域名邮箱
 
 ---
 
@@ -90,14 +90,14 @@
 │  MSAL 登录 → access token          BarcodeDetector 相机扫码    │
 │  Canvas 图片压缩(前端)  IndexedDB 缓存(物品目录/已读)           │
 └───────────────┬──────────────────────────────────────────────┘
-                │ HTTPS (api.otunlink.com)
+                │ HTTPS (api.otun.musi.land)
 ┌───────────────▼──────────────────────────────────────────────┐
 │ Cloudflare（边缘，后端只做严格校验与轻计算）                     │
-│  CF Pages: app.otunlink.com        CF Workers: api.otunlink  │
+│  CF Pages: app.otun.musi.land        CF Workers: api.otun.musi.land  │
 │   - 认证中间件(JWT/RBAC)  - 业务路由(REST /api/v1/*)           │
-│   - 文件校验+R2 写入（无图像处理）  - 邮件适配器(HTTP 调用)       │
+│   - 文件校验+S3 写入（无图像处理）  - 邮件适配器(HTTP 调用)       │
 │   - Hyperdrive 绑定(连接池+查询缓存)  - KV(JWKS 缓存等)          │
-│  CF R2 私有桶(原图+缩略图)  │  Cron: 过期批次扫描/通知           │
+│  CF S3 私有桶(原图+缩略图)  │  Cron: 过期批次扫描/通知           │
 └───────────────┬──────────────────────────────────────────────┘
                 │ Hyperdrive
 ┌───────────────▼──────────────────────────────────────────────┐
@@ -122,16 +122,16 @@
 | ORM/迁移 | Drizzle ORM + drizzle-kit | TS first、Hyperdrive 契合、迁移可管理 |
 | 数据库 | 私有 PostgreSQL（公司自有） | Hyperdrive 访问；本地开发直连 DATABASE_URL |
 | 认证 | Entra ID 免费版 OAuth2/OIDC（MSAL, PKCE） | 免费；单租户；jose 校验 JWT |
-| 对象存储 | Cloudflare R2（私有桶 + 签名 URL） | 与 Workers 同栈；免费 10GB 足够 |
+| 对象存储 | S3 兼容对象存储（华为云 OBS 私有桶 + 签名 URL） | 与 Workers 兼容；按 OBS 计费 |
 | 邮件 | **自建域名邮箱**（HTTP↔SMTP 桥适配器） | 已有域名邮箱；账号/凭证由你方管理 |
 | 部署 | CF Pages + CF Workers（GitHub Actions CI） | 零服务器；预览环境 |
 | 监控 | CF Analytics + 可选 Sentry | 免费档 |
 
 ### 2.3 域名、代码仓库与产物
 
-- `app.otunlink.com` —— CF Pages（静态 SPA）
-- `api.otunlink.com` —— CF Workers（Hono）
-- Auth 回调：`https://app.otunlink.com/auth/callback`
+- `app.otun.musi.land` —— CF Pages（静态 SPA）
+- `api.otun.musi.land` —— CF Workers（Hono）
+- Auth 回调：`https://app.otun.musi.land/auth/callback`
 - **代码仓库：`C:\Codes\OtunLink`**（新仓库，P0 初始化；本设计文档作为仓库 README/`docs/design.md` 一并落地）
 
 ### 2.4 成本
@@ -141,7 +141,7 @@
 | Azure AD (Entra ID) 免费版 | 0（上限 5 万对象；含安全默认值/MFA） |
 | CF Pages / Workers 免费计划 | 0（100,000 请求/天；不够再升级） |
 | Hyperdrive 免费档 | 0（100,000 次 DB 查询/天，UTC 0 点重置） |
-| R2 | 免费 10GB / 100 万读 / 1000 万写月额 |
+| S3 兼容 OBS | 华为云 OBS 按量计费（免费额度有限） |
 | PostgreSQL | 已有（私有） |
 | 邮件 | 自有域名邮箱（0） |
 
@@ -154,7 +154,7 @@
 ### 3.1 Azure AD (Entra ID) OAuth 流程
 
 1. 公司 Entra ID 租户注册**单租户**应用 `OtunLink`
-   - Platform: Web；Redirect URI: `https://app.otunlink.com/auth/callback`（本地加 `http://localhost:5173/auth/callback`）
+   - Platform: Web；Redirect URI: `https://app.otun.musi.land/auth/callback`（本地加 `http://localhost:5173/auth/callback`）
    - 开放 `openid profile email`；API scope `api://<app-id>/OtunLink.API`
 2. 前端 `@azure/msal-browser` 授权码 + PKCE；access token 1h（MSAL 自动续期）
 3. **首次登录自动开户**：`GET /api/v1/auth/me` 校验 JWT → 查 `users`
@@ -504,7 +504,7 @@ C:\Codes\OtunLink\
 
 ### 8.1 图片上传与压缩（全前端，后端只校验）
 - 前端 Canvas 压缩：原图 ≤1600px / JPEG 0.8（≤2MB），同时生成 320px 缩略图 → `POST /files`（两个字段）
-- 后端仅做严格校验：`content-type` + 魔数（JPEG/PNG/WebP）+ 尺寸/大小上限 → 写 R2 私有桶（UUID key）
+- 后端仅做严格校验：`content-type` + 魔数（JPEG/PNG/WebP）+ 尺寸/大小上限 → 写 S3 私有桶（UUID key）
 - 读取：`GET /files/:id/url` 返回 15 分钟签名 URL；列表用缩略图 key
 - 后端**零图像处理**（不用 sharp/wasm），节省 Worker 计算与冷启动
 
@@ -538,7 +538,7 @@ zod 400 `VALIDATION_ERROR`；401 未登录；403 `FORBIDDEN`；409 业务冲突�
 - Workers **无法直连 SMTP**（无 TCP），采用两种适配之一：
   1. **推荐**：在你们邮件服务器侧部署 `infra/mail-bridge`（轻量 Node 服务，约 300 行，仅内网监听 + API Key 鉴权，负责 HTTP→SMTP 转发），Worker 用 `fetch` 调用 `MAIL_BRIDGE_URL`
   2. 若邮件服务商提供 HTTP API（如企业邮开放接口），直接实现适配器替换
-- 配置：`MAIL_PROVIDER=bridge|api`、`MAIL_FROM`（如 `noreply@otunlink.com`）、模板（中文为主，`Accept-Language` 提供英文版）
+- 配置：`MAIL_PROVIDER=bridge|api`、`MAIL_FROM`（如 `noreply@otun.musi.land`）、模板（中文为主，`Accept-Language` 提供英文版）
 - 发送全部异步、失败重试 1 次、`email_logs` 记录
 
 ### 8.9 前端缓存与后端瘦身（成本原则）
@@ -557,8 +557,8 @@ zod 400 `VALIDATION_ERROR`；401 未登录；403 `FORBIDDEN`；409 业务冲突�
 | 项 | 要求 |
 |---|---|
 | 响应式 | 移动优先：320px 起；表格手机转卡片；Fluent 触控友好；底部导航（手机）；PWA 基础（manifest + 图标，离线仅缓存静态壳） |
-| 性能 | 列表 P95 < 500ms；分页 ≤50；图片走 R2 直链；前端缓存命中优先 |
-| 安全/隐私 | 全程 HTTPS + HSTS + CSP（无第三方脚本）；JWT + RBAC + 数据范围；R2 私有桶签名访问；文件魔数白名单；摄像头权限最小化、用后释放；邮件桥内网+API Key；Entra 开启安全默认值（MFA）；审计关键操作；数据最小化收集（仅 email/姓名/单元） |
+| 性能 | 列表 P95 < 500ms；分页 ≤50；图片走 S3 签名 URL；前端缓存命中优先 |
+| 安全/隐私 | 全程 HTTPS + HSTS + CSP（无第三方脚本）；JWT + RBAC + 数据范围；S3 私有桶签名访问；文件魔数白名单；摄像头权限最小化、用后释放；邮件桥内网+API Key；Entra 开启安全默认值（MFA）；审计关键操作；数据最小化收集（仅 email/姓名/单元） |
 | 可用性 | CF 全球边缘；私有 PG 由公司侧保障备份/监控 |
 | 备份 | PG 每日备份（公司侧）；台账只追加降低误操作 |
 | 成本 | 免费档为主：后端轻计算（验证优先）、缓存层、查询频率监控；Worker 免费 10 万请求/天、Hyperdrive 10 万查询/天需监控 |

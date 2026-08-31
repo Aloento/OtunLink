@@ -7,7 +7,7 @@
 - 🔨 通知：`notifications` 表写入点接入关键事件（待点货/差异/拒收/发货退货/售后/过期预警/销售发送/支付待确认…）；`GET /notifications`、`POST /notifications/read`；工作台 `/` 待办聚合（按角色+scope）
 - 🔨 邮件（design.md §8.8）：
   - `EmailProvider` 接口 + 两种适配器：`mail-bridge`（自建 HTTP↔SMTP 桥，`infra/mail-bridge` 轻量 Node 服务，API key 鉴权，部署于邮件服务器侧）/ `api`（预留）
-  - 环境变量：BRIDGE_URL/API_KEY、MAIL_FROM（如 noreply@otunlink.com）
+  - 环境变量：BRIDGE_URL/API_KEY、MAIL_FROM（如 noreply@otun.musi.land）
   - `email_logs` 表记录；异步发送 + 1 次重试；`POST /admin/test-email` 连通性测试
   - 无桥时的降级：仅站内通知（文档说明）
 - 🔨 审计：`audit_logs` 完善（谁/何时/何资源/前后值，关键写操作全覆盖）；`GET /admin/audit-logs`（筛选）

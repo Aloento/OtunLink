@@ -2,7 +2,7 @@
 # wrangler dev 会自动读取 apps/api/.dev.vars。
 
 # ── 本地 PostgreSQL（ck-01 起使用；ck-00 的 health 端点不需要）────────────
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/otunlink
+# DATABASE_URL=postgres://user:pass@host:5432/otunlink
 
 # ── Azure AD / Entra ID（ck-02 起使用，见 docs/auth-setup.md）──────────────
 ENTRA_TENANT_ID=
@@ -13,3 +13,8 @@ ENTRA_AUDIENCE=
 ENTRA_ISSUER=
 # 可选：客户端密码（本 checkpoint 服务端仅验签、不发起机密客户端请求，可不填）
 ENTRA_CLIENT_SECRET=
+
+# ── S3 兼容对象存储（华为云 OBS，见 docs/cloud-config.md）─────────────────
+# endpoint/region/bucket 已在 wrangler.toml [vars]，此处只需凭据
+S3_ACCESS_KEY_ID=
+S3_SECRET_ACCESS_KEY=

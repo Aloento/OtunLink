@@ -59,7 +59,7 @@ export function envAuthConfig(): BuiltAuthConfig | null {
   if (!tenantId || !clientId) return null;
 
   const devRedirect = 'http://localhost:5173/auth/callback';
-  const prodRedirect = 'https://app.otunlink.com/auth/callback';
+  const prodRedirect = 'https://app.otun.musi.land/auth/callback';
   const redirectUri =
     (import.meta.env.VITE_REDIRECT_URI as string | undefined) ??
     (import.meta.env.DEV ? devRedirect : prodRedirect);
@@ -72,7 +72,7 @@ export function envAuthConfig(): BuiltAuthConfig | null {
     tenantId,
     clientId,
     redirectUri,
-    postLogoutRedirectUri: import.meta.env.DEV ? 'http://localhost:5173' : 'https://app.otunlink.com',
+    postLogoutRedirectUri: import.meta.env.DEV ? 'http://localhost:5173' : 'https://app.otun.musi.land',
     apiScope,
   });
 }
