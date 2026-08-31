@@ -101,7 +101,7 @@ http://localhost:8787）。**当前无法直接自动化验收，原因有二：
 
 | 编号 | 可验收项 | 操作要点 | 预期 |
 |---|---|---|---|
-| R01 | 查看仓库库存/零售价 | `/inventory`、`/retail-prices` | 只读；可见效期；成本/采购价不可见 |
+| R01 | 查看各仓库库存/零售价 | `/inventory`、`/retail-prices` | 只读；可见效期；成本/采购价不可见。⚠️ §8.1：库存/零售价范围 = **已签约仓库**（不受自身门店 scope 过滤），默认无签约时为空；零售价**只读**已确认 |
 | R02 | 请货创建销售单 | 选仓库+物品+数量+送货方式(自提/快递) | 生成 DRAFT 销售单 |
 | R03 | 上传支付凭证 | 销售单上传支付凭证 | 状态 PAYMENT_UPLOADED |
 | R04 | 确认收货 | 确认收货 | 状态 CONFIRMED；可发起售后 |
@@ -153,7 +153,7 @@ http://localhost:8787）。**当前无法直接自动化验收，原因有二：
 | A02 | ✅ PASS | 真实 Entra 登录进入工作台 `/`，导航可见 |
 | A03 | ✅ PASS（缺陷1 已修复） | 中英切换即时生效；见缺陷清单 #1 i18n 字面键（代码已补齐，待复验） |
 | A04/A05 | ⚠️ PARTIAL | 导航/铃铛可用；响应式未做视口扫描；见缺陷 #2（createRoot 控制台报错，dev HMR 伪影） |
-| A06/A07 | ⏳ 账号已就绪，待执行 | 已创建受限 Entra 账号：RETAILER `retail.tester@SoarCraft.onmicrosoft.com`、PENDING `pending.tester@SoarCraft.onmicrosoft.com`。需先以该账号登录（`/auth/me` 自动开户），再由管理员在 AD01 分配岗位 |
+| A06/A07 | ⚠️ PASS（受 §8.1 偏差影响，语义确认后需按新矩阵复验） | RETAILER `retail.tester`：PENDING 登录显示引导页 → AD01 分配 RETAILER + ST-XX → 进入系统；访问 `/admin/users` 显示 Forbidden ✓ |
 | A08 | ⏳ 未执行 | 需最后再登出（会清除 ADMIN 会话） |
 | C01/C02 | ✅ PASS | 物品目录列表/新增物品正常 |
 | C03 | ✅（缺陷3 已修复，待复验） | 图片上传成功但**回显 403**（OBS 预签名 URL，见缺陷 #3）；预签名已修正，待复验回显 |
@@ -165,10 +165,10 @@ http://localhost:8787）。**当前无法直接自动化验收，原因有二：
 | W05/W06/W07 | ⏳ 未执行 | 手动入库/出库/报损未覆盖 |
 | W08 | ✅ PASS | 已过期 Tab 显示批次(-364 天)→一键生成报损单 OB-20260831-0001→过账→库存扣减为 0 |
 | W09 | ✅ PASS | 库存台账 + 台账流水（发货入库 · BATCH-2026-001 · +10.00）验证 |
-| W10 | ✅（缺陷5 已修复，待复验） | 零售价页**仅有「编辑」，无「新增」入口**；对无价仓库×物品无法创建零售价（缺陷 #5，已新增入口，待复验） |
+| W10 | ⚠️ 待复验（缺陷5 已修复；受 §8.1 影响） | 零售价管理属**仓库角色**（与业务语义一致，见 §8.1）；当前 WAREHOUSE 可改零售价 ✓；缺陷 #5「新增入口」待复验 |
 | W11–W15 | ⏳ 未执行 | 销售请货链；当前库存 0（W08 已耗尽），需先补货 |
 | W16 | ⏳ 待复验（缺陷6 已修复） | 通知中心；且确认收货时 `INBOUND_CONFIRMED` 通知写入失败（缺陷 #6，枚举已补齐，待复验） |
-| R01–R06 | ⏳ 账号已就绪，待执行 | 需以 RETAILER `retail.tester` 登录并经 AD01 分配 RETAILER 岗位 + 数据范围（如 ST-XX「XX超市」）后执行 |
+| R01–R06 | ⏸ 暂停（§8.1） | 角色权限模型偏差：RETAILER 应**只能看到已签约仓库的库存后请货**，不可见发货单、不可管理物品、零售价只读；且「已签约仓库」与当前自身门店 scope 过滤冲突（R01 实测库存页为空）→ **2026-08-31 晚语义已全部确认**，待实现修复后重写预期再验 |
 | AD01 | ✅ PASS | `/admin/users`：列表(姓名/邮箱/岗位/状态/数据范围/创建时间)+「新增用户」「编辑」弹窗(Entra 对象 ID（objectId）/邮箱/姓名/岗位/数据范围/状态/语言偏好)+**「删除」按钮（弹确认，禁止删除当前登录账号）**全部可用；含 Soar Aloento(管理员) 与 Seed Admin |
 | AD02 | ✅ PASS | `/admin/units`：6 个单元(集货/零售/仓库)列表正常；「新增业务单元」弹窗(编码/名称/类型/地址/联系方式/时区/本位币/启用)可用 |
 | AD03 | ✅ PASS | `/admin/audit-logs`：表列(时间/动作/实体类型/实体ID/操作用户/变更后)+分页「共 2 条」；按实体类型过滤 `inbound_order` 后剩 1 条，筛选刷新正常 |
@@ -182,7 +182,7 @@ http://localhost:8787）。**当前无法直接自动化验收，原因有二：
 
 | 账号 | 登录名 (UPN) | Entra objectId | 用途 | 密码 |
 |---|---|---|---|---|
-| Retail Tester | `retail.tester@SoarCraft.onmicrosoft.com` | `466efbdf-2c9f-4e4e-9f1e-dc367886b83a` | A06（RETAILER 无权限路由→Forbidden）+ A01–A06 之外 R01–R06（零售方只读库存/零售价、请货建单、支付凭证、确认收货、售后、通知） | `OtunTest@2026!` |
+| Retail Tester | `retail.tester@SoarCraft.onmicrosoft.com` | `466efbdf-2c9f-4e4e-9f1e-dc367886b83a` | A06（RETAILER 无权限路由→Forbidden）+ R01–R06（**待重写，见 §8.1**） | `OtunTest@2027!`（首登强制改密；**已注册 MFA**，TOTP 密钥在会话记录中） |
 | Pending Tester | `pending.tester@SoarCraft.onmicrosoft.com` | `f7193993-a3b2-445a-991f-88153260d3f5` | A07（未分配岗位登录→「等待管理员分配岗位」引导页） | `OtunTest@2026!` |
 
 > 说明：后端关联用户时**优先用 Entra `oid`（objectId），其次回退 `sub`**（见 `apps/api/src/auth/verifier.ts`、
@@ -204,6 +204,43 @@ http://localhost:8787）。**当前无法直接自动化验收，原因有二：
 | 8 | A06/A07 无法复现：ADMIN 全权限，缺受限/PENDING Entra 账号 | 无权限/PENDING 引导无法验收 | ✅ 账号已创建：RETAILER `retail.tester`（objectId `466efbdf-…`）、PENDING `pending.tester`（`f7193993-…`）；可执行验收 |
 | 9 | 硬刷新/直链访问受保护路由被重定向回 `/`（工作台）：刷新 `/admin/users`、`/admin/test-email`、`/shipments` 均由认证初始化阶段 `RequireAuth` 先用 `replace` 跳到 `/login`，登录态恢复后再跳 `/`，丢失深链 | 深链/刷新丢失，无法直达具体页面（SPA 内点击导航正常）| ✅ 已修复并实测通过（① `RequireAuth` 未登录跳转前将目标路径暂存至 sessionStorage（新增 `returnTo.ts`）；② `LoginPage`/`CallbackPage` 在会话就绪后 `consumeReturnTo()` 恢复深链，否则回 `/`。实测刷新/直达 `/admin/users`、`/admin/units`、`/admin/audit-logs`、`/admin/test-email` 均保留深链且登录态不丢） |
 | 10 | 用户管理「新增用户」与「删除」语义修正（本次实施）：① 后端新增 **oid 优先的账号关联**（`oid ?? sub`），使管理员填写的 Entra objectId 能正确预创建/命中真实用户，解决「手动新增用户不可靠、重复 PENDING」问题；② 新增 **`DELETE /admin/users/:id`** + 前端「删除」按钮（禁止删除当前登录账号），补全用户删除能力（原仅可「停用」DISABLED） | 用户管理完整性与开户流程一致 | ✅ 已修复（`types.ts`/`verifier.ts`/`middleware.ts`/`routes/auth.ts`/`repos/*`/`admin-users.ts`/`AdminUsersPage.tsx` + i18n + 测试） |
+
+| 11 | **角色权限模型偏差（2026-08-31 业务评审发现，2026-08-31 晚语义已全部确认 → 待实现）**：RETAILER 被实现为「可读发货单/管物流单号/看零售价/可维护物品目录」，但业务语义为「零售 = **外部合作方（商铺买家）**：不可见发货单、不管理零售价（仅只读，范围=已签约仓库）、不能管理物品、只能看已签约仓库库存后请货、付款、退货」；WAREHOUSE 才是改零售价的角色（现实现 ✓）；且「scope 空 = 全量」使仓库/集货可越权到非归属单元（必须绑定归属单元 + 账户单实体）；另需新增**仓库-零售签约关系**与**销售单配送方式+单号**（见 §8.1） | 商业信息泄漏 + 越权 + R 链路不可验收 | ⏸ 暂停验收，**语义已确认，待实现**（详见 §8.1 与 [`rbac-matrix-vs-semantics.md`](./rbac-matrix-vs-semantics.md)） |
+
+---
+
+## 8.1 角色权限模型偏差（评审记录 · 2026-08-31）
+
+**结论**：checkpoint 阶段实现的 RBAC 矩阵与真实业务语义不符（偏差源于早期设计文档 §3.2 矩阵本身即与业务语义有出入，checkpoint 忠实实现了该矩阵）。
+
+**业务语义（用户确认，2026-08-31 晚已全部确认）**：
+- **RETAILER = 外部合作方（商铺买家）**：不可见发货单（发货单/物流单号均不可见）；**不可管理零售价**（仅**只读**仓库提供的零售价）；**不可管理物品列表**（仅浏览/搜索/扫码）；只能看到**已签约仓库的库存**然后请货（下单）、上传支付凭证、确认收货、发起售后退货等。
+- **WAREHOUSE = 可修改零售价的角色**；只能管理**自己归属的仓库**，不能管理别人的仓库。
+- **COLLECTOR（发货方）= 只能管自己的发货单**。
+- **归属绑定**：仓库/集货/零售**必须绑定归属单元**；**一个账户只能绑定一个实体**（不允许一个账号管理多个仓库/集货地/门店），**一个实体可有多个账户**（如一个仓库多个仓管）；仅 ADMIN 可空（全量）。
+- **仓库-零售签约**：零售可见的库存/零售价/可请货仓库 = **已签约仓库**；签约仅由**仓库主动发起**（添加进可售客户列表即生效，零售无需同意）。
+- **销售单配送信息**：仓库提供**配送方式 + 配送单号**（如自提、快递）供零售查看（独立于发货单）。
+- **外部合作方账号**：由公司创建 Entra 账号（与内部其他用户一致），无特殊 B2B 来宾流程。
+
+**开放问题答复（2026-08-31 晚，业务方逐条确认）**：
+1. 零售价：**可以只读**（范围 = 已签约仓库）。
+2. ITEMS_WRITE：**移除**（零售不能管理物品列表）。
+3. 物流单号：随发货**不可见**；销售单需有**独立配送方式+单号**供零售查看。
+4. scope 语义：**非 ADMIN 必须绑定归属单元**，账户单实体（实体可多账户）；「空 = 全量」仅 ADMIN。
+5. 仓库可见范围：**已签约仓库**（签约由仓库主动发起/添加即生效）。
+6. 外部合作方账号：公司创建 Entra 账号（与内部一致）。
+
+**实现偏差**（详见 [rbac-matrix-vs-semantics.md](./rbac-matrix-vs-semantics.md) 三方对照表）：
+1. `RETAILER` 含 `SHIPMENTS_READ` + `TRACKINGS_MANAGE` → 前端出现「发货单」入口，外部合作方可看内部发货单（**应移除**）。
+2. `RETAILER` 含 `RETAIL_PRICES_READ` → 只读保留 ✓，但**查询范围需改为已签约仓库**（当前 `scopeAllows` 会受自身门店过滤/空 scope 放行）。
+3. `RETAILER` 含 `ITEMS_WRITE` → 外部合作方可维护全局物品目录（**应移除**，仅保留 `ITEMS_READ`）。
+4. **「scope 空 = 全量」**：`scopeAllows*`/`scopeAllowsWrite` 在 `scope_unit_id` 为空时全部放行（`shipments.ts`、`retail-prices.ts`、`inbound/outbound/reviews/return-orders` 等）→ 仓库/集货未绑 scope 时可操作**所有**仓库/发货单，违反「只能管理自己归属」（应改为非 ADMIN 空 scope 即拒绝）。
+5. **零售库存被自身门店 scope 过滤**：`stock.ts:28` `unitId: unitId || scope?.unitId` → `retail.tester`(scope=ST-XX) 调 `/stock` 只查自己门店（无货）→ 库存页恒空；应改为按**已签约仓库**查询。
+6. **缺失**：仓库-零售签约关系（新表）、销售单配送方式+单号（`sales_orders.carrier/tracking_no`）——均为新增实现项。
+
+**本轮处理（2026-08-31）**：不实现代码；已修订 `docs/design.md`（§1.3/§1.4/§3.2/§3.3/§3.2.1/§3.2.2/附录 C/§11.10 + §4.2 销售单/新表），确认结果记录于 [`rbac-matrix-vs-semantics.md`](./rbac-matrix-vs-semantics.md) §1.1。**R01–R06 验收暂停**，待实现修复（角色权限 + scope + 签约 + 销售单配送字段）后重写 R 链路预期再验。
+
+---
 
 ## 9. 本阶段代码 / 迁移变更
 

@@ -34,7 +34,7 @@ design.md：§5.5、§4.2 sales/payments/allocations、§8.2、附录 B FEFO、�
 - 状态机：DRAFT → SENT（FEFO expiry_date ASC 或手工批次，逐批 OUTBOUND_SALE 扣减，行锁 CAS 防负库存）→ PAYMENT_UPLOADED（支付凭证）→ CONFIRMED（确认收货）；DRAFT/CONFIRMED 不可取消。
 - 取消：SENT/PAYMENT_UPLOADED 按原批次 OUTBOUND_SALE_REVERSAL 回补，支付单写 refundNote。
 - 金额：服务端计算（行 unit_price_override 默认零售价 + 整单 discount_percent + freight），行/合计快照；零售方不可见 unit_cost。
-- 权限：WAREHOUSE（创建/发送/取消/改零售价）、RETAILER（请货/查看库存与零售价/上传支付/确认收货）；scope 按买方或卖方单元过滤（SALES_REQUEST/SALES_CREATE/SALES_SEND/SALES_CANCEL/SALES_PAYMENT/SALES_CONFIRM_RECEIPT）。
+- 权限：WAREHOUSE（创建/发送/取消/改零售价）、RETAILER（请货/查看库存与零售价/上传支付/确认收货）；scope 按买方或卖方单元过滤（SALES_REQUEST/SALES_CREATE/SALES_SEND/SALES_CANCEL/SALES_PAYMENT/SALES_CONFIRM_RECEIPT）。 **⚠️ 2026-08-31 业务评审废弃/调整**：RETAILER 为外部合作方——零售价**只读**且范围=**已签约仓库**；请货可选仓库=已签约；销售单需有**配送方式+配送单号**（仓库提供、零售只读）；scope 非 ADMIN 必填（见 `docs/qa/rbac-matrix-vs-semantics.md`），实现修复时同步更新。
 - 端点：POST/GET /sales-orders、GET/PATCH /sales-orders/:id、POST :id/send、POST :id/cancel、POST :id/payments、POST :id/confirm-receipt；GET /stock?unitId= 与 GET /retail-prices 对零售只读。
 - 前端：/sales（我的请货 + 主动送货列表/创建/详情/发送/支付/收货）、/inventory 零售只读视图（无成本列，显示零售价）；i18n zh-CN/en。
 - 错误码：复用 INSUFFICIENT_STOCK/STOCK_BATCH_NOT_FOUND；新增 SALES_STATE_CONFLICT/SALES_LINE_INVALID/SALES_NOT_FOUND/SALES_PAYMENT_NOT_FOUND/SALES_ALLOCATION_MISMATCH 等。
