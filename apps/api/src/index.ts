@@ -9,6 +9,8 @@ import { adminRouter } from './routes/admin';
 import { adminUnitsRouter } from './routes/admin-units';
 import { adminUsersRouter } from './routes/admin-users';
 import { authRouter } from './routes/auth';
+import { filesRouter } from './routes/files';
+import { itemsRouter } from './routes/items';
 import { unitsRouter } from './routes/units';
 import { usersRouter } from './routes/users';
 import type { AppEnv } from './types';
@@ -38,6 +40,14 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // 业务单元（登录用户可见范围）
   app.use('/api/v1/units/*', requireToken);
   app.route('/api/v1/units', unitsRouter());
+
+  // 物品目录（登录用户，RBAC 见各路由）
+  app.use('/api/v1/items/*', requireToken);
+  app.route('/api/v1/items', itemsRouter());
+
+  // 图片上传 / 预签名 URL（登录用户，RBAC 见各路由）
+  app.use('/api/v1/files/*', requireToken);
+  app.route('/api/v1/files', filesRouter());
 
   // 管理端用户 / 业务单元（JWT + RBAC）
   app.use('/api/v1/admin/users/*', requireToken);

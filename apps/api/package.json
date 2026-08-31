@@ -13,6 +13,7 @@
   "dependencies": {
     "@otunlink/db": "workspace:*",
     "@otunlink/shared": "workspace:*",
+    "aws4fetch": "^1.0.20",
     "hono": "^4.13.5",
     "jose": "^6.2.10"
   },

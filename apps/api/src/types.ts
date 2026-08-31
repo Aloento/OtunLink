@@ -1,4 +1,4 @@
-import type { UnitType, UserRole, UserStatus } from '@otunlink/shared';
+import type { ItemStatus, SpecUnit, UnitType, UserRole, UserStatus } from '@otunlink/shared';
 
 // 认证与数据层共享类型（ck-02）。
 // Repository 接口是「生产 Drizzle / 测试内存实现」的接缝：生产最终应以
@@ -19,6 +19,12 @@ export interface Env extends Record<string, unknown> {
   HYPERDRIVE?: unknown;
   DATABASE_URL?: string;
   ADMIN_SECRET?: string;
+  // S3 兼容对象存储（华为云 OBS，见 docs/cloud-config.md）
+  S3_ENDPOINT?: string;
+  S3_REGION?: string;
+  S3_BUCKET?: string;
+  S3_ACCESS_KEY_ID?: string;
+  S3_SECRET_ACCESS_KEY?: string;
 }
 
 export interface TokenClaims {
@@ -96,6 +102,96 @@ export interface UpdateUnitInput {
   isActive?: boolean;
 }
 
+// ── 物品 / 文件（ck-04）────────────────────────────────────────────────────
+
+export interface ItemRecord {
+  id: string;
+  sku: string | null;
+  name: string;
+  barcode: string | null;
+  specUnit: SpecUnit;
+  innerUnit: SpecUnit | null;
+  innerCount: string | null;
+  isPerishable: boolean;
+  category: string | null;
+  description: string | null;
+  status: ItemStatus;
+  createdBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface FileRecord {
+  id: string;
+  key: string;
+  thumbnailKey: string | null;
+  mime: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  createdAt: Date;
+}
+
+export interface ItemImageRecord {
+  id: string;
+  itemId: string;
+  fileId: string;
+  isPrimary: boolean;
+  sortOrder: number;
+  createdAt: Date;
+  /** 联表带出的文件信息（列表/详情返回用）。 */
+  file?: FileRecord;
+}
+
+export interface CreateItemInput {
+  sku?: string | null;
+  name: string;
+  barcode?: string | null;
+  specUnit?: SpecUnit;
+  innerUnit?: SpecUnit | null;
+  innerCount?: string | null;
+  isPerishable?: boolean;
+  category?: string | null;
+  description?: string | null;
+  status?: ItemStatus;
+  createdBy: string;
+}
+
+export interface UpdateItemInput {
+  sku?: string | null;
+  name?: string;
+  barcode?: string | null;
+  specUnit?: SpecUnit;
+  innerUnit?: SpecUnit | null;
+  innerCount?: string | null;
+  isPerishable?: boolean;
+  category?: string | null;
+  description?: string | null;
+  status?: ItemStatus;
+}
+
+export interface CreateFileInput {
+  key: string;
+  thumbnailKey: string | null;
+  mime: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+}
+
+export interface ItemListQuery {
+  q?: string;
+  page?: number;
+  size?: number;
+}
+
+export interface ItemListResult {
+  items: ItemRecord[];
+  total: number;
+  page: number;
+  size: number;
+}
+
 export interface UserRepository {
   findByEntraSub(sub: string): Promise<UserRecord | null>;
   findById(id: string): Promise<UserRecord | null>;
@@ -111,9 +207,26 @@ export interface UnitRepository {
   update(id: string, patch: UpdateUnitInput): Promise<UnitRecord | null>;
 }
 
+export interface ItemRepository {
+  findById(id: string): Promise<ItemRecord | null>;
+  findByBarcode(code: string): Promise<ItemRecord | null>;
+  list(query: ItemListQuery): Promise<ItemListResult>;
+  create(input: CreateItemInput): Promise<ItemRecord>;
+  update(id: string, patch: UpdateItemInput): Promise<ItemRecord | null>;
+  listImages(itemId: string): Promise<ItemImageRecord[]>;
+  attachImages(itemId: string, fileIds: string[]): Promise<ItemImageRecord[]>;
+}
+
+export interface FileRepository {
+  findById(id: string): Promise<FileRecord | null>;
+  create(input: CreateFileInput): Promise<FileRecord>;
+}
+
 export interface Repos {
   users: UserRepository;
   units: UnitRepository;
+  items: ItemRepository;
+  files: FileRepository;
 }
 
 export interface AuthState {

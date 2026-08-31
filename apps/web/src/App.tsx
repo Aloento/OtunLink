@@ -1,18 +1,22 @@
 import { useTranslation } from 'react-i18next';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
+import { Permissions } from '@otunlink/shared';
+
 import { PlaceholderPage } from './components/PlaceholderPage';
 import { AppLayout } from './layout/AppLayout';
 import { CallbackPage } from './pages/CallbackPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
+import { ItemDetailPage } from './pages/items/ItemDetailPage';
+import { ItemFormPage } from './pages/items/ItemFormPage';
+import { ItemsPage } from './pages/items/ItemsPage';
 import { RequireActive, RequireAuth, RequirePermission } from './routes/guards';
 import { CALLBACK_PATH, LOGIN_PATH, ROUTES, type RouteKey } from './routes/routes';
 
-// 业务页面（除工作台外）在 ck-03 一律以「开发中」占位。
+// 业务页面（除工作台与物品目录外）在 ck-03/ck-04 以「开发中」占位。
 const PLACEHOLDER_KEYS = [
   'shipments',
-  'items',
   'inbound',
   'outbound',
   'returns',
@@ -45,6 +49,38 @@ export default function App() {
           element={
             <RequirePermission permissions={ROUTES.dashboard.permissions}>
               <DashboardPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={ROUTES.items.path}
+          element={
+            <RequirePermission permissions={ROUTES.items.permissions}>
+              <ItemsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={`${ROUTES.items.path}/new`}
+          element={
+            <RequirePermission permissions={[Permissions.ITEMS_WRITE]}>
+              <ItemFormPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={`${ROUTES.items.path}/:id/edit`}
+          element={
+            <RequirePermission permissions={[Permissions.ITEMS_WRITE]}>
+              <ItemFormPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={`${ROUTES.items.path}/:id`}
+          element={
+            <RequirePermission permissions={ROUTES.items.permissions}>
+              <ItemDetailPage />
             </RequirePermission>
           }
         />

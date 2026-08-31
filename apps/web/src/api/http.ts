@@ -72,6 +72,10 @@ const CODE_TO_I18N_KEY: Record<string, string> = {
   [ErrorCodes.MIGRATION_DISABLED]: 'errors.MIGRATION_DISABLED',
   [ErrorCodes.MIGRATION_UNAVAILABLE]: 'errors.MIGRATION_UNAVAILABLE',
   [ErrorCodes.MIGRATION_FAILED]: 'errors.MIGRATION_FAILED',
+  [ErrorCodes.BARCODE_CONFLICT]: 'errors.BARCODE_CONFLICT',
+  [ErrorCodes.FILE_INVALID]: 'errors.FILE_INVALID',
+  [ErrorCodes.FILE_TOO_LARGE]: 'errors.FILE_TOO_LARGE',
+  [ErrorCodes.STORAGE_UNAVAILABLE]: 'errors.STORAGE_UNAVAILABLE',
   NETWORK: 'errors.NETWORK',
 };
 
@@ -107,7 +111,9 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${token}`);
-  if (init.body !== undefined && !headers.has('Content-Type')) {
+  const isFormData =
+    typeof FormData !== 'undefined' && init.body instanceof FormData;
+  if (init.body !== undefined && !headers.has('Content-Type') && !isFormData) {
     headers.set('Content-Type', 'application/json');
   }
 

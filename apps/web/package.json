@@ -17,6 +17,8 @@
     "@otunlink/shared": "workspace:*",
     "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-query-persist-client": "^5.102.8",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "i18next": "^26.4.0",
     "idb-keyval": "^6.3.0",
     "react": "^19.2.8",

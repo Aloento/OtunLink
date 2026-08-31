@@ -1,9 +1,19 @@
 import type {
+  CreateFileInput,
+  CreateItemInput,
   CreateUnitInput,
   CreateUserInput,
+  FileRecord,
+  FileRepository,
+  ItemImageRecord,
+  ItemListQuery,
+  ItemListResult,
+  ItemRecord,
+  ItemRepository,
   Repos,
   UnitRecord,
   UnitRepository,
+  UpdateItemInput,
   UpdateUnitInput,
   UpdateUserInput,
   UserRecord,
@@ -149,9 +159,194 @@ function cloneUnit(row: UnitRecord): UnitRecord {
   };
 }
 
-export function createMemoryRepos(seed?: { users?: UserRecord[]; units?: UnitRecord[] }): Repos {
+// 条码冲突信号：内存实现用消息前缀标记，路由层据此映射为 BARCODE_CONFLICT（409）。
+const BARCODE_CONFLICT_MESSAGE = 'BARCODE_CONFLICT: barcode already taken by an ACTIVE item';
+
+class MemoryItemRepository implements ItemRepository {
+  private rows = new Map<string, ItemRecord>();
+  private images = new Map<string, ItemImageRecord[]>();
+
+  constructor(seed: ItemRecord[] = []) {
+    for (const row of seed) this.rows.set(row.id, cloneItem(row));
+  }
+
+  private assertBarcodeAvailable(barcode: string | null | undefined, excludeId?: string): void {
+    if (!barcode) return;
+    for (const row of this.rows.values()) {
+      if (row.id !== excludeId && row.status === 'ACTIVE' && row.barcode === barcode) {
+        throw new Error(BARCODE_CONFLICT_MESSAGE);
+      }
+    }
+  }
+
+  async findById(id: string): Promise<ItemRecord | null> {
+    const row = this.rows.get(id);
+    return row ? cloneItem(row) : null;
+  }
+
+  async findByBarcode(code: string): Promise<ItemRecord | null> {
+    const trimmed = code.trim();
+    if (!trimmed) return null;
+    for (const row of this.rows.values()) {
+      if (row.status === 'ACTIVE' && row.barcode === trimmed) return cloneItem(row);
+    }
+    return null;
+  }
+
+  async list(query: ItemListQuery): Promise<ItemListResult> {
+    const q = query.q?.trim().toLowerCase();
+    const all = [...this.rows.values()]
+      .filter((row) => {
+        if (!q) return true;
+        return (
+          row.name.toLowerCase().includes(q) ||
+          (row.barcode?.toLowerCase().includes(q) ?? false) ||
+          (row.sku?.toLowerCase().includes(q) ?? false)
+        );
+      })
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    const size = Math.min(Math.max(query.size ?? 50, 1), 50);
+    const page = Math.max(query.page ?? 1, 1);
+    const start = (page - 1) * size;
+    const items = all.slice(start, start + size).map(cloneItem);
+    return { items, total: all.length, page, size };
+  }
+
+  async create(input: CreateItemInput): Promise<ItemRecord> {
+    this.assertBarcodeAvailable(input.barcode ?? null);
+    const now = new Date();
+    const row: ItemRecord = {
+      id: uuid(),
+      sku: normalizeEmpty(input.sku),
+      name: input.name,
+      barcode: normalizeEmpty(input.barcode),
+      specUnit: input.specUnit ?? 'PIECE',
+      innerUnit: input.innerUnit ?? null,
+      innerCount: normalizeEmpty(input.innerCount),
+      isPerishable: input.isPerishable ?? false,
+      category: normalizeEmpty(input.category),
+      description: normalizeEmpty(input.description),
+      status: input.status ?? 'ACTIVE',
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(row.id, cloneItem(row));
+    return cloneItem(row);
+  }
+
+  async update(id: string, patch: UpdateItemInput): Promise<ItemRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (patch.barcode !== undefined) {
+      const nextBarcode = normalizeEmpty(patch.barcode);
+      const nextStatus = patch.status ?? existing.status;
+      if (nextStatus === 'ACTIVE') this.assertBarcodeAvailable(nextBarcode, id);
+    }
+    const next: ItemRecord = {
+      ...existing,
+      ...(patch.sku !== undefined ? { sku: normalizeEmpty(patch.sku) } : {}),
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.barcode !== undefined ? { barcode: normalizeEmpty(patch.barcode) } : {}),
+      ...(patch.specUnit !== undefined ? { specUnit: patch.specUnit } : {}),
+      ...(patch.innerUnit !== undefined ? { innerUnit: normalizeEmpty(patch.innerUnit) } : {}),
+      ...(patch.innerCount !== undefined ? { innerCount: normalizeEmpty(patch.innerCount) } : {}),
+      ...(patch.isPerishable !== undefined ? { isPerishable: patch.isPerishable } : {}),
+      ...(patch.category !== undefined ? { category: normalizeEmpty(patch.category) } : {}),
+      ...(patch.description !== undefined ? { description: normalizeEmpty(patch.description) } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      updatedAt: new Date(),
+    };
+    this.rows.set(id, cloneItem(next));
+    return cloneItem(next);
+  }
+
+  async listImages(itemId: string): Promise<ItemImageRecord[]> {
+    return (this.images.get(itemId) ?? []).map(cloneItemImage);
+  }
+
+  async attachImages(itemId: string, fileIds: string[]): Promise<ItemImageRecord[]> {
+    const existing = this.images.get(itemId) ?? [];
+    let nextOrder = existing.reduce((max, img) => Math.max(max, img.sortOrder), 0);
+    const added: ItemImageRecord[] = [];
+    for (const fileId of fileIds) {
+      nextOrder += 1;
+      const record: ItemImageRecord = {
+        id: uuid(),
+        itemId,
+        fileId,
+        isPrimary: existing.length === 0 && added.length === 0,
+        sortOrder: nextOrder,
+        createdAt: new Date(),
+      };
+      added.push(record);
+    }
+    this.images.set(itemId, [...existing, ...added]);
+    return (this.images.get(itemId) ?? []).map(cloneItemImage);
+  }
+}
+
+class MemoryFileRepository implements FileRepository {
+  private rows = new Map<string, FileRecord>();
+
+  constructor(seed: FileRecord[] = []) {
+    for (const row of seed) this.rows.set(row.id, cloneFile(row));
+  }
+
+  async findById(id: string): Promise<FileRecord | null> {
+    const row = this.rows.get(id);
+    return row ? cloneFile(row) : null;
+  }
+
+  async create(input: CreateFileInput): Promise<FileRecord> {
+    const row: FileRecord = {
+      id: uuid(),
+      key: input.key,
+      thumbnailKey: input.thumbnailKey,
+      mime: input.mime,
+      size: input.size,
+      width: input.width,
+      height: input.height,
+      createdAt: new Date(),
+    };
+    this.rows.set(row.id, cloneFile(row));
+    return cloneFile(row);
+  }
+}
+
+function normalizeEmpty<T extends string>(value: T | null | undefined): T | null {
+  if (value === undefined || value === null) return null;
+  const trimmed = value.trim() as T;
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function cloneItem(row: ItemRecord): ItemRecord {
+  return { ...row, createdAt: new Date(row.createdAt), updatedAt: new Date(row.updatedAt) };
+}
+
+function cloneItemImage(row: ItemImageRecord): ItemImageRecord {
+  return {
+    ...row,
+    createdAt: new Date(row.createdAt),
+    ...(row.file ? { file: cloneFile(row.file) } : {}),
+  };
+}
+
+function cloneFile(row: FileRecord): FileRecord {
+  return { ...row, createdAt: new Date(row.createdAt) };
+}
+
+export function createMemoryRepos(seed?: {
+  users?: UserRecord[];
+  units?: UnitRecord[];
+  items?: ItemRecord[];
+  files?: FileRecord[];
+}): Repos {
   return {
     users: new MemoryUserRepository(seed?.users),
     units: new MemoryUnitRepository(seed?.units),
+    items: new MemoryItemRepository(seed?.items),
+    files: new MemoryFileRepository(seed?.files),
   };
 }

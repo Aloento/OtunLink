@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { UNIT_TYPES, USER_ROLES, USER_STATUSES } from './auth';
+import { ITEM_STATUSES, SPEC_UNITS } from './items';
 
 // 认证/岗位/业务单元相关的请求校验（ck-02 范围）。
 // 放在 shared 供 api 使用；api 包不直接依赖 zod，通过 shared 复用。
@@ -60,8 +61,56 @@ export const unitPatchSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+const specUnit = () => z.enum(SPEC_UNITS);
+const itemStatus = () => z.enum(ITEM_STATUSES);
+
+const innerCountSchema = z
+  .union([
+    z.number().nonnegative(),
+    z.string().trim().regex(/^\d+(\.\d+)?$/),
+  ])
+  .transform((value) => String(value));
+
+/** 新建物品（POST /items）。条码可空；spec_unit 默认 PIECE。 */
+export const itemCreateSchema = z.object({
+  sku: z.string().trim().max(64).optional(),
+  name: z.string().trim().min(1).max(256),
+  barcode: z.string().trim().max(128).optional(),
+  specUnit: specUnit().optional(),
+  innerUnit: specUnit().optional(),
+  innerCount: innerCountSchema.optional(),
+  isPerishable: z.boolean().optional(),
+  category: z.string().trim().max(128).optional(),
+  description: z.string().trim().max(4096).optional(),
+  status: itemStatus().optional(),
+  /** 新建后关联的图片文件 id（可选，走 POST /files 预上传）。 */
+  fileIds: z.array(z.uuid()).max(20).optional(),
+});
+
+/** 关联图片到物品（POST /items/:id/images）。 */
+export const itemAttachImagesSchema = z.object({
+  fileIds: z.array(z.uuid()).min(1).max(20),
+});
+
+/** 更新物品（PATCH /items/:id）。空字符串语义上等同 null（清除字段）。 */
+export const itemPatchSchema = z.object({
+  sku: z.string().trim().max(64).optional().nullable(),
+  name: z.string().trim().min(1).max(256).optional(),
+  barcode: z.string().trim().max(128).optional().nullable(),
+  specUnit: specUnit().optional(),
+  innerUnit: specUnit().optional().nullable(),
+  innerCount: innerCountSchema.optional().nullable(),
+  isPerishable: z.boolean().optional(),
+  category: z.string().trim().max(128).optional().nullable(),
+  description: z.string().trim().max(4096).optional().nullable(),
+  status: itemStatus().optional(),
+});
+
 export type UserSelfPatchInput = z.infer<typeof userSelfPatchSchema>;
 export type AdminUserCreateInput = z.infer<typeof adminUserCreateSchema>;
 export type AdminUserPatchInput = z.infer<typeof adminUserPatchSchema>;
 export type UnitCreateInput = z.infer<typeof unitCreateSchema>;
 export type UnitPatchInput = z.infer<typeof unitPatchSchema>;
+export type ItemCreateInput = z.infer<typeof itemCreateSchema>;
+export type ItemPatchInput = z.infer<typeof itemPatchSchema>;
+export type ItemAttachImagesInput = z.infer<typeof itemAttachImagesSchema>;
