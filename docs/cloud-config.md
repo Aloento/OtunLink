@@ -9,7 +9,7 @@
 | --- | --- |
 | 账户 Account ID | `6597a89c745d8a5c698ffe521e15580e` |
 | 域名 | `otun.musi.land`（CNAME → `otun.pages.dev`） |
-| Pages 项目 | `otun` 已创建（2026-08-31）并部署首版（`fa528f40.otun.pages.dev`）；自定义域 `otun.musi.land` status=active；部署方式：`wrangler pages deploy apps/web/dist --project-name otun`（GitHub Actions `deploy.yml` 自动执行；未用 CF Git 集成，monorepo 无法解析工作区包） |
+| Pages 项目 | 项目名 **`otunlink`**（项目域 `otun.pages.dev`）；自定义域 `otun.musi.land` status=active、`app.otun.musi.land` 已登记（initializing，待 CNAME）；部署方式：`wrangler pages deploy apps/web/dist --project-name otunlink`（GitHub Actions `deploy.yml` 自动执行；未用 CF Git 集成，monorepo 无法解析工作区包） |
 | API Token | 存于 `C:\Codes\OtunLink\.cf\api-token.txt`（gitignored；权限：Worker/Pages/KV/Hyperdrive 编辑） |
 | API Worker | `otunlink-api` 已部署（2026-08-31）；自定义域 `api.otun.musi.land`（自动创建 CNAME+证书）与 workers.dev 子域 `otunlink-api.soarcraft.workers.dev` 均已启用 |
 
