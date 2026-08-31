@@ -25,3 +25,18 @@
 
 ## 参考
 design.md：§4.2 发货单/清单、§5.1 状态机、§8.4 编号、附录 B 效期上报、§6 页面与 API。
+
+## 完成情况
+
+✅ 已完成（ck-05）。
+
+- 后端：`POST /shipments`（多物流单号 + 箱数 + 清单复用 + 效期上报）、`GET /shipments`（状态过滤 + 分页 + 物流单号/名称带出）、`GET /shipments/:id`、`PATCH /shipments/:id`（仅 DRAFT）、`POST /shipments/:id/send`（DRAFT→SENT 锁定）。
+- 编号：`SH-YYYYMMDD-XXXX`（§8.4），memory 按日计数、SQL 用计数 + 唯一索引兜底。
+- 快照：清单写入名称/规格快照；下单价格写入 `unit_price`；转交后不可编辑。
+- 权限：读 = `shipments:read`，创建/编辑 = `shipments:create`，转交 = `shipments:transfer`；`scope_unit_id` 数据范围生效（写仅本单元，读命中发货/收货任一方放行）。
+- 前端：`/shipments` 列表、`/shipments/:id` 详情（效期列 + 物流单号卡片 + 转交按钮）、`/shipments/new` 与 `/shipments/:id/edit` 表单（单元选择、多物流单号、搜索复用物品、易腐物品逐行效期、跳转新增物品）；i18n 中英同步。
+- 测试：`apps/api` shipments 路由 12 用例（创建校验/效期/多单号唯一/转交状态迁移/权限矩阵/数据范围）全部通过。
+
+验证：`pnpm -r typecheck`、`pnpm -r test`、`pnpm -r build` 全部通过（api build = `wrangler deploy --dry-run`）。
+
+遗留：点货/差异/入库按范围交由 ck-06/ck-07；转交后的「收货方通知」沿用既有通知桩（ck-10 落地）。
