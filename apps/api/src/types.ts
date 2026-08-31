@@ -1,4 +1,11 @@
-import type { ItemStatus, SpecUnit, UnitType, UserRole, UserStatus } from '@otunlink/shared';
+import type {
+  ItemStatus,
+  ShipmentStatus,
+  SpecUnit,
+  UnitType,
+  UserRole,
+  UserStatus,
+} from '@otunlink/shared';
 
 // 认证与数据层共享类型（ck-02）。
 // Repository 接口是「生产 Drizzle / 测试内存实现」的接缝：生产最终应以
@@ -222,11 +229,124 @@ export interface FileRepository {
   create(input: CreateFileInput): Promise<FileRecord>;
 }
 
+// ── 发货单（ck-05）────────────────────────────────────────────────────────
+
+export interface ShipmentRecord {
+  id: string;
+  shipmentNo: string;
+  shipperUnitId: string;
+  receiverUnitId: string;
+  status: ShipmentStatus;
+  boxesCount: number;
+  currency: string;
+  expectedArrivalDate: string | null;
+  remark: string | null;
+  sentAt: Date | null;
+  createdBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ShipmentTrackingRecord {
+  id: string;
+  shipmentId: string;
+  carrier: string;
+  trackingNo: string;
+  note: string | null;
+  createdAt: Date;
+}
+
+export interface ShipmentItemRecord {
+  id: string;
+  shipmentId: string;
+  itemId: string | null;
+  name: string;
+  spec: string | null;
+  expectedQty: string;
+  actualQty: string | null;
+  unitPrice: string | null;
+  productionDate: string | null;
+  expiryDate: string | null;
+  lineNote: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateShipmentTrackingInput {
+  carrier: string;
+  trackingNo: string;
+  note: string | null;
+}
+
+export interface CreateShipmentItemInput {
+  itemId: string;
+  /** 下单时快照（由路由层从物品目录读出）。 */
+  name: string;
+  spec: string | null;
+  expectedQty: string;
+  unitPrice: string | null;
+  productionDate: string | null;
+  expiryDate: string | null;
+  lineNote: string | null;
+}
+
+export interface CreateShipmentInput {
+  shipperUnitId: string;
+  receiverUnitId: string;
+  boxesCount: number;
+  currency: string;
+  expectedArrivalDate: string | null;
+  remark: string | null;
+  trackings: CreateShipmentTrackingInput[];
+  items: CreateShipmentItemInput[];
+  createdBy: string;
+}
+
+export interface UpdateShipmentInput {
+  shipperUnitId?: string;
+  receiverUnitId?: string;
+  boxesCount?: number;
+  currency?: string;
+  expectedArrivalDate?: string | null;
+  remark?: string | null;
+  trackings?: CreateShipmentTrackingInput[];
+  items?: CreateShipmentItemInput[];
+}
+
+export interface ShipmentListQuery {
+  page?: number;
+  size?: number;
+  status?: ShipmentStatus;
+  /** 数据范围：仅返回发货方或收货方等于该单元的单据。 */
+  scopeUnitId?: string;
+}
+
+export interface ShipmentListResult {
+  items: ShipmentRecord[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface ShipmentRepository {
+  findById(id: string): Promise<ShipmentRecord | null>;
+  findByNo(no: string): Promise<ShipmentRecord | null>;
+  list(query: ShipmentListQuery): Promise<ShipmentListResult>;
+  create(input: CreateShipmentInput): Promise<ShipmentRecord>;
+  update(id: string, patch: UpdateShipmentInput): Promise<ShipmentRecord | null>;
+  /** DRAFT → SENT，记录 sent_at；非 DRAFT 抛 SHIPMENT_STATE_CONFLICT 信号。 */
+  send(id: string): Promise<ShipmentRecord | null>;
+  listTrackings(shipmentId: string): Promise<ShipmentTrackingRecord[]>;
+  listTrackingsForShipments(ids: string[]): Promise<Map<string, ShipmentTrackingRecord[]>>;
+  listItems(shipmentId: string): Promise<ShipmentItemRecord[]>;
+}
+
 export interface Repos {
   users: UserRepository;
   units: UnitRepository;
   items: ItemRepository;
   files: FileRepository;
+  shipments: ShipmentRepository;
 }
 
 export interface AuthState {

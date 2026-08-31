@@ -16,6 +16,9 @@ export const ErrorCodes = {
   FILE_INVALID: 'FILE_INVALID',
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
   STORAGE_UNAVAILABLE: 'STORAGE_UNAVAILABLE',
+  // 发货单（ck-05）
+  TRACKING_CONFLICT: 'TRACKING_CONFLICT',
+  SHIPMENT_STATE_CONFLICT: 'SHIPMENT_STATE_CONFLICT',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

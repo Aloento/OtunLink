@@ -11,12 +11,14 @@ import { LoginPage } from './pages/LoginPage';
 import { ItemDetailPage } from './pages/items/ItemDetailPage';
 import { ItemFormPage } from './pages/items/ItemFormPage';
 import { ItemsPage } from './pages/items/ItemsPage';
+import { ShipmentDetailPage } from './pages/shipments/ShipmentDetailPage';
+import { ShipmentFormPage } from './pages/shipments/ShipmentFormPage';
+import { ShipmentsPage } from './pages/shipments/ShipmentsPage';
 import { RequireActive, RequireAuth, RequirePermission } from './routes/guards';
 import { CALLBACK_PATH, LOGIN_PATH, ROUTES, type RouteKey } from './routes/routes';
 
 // 业务页面（除工作台与物品目录外）在 ck-03/ck-04 以「开发中」占位。
 const PLACEHOLDER_KEYS = [
-  'shipments',
   'inbound',
   'outbound',
   'returns',
@@ -81,6 +83,38 @@ export default function App() {
           element={
             <RequirePermission permissions={ROUTES.items.permissions}>
               <ItemDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={ROUTES.shipments.path}
+          element={
+            <RequirePermission permissions={ROUTES.shipments.permissions}>
+              <ShipmentsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={`${ROUTES.shipments.path}/new`}
+          element={
+            <RequirePermission permissions={[Permissions.SHIPMENTS_CREATE]}>
+              <ShipmentFormPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={`${ROUTES.shipments.path}/:id/edit`}
+          element={
+            <RequirePermission permissions={[Permissions.SHIPMENTS_CREATE]}>
+              <ShipmentFormPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={`${ROUTES.shipments.path}/:id`}
+          element={
+            <RequirePermission permissions={ROUTES.shipments.permissions}>
+              <ShipmentDetailPage />
             </RequirePermission>
           }
         />

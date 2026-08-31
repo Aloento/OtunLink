@@ -3,6 +3,7 @@ import type { SqlExecutor } from '@otunlink/db';
 import type {
   CreateFileInput,
   CreateItemInput,
+  CreateShipmentInput,
   CreateUnitInput,
   CreateUserInput,
   FileRecord,
@@ -11,8 +12,14 @@ import type {
   ItemListResult,
   ItemRecord,
   Repos,
+  ShipmentItemRecord,
+  ShipmentListQuery,
+  ShipmentListResult,
+  ShipmentRecord,
+  ShipmentTrackingRecord,
   UnitRecord,
   UpdateItemInput,
+  UpdateShipmentInput,
   UpdateUnitInput,
   UpdateUserInput,
   UserRecord,
@@ -35,6 +42,10 @@ const quote = (value: unknown): string => {
 };
 
 const col = (name: string, value: unknown): string => `${name} = ${quote(value)}`;
+
+// 路由层据此把仓库层异常映射为 409 与对应错误码。
+const SHIPMENT_STATE_CONFLICT = 'SHIPMENT_STATE_CONFLICT: only DRAFT shipments can be edited or sent';
+const SHIPMENT_TRACKING_CONFLICT = 'TRACKING_CONFLICT: carrier+tracking_no already exists';
 
 function mapUser(row: Record<string, unknown>): UserRecord {
   return {
@@ -96,6 +107,53 @@ function mapFile(row: Record<string, unknown>): FileRecord {
     width: row.width != null ? Number(row.width) : null,
     height: row.height != null ? Number(row.height) : null,
     createdAt: new Date(String(row.created_at)),
+  };
+}
+
+function mapShipment(row: Record<string, unknown>): ShipmentRecord {
+  return {
+    id: String(row.id),
+    shipmentNo: String(row.shipment_no),
+    shipperUnitId: String(row.shipper_unit_id),
+    receiverUnitId: String(row.receiver_unit_id),
+    status: (row.status as ShipmentRecord['status']) ?? 'DRAFT',
+    boxesCount: Number(row.boxes_count ?? 0),
+    currency: String(row.currency ?? 'CNY'),
+    expectedArrivalDate: row.expected_arrival_date ? String(row.expected_arrival_date).slice(0, 10) : null,
+    remark: row.remark ? String(row.remark) : null,
+    sentAt: row.sent_at ? new Date(String(row.sent_at)) : null,
+    createdBy: row.created_by ? String(row.created_by) : null,
+    createdAt: new Date(String(row.created_at)),
+    updatedAt: new Date(String(row.updated_at)),
+  };
+}
+
+function mapShipmentTracking(row: Record<string, unknown>): ShipmentTrackingRecord {
+  return {
+    id: String(row.id),
+    shipmentId: String(row.shipment_id),
+    carrier: String(row.carrier),
+    trackingNo: String(row.tracking_no),
+    note: row.note ? String(row.note) : null,
+    createdAt: new Date(String(row.created_at)),
+  };
+}
+
+function mapShipmentItem(row: Record<string, unknown>): ShipmentItemRecord {
+  return {
+    id: String(row.id),
+    shipmentId: String(row.shipment_id),
+    itemId: row.item_id ? String(row.item_id) : null,
+    name: String(row.name),
+    spec: row.spec ? String(row.spec) : null,
+    expectedQty: row.expected_qty != null ? String(row.expected_qty) : '0',
+    actualQty: row.actual_qty != null ? String(row.actual_qty) : null,
+    unitPrice: row.unit_price != null ? String(row.unit_price) : null,
+    productionDate: row.production_date ? String(row.production_date).slice(0, 10) : null,
+    expiryDate: row.expiry_date ? String(row.expiry_date).slice(0, 10) : null,
+    lineNote: row.line_note ? String(row.line_note) : null,
+    createdAt: new Date(String(row.created_at)),
+    updatedAt: new Date(String(row.updated_at)),
   };
 }
 
@@ -302,7 +360,195 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  return { users, units, items, files };
+  // 物流单号唯一索引冲突翻译：把 PG 约束错误归一为业务错误码。
+  function translateTrackingError(err: unknown, message: string): never {
+    const text = err instanceof Error ? err.message : String(err);
+    if (/duplicate|unique|23505/i.test(text)) throw new Error(SHIPMENT_TRACKING_CONFLICT);
+    throw new Error(message);
+  }
+
+  const shipments = {
+    async findById(id: string): Promise<ShipmentRecord | null> {
+      const { rows } = await exec.query(`SELECT * FROM shipments WHERE id = ${quote(id)} LIMIT 1`);
+      return rows[0] ? mapShipment(rows[0]) : null;
+    },
+    async findByNo(no: string): Promise<ShipmentRecord | null> {
+      const { rows } = await exec.query(
+        `SELECT * FROM shipments WHERE shipment_no = ${quote(no)} LIMIT 1`,
+      );
+      return rows[0] ? mapShipment(rows[0]) : null;
+    },
+    async list(query: ShipmentListQuery): Promise<ShipmentListResult> {
+      const where: string[] = [];
+      if (query.status) where.push(`status = ${quote(query.status)}`);
+      if (query.scopeUnitId) {
+        where.push(
+          `(shipper_unit_id = ${quote(query.scopeUnitId)} OR receiver_unit_id = ${quote(query.scopeUnitId)})`,
+        );
+      }
+      const clause = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
+      const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+      const page = Math.max(query.page ?? 1, 1);
+      const offset = (page - 1) * size;
+      const totalResult = await exec.query(`SELECT count(*)::int AS n FROM shipments${clause}`);
+      const total = Number(totalResult.rows[0]?.n ?? 0);
+      const { rows } = await exec.query(
+        `SELECT * FROM shipments${clause} ORDER BY created_at DESC, id ASC LIMIT ${size} OFFSET ${offset}`,
+      );
+      return { items: rows.map(mapShipment), total, page, size };
+    },
+    async create(input: CreateShipmentInput): Promise<ShipmentRecord> {
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const prefix = `SH-${date}-`;
+      const countResult = await exec.query(
+        `SELECT count(*)::int AS n FROM shipments WHERE shipment_no LIKE ${quote(`${prefix}%`)}`,
+      );
+      const base = Number(countResult.rows[0]?.n ?? 0) + 1;
+      let shipmentNo = `${prefix}${String(base).padStart(4, '0')}`;
+      // 唯一索引兜底：并发/重跑时顺延序号。
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const exists = await exec.query(
+          `SELECT count(*)::int AS n FROM shipments WHERE shipment_no = ${quote(shipmentNo)}`,
+        );
+        if (Number(exists.rows[0]?.n ?? 0) === 0) break;
+        shipmentNo = `${prefix}${String(base + attempt + 1).padStart(4, '0')}`;
+      }
+
+      await exec.query('BEGIN');
+      try {
+        const { rows } = await exec.query(
+          `INSERT INTO shipments
+             (shipment_no, shipper_unit_id, receiver_unit_id, status, boxes_count,
+              currency, expected_arrival_date, remark, created_by)
+           VALUES (${quote(shipmentNo)}, ${quote(input.shipperUnitId)}, ${quote(input.receiverUnitId)},
+                   'DRAFT', ${quote(input.boxesCount)}, ${quote(input.currency ?? 'CNY')},
+                   ${quote(nn(input.expectedArrivalDate))}, ${quote(nn(input.remark))},
+                   ${quote(input.createdBy)})
+           RETURNING *`,
+        );
+        const shipment = mapShipment(rows[0]);
+        for (const t of input.trackings) {
+          try {
+            await exec.query(
+              `INSERT INTO shipment_trackings (shipment_id, carrier, tracking_no, note)
+               VALUES (${quote(shipment.id)}, ${quote(t.carrier)}, ${quote(t.trackingNo)},
+                       ${quote(nn(t.note))})`,
+            );
+          } catch (err) {
+            translateTrackingError(err, String(err));
+          }
+        }
+        for (const i of input.items) {
+          await exec.query(
+            `INSERT INTO shipment_items
+               (shipment_id, item_id, name, spec, expected_qty, unit_price,
+                production_date, expiry_date, line_note)
+             VALUES (${quote(shipment.id)}, ${quote(i.itemId)}, ${quote(i.name)},
+                     ${quote(nn(i.spec))}, ${quote(i.expectedQty)}, ${quote(nn(i.unitPrice))},
+                     ${quote(nn(i.productionDate))}, ${quote(nn(i.expiryDate))},
+                     ${quote(nn(i.lineNote))})`,
+          );
+        }
+        await exec.query('COMMIT');
+        return shipment;
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async update(id: string, patch: UpdateShipmentInput): Promise<ShipmentRecord | null> {
+      const existing = await this.findById(id);
+      if (!existing) return null;
+      if (existing.status !== 'DRAFT') throw new Error(SHIPMENT_STATE_CONFLICT);
+
+      const sets: string[] = [];
+      if (patch.shipperUnitId !== undefined) sets.push(col('shipper_unit_id', patch.shipperUnitId));
+      if (patch.receiverUnitId !== undefined) sets.push(col('receiver_unit_id', patch.receiverUnitId));
+      if (patch.boxesCount !== undefined) sets.push(col('boxes_count', patch.boxesCount));
+      if (patch.currency !== undefined) sets.push(col('currency', patch.currency));
+      if (patch.expectedArrivalDate !== undefined) sets.push(col('expected_arrival_date', nn(patch.expectedArrivalDate)));
+      if (patch.remark !== undefined) sets.push(col('remark', nn(patch.remark)));
+      if (sets.length === 0) return existing;
+      sets.push('updated_at = now()');
+
+      await exec.query('BEGIN');
+      try {
+        const { rows } = await exec.query(
+          `UPDATE shipments SET ${sets.join(', ')} WHERE id = ${quote(id)} RETURNING *`,
+        );
+        if (patch.trackings) {
+          await exec.query(`DELETE FROM shipment_trackings WHERE shipment_id = ${quote(id)}`);
+          for (const t of patch.trackings) {
+            try {
+              await exec.query(
+                `INSERT INTO shipment_trackings (shipment_id, carrier, tracking_no, note)
+                 VALUES (${quote(id)}, ${quote(t.carrier)}, ${quote(t.trackingNo)}, ${quote(nn(t.note))})`,
+              );
+            } catch (err) {
+              translateTrackingError(err, String(err));
+            }
+          }
+        }
+        if (patch.items) {
+          await exec.query(`DELETE FROM shipment_items WHERE shipment_id = ${quote(id)}`);
+          for (const i of patch.items) {
+            await exec.query(
+              `INSERT INTO shipment_items
+                 (shipment_id, item_id, name, spec, expected_qty, unit_price,
+                  production_date, expiry_date, line_note)
+               VALUES (${quote(id)}, ${quote(i.itemId)}, ${quote(i.name)},
+                       ${quote(nn(i.spec))}, ${quote(i.expectedQty)}, ${quote(nn(i.unitPrice))},
+                       ${quote(nn(i.productionDate))}, ${quote(nn(i.expiryDate))},
+                       ${quote(nn(i.lineNote))})`,
+            );
+          }
+        }
+        await exec.query('COMMIT');
+        return rows[0] ? mapShipment(rows[0]) : null;
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async send(id: string): Promise<ShipmentRecord | null> {
+      const existing = await this.findById(id);
+      if (!existing) return null;
+      if (existing.status !== 'DRAFT') throw new Error(SHIPMENT_STATE_CONFLICT);
+      const { rows } = await exec.query(
+        `UPDATE shipments SET status = 'SENT', sent_at = now(), updated_at = now()
+         WHERE id = ${quote(id)} AND status = 'DRAFT' RETURNING *`,
+      );
+      return rows[0] ? mapShipment(rows[0]) : null;
+    },
+    async listTrackings(shipmentId: string): Promise<ShipmentTrackingRecord[]> {
+      const { rows } = await exec.query(
+        `SELECT * FROM shipment_trackings WHERE shipment_id = ${quote(shipmentId)} ORDER BY created_at ASC, id ASC`,
+      );
+      return rows.map(mapShipmentTracking);
+    },
+    async listTrackingsForShipments(ids: string[]): Promise<Map<string, ShipmentTrackingRecord[]>> {
+      const map = new Map<string, ShipmentTrackingRecord[]>();
+      for (const id of ids) map.set(id, []);
+      if (ids.length === 0) return map;
+      const inList = ids.map((id) => quote(id)).join(', ');
+      const { rows } = await exec.query(
+        `SELECT * FROM shipment_trackings WHERE shipment_id IN (${inList}) ORDER BY created_at ASC, id ASC`,
+      );
+      for (const row of rows) {
+        const tracking = mapShipmentTracking(row);
+        map.get(tracking.shipmentId)?.push(tracking);
+      }
+      return map;
+    },
+    async listItems(shipmentId: string): Promise<ShipmentItemRecord[]> {
+      const { rows } = await exec.query(
+        `SELECT * FROM shipment_items WHERE shipment_id = ${quote(shipmentId)} ORDER BY created_at ASC, id ASC`,
+      );
+      return rows.map(mapShipmentItem);
+    },
+  };
+
+  return { users, units, items, files, shipments };
 }
 
 // 将 undefined/空字符串归一化为 null（写入 DB 的 NULL）。

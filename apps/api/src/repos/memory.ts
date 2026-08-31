@@ -1,6 +1,7 @@
 import type {
   CreateFileInput,
   CreateItemInput,
+  CreateShipmentInput,
   CreateUnitInput,
   CreateUserInput,
   FileRecord,
@@ -11,9 +12,16 @@ import type {
   ItemRecord,
   ItemRepository,
   Repos,
+  ShipmentItemRecord,
+  ShipmentListQuery,
+  ShipmentListResult,
+  ShipmentRecord,
+  ShipmentRepository,
+  ShipmentTrackingRecord,
   UnitRecord,
   UnitRepository,
   UpdateItemInput,
+  UpdateShipmentInput,
   UpdateUnitInput,
   UpdateUserInput,
   UserRecord,
@@ -337,16 +345,272 @@ function cloneFile(row: FileRecord): FileRecord {
   return { ...row, createdAt: new Date(row.createdAt) };
 }
 
+// 物流单号 / 状态冲突信号：内存实现用消息前缀标记，路由层据此映射 409。
+const TRACKING_CONFLICT_MESSAGE = 'TRACKING_CONFLICT: carrier+tracking_no already exists';
+const SHIPMENT_STATE_MESSAGE = 'SHIPMENT_STATE_CONFLICT: only DRAFT shipments can be edited or sent';
+
+/** 单据编号 §8.4：SH-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号）。 */
+function shipmentNoDate(now: Date): string {
+  return now.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+class MemoryShipmentRepository implements ShipmentRepository {
+  private rows = new Map<string, ShipmentRecord>();
+  private trackings = new Map<string, ShipmentTrackingRecord[]>();
+  private items = new Map<string, ShipmentItemRecord[]>();
+  private dailyCounters = new Map<string, number>();
+
+  constructor(seed: { shipments?: ShipmentRecord[]; trackings?: ShipmentTrackingRecord[]; items?: ShipmentItemRecord[] } = {}) {
+    for (const row of seed.shipments ?? []) this.rows.set(row.id, cloneShipment(row));
+    for (const row of seed.trackings ?? []) {
+      const list = this.trackings.get(row.shipmentId) ?? [];
+      list.push(cloneShipmentTracking(row));
+      this.trackings.set(row.shipmentId, list);
+    }
+    for (const row of seed.items ?? []) {
+      const list = this.items.get(row.shipmentId) ?? [];
+      list.push(cloneShipmentItem(row));
+      this.items.set(row.shipmentId, list);
+    }
+  }
+
+  private nextShipmentNo(): string {
+    const key = shipmentNoDate(new Date());
+    const next = (this.dailyCounters.get(key) ?? 0) + 1;
+    this.dailyCounters.set(key, next);
+    return `SH-${key}-${String(next).padStart(4, '0')}`;
+  }
+
+  private assertTrackingsAvailable(
+    trackings: CreateShipmentInput['trackings'],
+    excludeShipmentId?: string,
+  ): void {
+    for (const incoming of trackings) {
+      for (const [shipmentId, rows] of this.trackings) {
+        if (shipmentId === excludeShipmentId) continue;
+        for (const row of rows) {
+          if (row.carrier === incoming.carrier && row.trackingNo === incoming.trackingNo) {
+            throw new Error(TRACKING_CONFLICT_MESSAGE);
+          }
+        }
+      }
+    }
+  }
+
+  async findById(id: string): Promise<ShipmentRecord | null> {
+    const row = this.rows.get(id);
+    return row ? cloneShipment(row) : null;
+  }
+
+  async findByNo(no: string): Promise<ShipmentRecord | null> {
+    for (const row of this.rows.values()) {
+      if (row.shipmentNo === no) return cloneShipment(row);
+    }
+    return null;
+  }
+
+  async list(query: ShipmentListQuery): Promise<ShipmentListResult> {
+    const all = [...this.rows.values()]
+      .filter((row) => (query.status ? row.status === query.status : true))
+      .filter((row) =>
+        query.scopeUnitId
+          ? row.shipperUnitId === query.scopeUnitId || row.receiverUnitId === query.scopeUnitId
+          : true,
+      )
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+    const page = Math.max(query.page ?? 1, 1);
+    const start = (page - 1) * size;
+    return {
+      items: all.slice(start, start + size).map(cloneShipment),
+      total: all.length,
+      page,
+      size,
+    };
+  }
+
+  async create(input: CreateShipmentInput): Promise<ShipmentRecord> {
+    this.assertTrackingsAvailable(input.trackings);
+    const now = new Date();
+    const row: ShipmentRecord = {
+      id: uuid(),
+      shipmentNo: this.nextShipmentNo(),
+      shipperUnitId: input.shipperUnitId,
+      receiverUnitId: input.receiverUnitId,
+      status: 'DRAFT',
+      boxesCount: input.boxesCount,
+      currency: input.currency,
+      expectedArrivalDate: normalizeEmpty(input.expectedArrivalDate),
+      remark: normalizeEmpty(input.remark),
+      sentAt: null,
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(row.id, cloneShipment(row));
+
+    this.trackings.set(
+      row.id,
+      input.trackings.map((t) => ({
+        id: uuid(),
+        shipmentId: row.id,
+        carrier: t.carrier,
+        trackingNo: t.trackingNo,
+        note: normalizeEmpty(t.note),
+        createdAt: now,
+      })),
+    );
+    this.items.set(
+      row.id,
+      input.items.map((i) => ({
+        id: uuid(),
+        shipmentId: row.id,
+        itemId: i.itemId,
+        name: i.name,
+        spec: normalizeEmpty(i.spec),
+        expectedQty: i.expectedQty,
+        actualQty: null,
+        unitPrice: normalizeEmpty(i.unitPrice),
+        productionDate: normalizeEmpty(i.productionDate),
+        expiryDate: normalizeEmpty(i.expiryDate),
+        lineNote: normalizeEmpty(i.lineNote),
+        createdAt: now,
+        updatedAt: now,
+      })),
+    );
+    return cloneShipment(row);
+  }
+
+  async update(id: string, patch: UpdateShipmentInput): Promise<ShipmentRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'DRAFT') throw new Error(SHIPMENT_STATE_MESSAGE);
+
+    if (patch.trackings) this.assertTrackingsAvailable(patch.trackings, id);
+
+    const next: ShipmentRecord = {
+      ...existing,
+      ...(patch.shipperUnitId !== undefined ? { shipperUnitId: patch.shipperUnitId } : {}),
+      ...(patch.receiverUnitId !== undefined ? { receiverUnitId: patch.receiverUnitId } : {}),
+      ...(patch.boxesCount !== undefined ? { boxesCount: patch.boxesCount } : {}),
+      ...(patch.currency !== undefined ? { currency: patch.currency } : {}),
+      ...(patch.expectedArrivalDate !== undefined
+        ? { expectedArrivalDate: normalizeEmpty(patch.expectedArrivalDate) }
+        : {}),
+      ...(patch.remark !== undefined ? { remark: normalizeEmpty(patch.remark) } : {}),
+      updatedAt: new Date(),
+    };
+    this.rows.set(id, cloneShipment(next));
+
+    if (patch.trackings) {
+      const now = new Date();
+      this.trackings.set(
+        id,
+        patch.trackings.map((t) => ({
+          id: uuid(),
+          shipmentId: id,
+          carrier: t.carrier,
+          trackingNo: t.trackingNo,
+          note: normalizeEmpty(t.note),
+          createdAt: now,
+        })),
+      );
+    }
+    if (patch.items) {
+      const now = new Date();
+      this.items.set(
+        id,
+        patch.items.map((i) => ({
+          id: uuid(),
+          shipmentId: id,
+          itemId: i.itemId,
+          name: i.name,
+          spec: normalizeEmpty(i.spec),
+          expectedQty: i.expectedQty,
+          actualQty: null,
+          unitPrice: normalizeEmpty(i.unitPrice),
+          productionDate: normalizeEmpty(i.productionDate),
+          expiryDate: normalizeEmpty(i.expiryDate),
+          lineNote: normalizeEmpty(i.lineNote),
+          createdAt: now,
+          updatedAt: now,
+        })),
+      );
+    }
+    return cloneShipment(next);
+  }
+
+  async send(id: string): Promise<ShipmentRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'DRAFT') throw new Error(SHIPMENT_STATE_MESSAGE);
+    const next: ShipmentRecord = {
+      ...existing,
+      status: 'SENT',
+      sentAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.rows.set(id, cloneShipment(next));
+    return cloneShipment(next);
+  }
+
+  async listTrackings(shipmentId: string): Promise<ShipmentTrackingRecord[]> {
+    return (this.trackings.get(shipmentId) ?? []).map(cloneShipmentTracking);
+  }
+
+  async listTrackingsForShipments(ids: string[]): Promise<Map<string, ShipmentTrackingRecord[]>> {
+    const map = new Map<string, ShipmentTrackingRecord[]>();
+    for (const id of ids) {
+      map.set(id, (this.trackings.get(id) ?? []).map(cloneShipmentTracking));
+    }
+    return map;
+  }
+
+  async listItems(shipmentId: string): Promise<ShipmentItemRecord[]> {
+    return (this.items.get(shipmentId) ?? []).map(cloneShipmentItem);
+  }
+}
+
+function cloneShipment(row: ShipmentRecord): ShipmentRecord {
+  return {
+    ...row,
+    sentAt: row.sentAt ? new Date(row.sentAt) : null,
+    createdAt: new Date(row.createdAt),
+    updatedAt: new Date(row.updatedAt),
+  };
+}
+
+function cloneShipmentTracking(row: ShipmentTrackingRecord): ShipmentTrackingRecord {
+  return { ...row, createdAt: new Date(row.createdAt) };
+}
+
+function cloneShipmentItem(row: ShipmentItemRecord): ShipmentItemRecord {
+  return {
+    ...row,
+    createdAt: new Date(row.createdAt),
+    updatedAt: new Date(row.updatedAt),
+  };
+}
+
 export function createMemoryRepos(seed?: {
   users?: UserRecord[];
   units?: UnitRecord[];
   items?: ItemRecord[];
   files?: FileRecord[];
+  shipments?: ShipmentRecord[];
+  shipmentTrackings?: ShipmentTrackingRecord[];
+  shipmentItems?: ShipmentItemRecord[];
 }): Repos {
   return {
     users: new MemoryUserRepository(seed?.users),
     units: new MemoryUnitRepository(seed?.units),
     items: new MemoryItemRepository(seed?.items),
     files: new MemoryFileRepository(seed?.files),
+    shipments: new MemoryShipmentRepository({
+      shipments: seed?.shipments,
+      trackings: seed?.shipmentTrackings,
+      items: seed?.shipmentItems,
+    }),
   };
 }

@@ -1,4 +1,13 @@
-import type { FileRecord, ItemImageRecord, ItemRecord, UnitRecord, UserRecord } from '../types';
+import type {
+  FileRecord,
+  ItemImageRecord,
+  ItemRecord,
+  ShipmentItemRecord,
+  ShipmentRecord,
+  ShipmentTrackingRecord,
+  UnitRecord,
+  UserRecord,
+} from '../types';
 
 // 对外 DTO：剥离内部/敏感字段（entraSub 属于租户身份标识，不下发到前端）。
 
@@ -88,5 +97,60 @@ export function itemImageDto(image: ItemImageRecord) {
     sortOrder: image.sortOrder,
     createdAt: image.createdAt.toISOString(),
     ...(image.file ? { file: fileDto(image.file) } : {}),
+  };
+}
+
+export function shipmentTrackingDto(tracking: ShipmentTrackingRecord) {
+  return {
+    id: tracking.id,
+    carrier: tracking.carrier,
+    trackingNo: tracking.trackingNo,
+    note: tracking.note,
+    createdAt: tracking.createdAt.toISOString(),
+  };
+}
+
+export function shipmentItemDto(item: ShipmentItemRecord) {
+  return {
+    id: item.id,
+    itemId: item.itemId,
+    name: item.name,
+    spec: item.spec,
+    expectedQty: item.expectedQty,
+    actualQty: item.actualQty,
+    unitPrice: item.unitPrice,
+    productionDate: item.productionDate,
+    expiryDate: item.expiryDate,
+    lineNote: item.lineNote,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+  };
+}
+
+export function shipmentDto(
+  shipment: ShipmentRecord,
+  options: {
+    shipperName: string | null;
+    receiverName: string | null;
+    trackings: ShipmentTrackingRecord[];
+  },
+) {
+  return {
+    id: shipment.id,
+    shipmentNo: shipment.shipmentNo,
+    shipperUnitId: shipment.shipperUnitId,
+    receiverUnitId: shipment.receiverUnitId,
+    shipperName: options.shipperName,
+    receiverName: options.receiverName,
+    status: shipment.status,
+    boxesCount: shipment.boxesCount,
+    currency: shipment.currency,
+    expectedArrivalDate: shipment.expectedArrivalDate,
+    remark: shipment.remark,
+    sentAt: shipment.sentAt ? shipment.sentAt.toISOString() : null,
+    createdBy: shipment.createdBy,
+    createdAt: shipment.createdAt.toISOString(),
+    updatedAt: shipment.updatedAt.toISOString(),
+    trackings: options.trackings.map(shipmentTrackingDto),
   };
 }

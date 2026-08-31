@@ -106,6 +106,60 @@ export const itemPatchSchema = z.object({
   status: itemStatus().optional(),
 });
 
+// ── 发货单（ck-05）────────────────────────────────────────────────────────
+
+const dateOnly = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/** 数量：number 或数字字符串，> 0，统一转为字符串（DB numeric 以文本回读）。 */
+const shipmentQty = z
+  .union([
+    z.number().positive(),
+    z
+      .string()
+      .trim()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .refine((value) => Number(value) > 0, { message: '数量必须大于 0' }),
+  ])
+  .transform((value) => String(value));
+
+/** 金额：number 或数字字符串，>= 0，统一转为字符串。 */
+const shipmentMoney = z
+  .union([
+    z.number().nonnegative(),
+    z.string().trim().regex(/^\d+(\.\d{1,2})?$/),
+  ])
+  .transform((value) => String(value));
+
+export const shipmentTrackingSchema = z.object({
+  carrier: z.string().trim().min(1).max(64),
+  trackingNo: z.string().trim().min(1).max(128),
+  note: z.string().trim().max(512).optional().nullable(),
+});
+
+export const shipmentItemCreateSchema = z.object({
+  itemId: z.uuid(),
+  expectedQty: shipmentQty,
+  unitPrice: shipmentMoney.optional().nullable(),
+  productionDate: dateOnly.optional().nullable(),
+  expiryDate: dateOnly.optional().nullable(),
+  lineNote: z.string().trim().max(1024).optional().nullable(),
+});
+
+/** 新建发货单（POST /shipments）。多物流单号 + 清单 + 箱数。 */
+export const shipmentCreateSchema = z.object({
+  shipperUnitId: z.uuid(),
+  receiverUnitId: z.uuid(),
+  boxesCount: z.number().int().nonnegative(),
+  currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional(),
+  expectedArrivalDate: dateOnly.optional().nullable(),
+  remark: z.string().trim().max(4096).optional().nullable(),
+  trackings: z.array(shipmentTrackingSchema).min(1).max(50),
+  items: z.array(shipmentItemCreateSchema).min(1).max(500),
+});
+
+/** 更新发货单（PATCH /shipments/:id）：仅 DRAFT；字段整体替换语义。 */
+export const shipmentPatchSchema = shipmentCreateSchema.partial();
+
 export type UserSelfPatchInput = z.infer<typeof userSelfPatchSchema>;
 export type AdminUserCreateInput = z.infer<typeof adminUserCreateSchema>;
 export type AdminUserPatchInput = z.infer<typeof adminUserPatchSchema>;
@@ -114,3 +168,7 @@ export type UnitPatchInput = z.infer<typeof unitPatchSchema>;
 export type ItemCreateInput = z.infer<typeof itemCreateSchema>;
 export type ItemPatchInput = z.infer<typeof itemPatchSchema>;
 export type ItemAttachImagesInput = z.infer<typeof itemAttachImagesSchema>;
+export type ShipmentCreateInput = z.infer<typeof shipmentCreateSchema>;
+export type ShipmentPatchInput = z.infer<typeof shipmentPatchSchema>;
+export type ShipmentTrackingInput = z.infer<typeof shipmentTrackingSchema>;
+export type ShipmentItemCreateInput = z.infer<typeof shipmentItemCreateSchema>;
