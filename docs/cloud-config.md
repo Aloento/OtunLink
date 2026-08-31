@@ -11,6 +11,7 @@
 | 域名 | `otun.musi.land`（CNAME → `otun.pages.dev`） |
 | Pages 项目 | `otun`（绑定 `otunlink-api` Worker 作函数入口） |
 | API Token | 存于 `C:\Codes\OtunLink\.cf\api-token.txt`（gitignored；权限：Worker/Pages/KV/Hyperdrive 编辑） |
+| API Worker | `otunlink-api` 已部署（2026-08-31）；自定义域 `api.otun.musi.land`（自动创建 CNAME+证书）与 workers.dev 子域 `otunlink-api.soarcraft.workers.dev` 均已启用 |
 
 ### 绑定（已写入 apps/api/wrangler.toml）
 
