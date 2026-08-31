@@ -1,3 +1,43 @@
+CREATE TYPE "unit_type" AS ENUM ('COLLECTOR', 'WAREHOUSE', 'RETAILER');
+--> statement-breakpoint
+CREATE TYPE "user_role" AS ENUM ('ADMIN', 'COLLECTOR', 'WAREHOUSE', 'RETAILER');
+--> statement-breakpoint
+CREATE TYPE "user_status" AS ENUM ('ACTIVE', 'PENDING', 'DISABLED');
+--> statement-breakpoint
+CREATE TYPE "spec_unit" AS ENUM ('PIECE', 'BAG', 'BOX', 'PACK', 'SET', 'OTHER');
+--> statement-breakpoint
+CREATE TYPE "item_status" AS ENUM ('ACTIVE', 'INACTIVE');
+--> statement-breakpoint
+CREATE TYPE "shipment_status" AS ENUM ('DRAFT', 'SENT', 'COUNTING', 'READY', 'DISCREPANCY', 'REVIEW_PENDING', 'INBOUNDED', 'RETURN_PENDING', 'RETURNED');
+--> statement-breakpoint
+CREATE TYPE "discrepancy_review_status" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+--> statement-breakpoint
+CREATE TYPE "batch_source_type" AS ENUM ('SHIPMENT', 'MANUAL');
+--> statement-breakpoint
+CREATE TYPE "inbound_source_type" AS ENUM ('SHIPMENT', 'MANUAL');
+--> statement-breakpoint
+CREATE TYPE "inbound_status" AS ENUM ('DRAFT', 'POSTED');
+--> statement-breakpoint
+CREATE TYPE "outbound_type" AS ENUM ('NORMAL', 'LOSS');
+--> statement-breakpoint
+CREATE TYPE "outbound_status" AS ENUM ('DRAFT', 'POSTED');
+--> statement-breakpoint
+CREATE TYPE "return_source_type" AS ENUM ('SHIPMENT', 'SALES');
+--> statement-breakpoint
+CREATE TYPE "return_status" AS ENUM ('PENDING', 'CLOSED', 'REJECTED', 'REQUESTED', 'APPROVED', 'RETURNED', 'CANCELLED');
+--> statement-breakpoint
+CREATE TYPE "sales_source" AS ENUM ('RETAILER_REQUEST', 'WAREHOUSE_INITIATED');
+--> statement-breakpoint
+CREATE TYPE "delivery_method" AS ENUM ('PICKUP', 'EXPRESS', 'LOGISTICS');
+--> statement-breakpoint
+CREATE TYPE "sales_status" AS ENUM ('DRAFT', 'SENT', 'PAYMENT_UPLOADED', 'CONFIRMED', 'CANCELLED');
+--> statement-breakpoint
+CREATE TYPE "stock_movement_type" AS ENUM ('INBOUND_SHIPMENT', 'INBOUND_MANUAL', 'OUTBOUND_NORMAL', 'OUTBOUND_LOSS', 'OUTBOUND_SALE', 'OUTBOUND_SALE_REVERSAL', 'RETURN_IN', 'RETURN_OUT');
+--> statement-breakpoint
+CREATE TYPE "notification_type" AS ENUM ('SHIPMENT_TRANSFER', 'DISCREPANCY', 'RETURN', 'AFTER_SALE', 'SALES', 'INBOUND', 'OUTBOUND', 'EXPIRY_ALERT', 'PAYMENT', 'SYSTEM');
+--> statement-breakpoint
+CREATE TYPE "email_log_status" AS ENUM ('PENDING', 'SENT', 'FAILED');
+--> statement-breakpoint
 CREATE TABLE "audit_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid,

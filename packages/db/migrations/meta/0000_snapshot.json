@@ -1,5 +1,5 @@
 {
-  "id": "b51de02c-77de-43d8-a647-4063b610a6e7",
+  "id": "0f0d216b-c5c7-457d-abb5-142fc9d2c7ee",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -3846,7 +3846,208 @@
       "isRLSEnabled": false
     }
   },
-  "enums": {},
+  "enums": {
+    "public.unit_type": {
+      "name": "unit_type",
+      "schema": "public",
+      "values": [
+        "COLLECTOR",
+        "WAREHOUSE",
+        "RETAILER"
+      ]
+    },
+    "public.user_role": {
+      "name": "user_role",
+      "schema": "public",
+      "values": [
+        "ADMIN",
+        "COLLECTOR",
+        "WAREHOUSE",
+        "RETAILER"
+      ]
+    },
+    "public.user_status": {
+      "name": "user_status",
+      "schema": "public",
+      "values": [
+        "ACTIVE",
+        "PENDING",
+        "DISABLED"
+      ]
+    },
+    "public.spec_unit": {
+      "name": "spec_unit",
+      "schema": "public",
+      "values": [
+        "PIECE",
+        "BAG",
+        "BOX",
+        "PACK",
+        "SET",
+        "OTHER"
+      ]
+    },
+    "public.item_status": {
+      "name": "item_status",
+      "schema": "public",
+      "values": [
+        "ACTIVE",
+        "INACTIVE"
+      ]
+    },
+    "public.shipment_status": {
+      "name": "shipment_status",
+      "schema": "public",
+      "values": [
+        "DRAFT",
+        "SENT",
+        "COUNTING",
+        "READY",
+        "DISCREPANCY",
+        "REVIEW_PENDING",
+        "INBOUNDED",
+        "RETURN_PENDING",
+        "RETURNED"
+      ]
+    },
+    "public.discrepancy_review_status": {
+      "name": "discrepancy_review_status",
+      "schema": "public",
+      "values": [
+        "PENDING",
+        "APPROVED",
+        "REJECTED"
+      ]
+    },
+    "public.batch_source_type": {
+      "name": "batch_source_type",
+      "schema": "public",
+      "values": [
+        "SHIPMENT",
+        "MANUAL"
+      ]
+    },
+    "public.inbound_source_type": {
+      "name": "inbound_source_type",
+      "schema": "public",
+      "values": [
+        "SHIPMENT",
+        "MANUAL"
+      ]
+    },
+    "public.inbound_status": {
+      "name": "inbound_status",
+      "schema": "public",
+      "values": [
+        "DRAFT",
+        "POSTED"
+      ]
+    },
+    "public.outbound_type": {
+      "name": "outbound_type",
+      "schema": "public",
+      "values": [
+        "NORMAL",
+        "LOSS"
+      ]
+    },
+    "public.outbound_status": {
+      "name": "outbound_status",
+      "schema": "public",
+      "values": [
+        "DRAFT",
+        "POSTED"
+      ]
+    },
+    "public.return_source_type": {
+      "name": "return_source_type",
+      "schema": "public",
+      "values": [
+        "SHIPMENT",
+        "SALES"
+      ]
+    },
+    "public.return_status": {
+      "name": "return_status",
+      "schema": "public",
+      "values": [
+        "PENDING",
+        "CLOSED",
+        "REJECTED",
+        "REQUESTED",
+        "APPROVED",
+        "RETURNED",
+        "CANCELLED"
+      ]
+    },
+    "public.sales_source": {
+      "name": "sales_source",
+      "schema": "public",
+      "values": [
+        "RETAILER_REQUEST",
+        "WAREHOUSE_INITIATED"
+      ]
+    },
+    "public.delivery_method": {
+      "name": "delivery_method",
+      "schema": "public",
+      "values": [
+        "PICKUP",
+        "EXPRESS",
+        "LOGISTICS"
+      ]
+    },
+    "public.sales_status": {
+      "name": "sales_status",
+      "schema": "public",
+      "values": [
+        "DRAFT",
+        "SENT",
+        "PAYMENT_UPLOADED",
+        "CONFIRMED",
+        "CANCELLED"
+      ]
+    },
+    "public.stock_movement_type": {
+      "name": "stock_movement_type",
+      "schema": "public",
+      "values": [
+        "INBOUND_SHIPMENT",
+        "INBOUND_MANUAL",
+        "OUTBOUND_NORMAL",
+        "OUTBOUND_LOSS",
+        "OUTBOUND_SALE",
+        "OUTBOUND_SALE_REVERSAL",
+        "RETURN_IN",
+        "RETURN_OUT"
+      ]
+    },
+    "public.notification_type": {
+      "name": "notification_type",
+      "schema": "public",
+      "values": [
+        "SHIPMENT_TRANSFER",
+        "DISCREPANCY",
+        "RETURN",
+        "AFTER_SALE",
+        "SALES",
+        "INBOUND",
+        "OUTBOUND",
+        "EXPIRY_ALERT",
+        "PAYMENT",
+        "SYSTEM"
+      ]
+    },
+    "public.email_log_status": {
+      "name": "email_log_status",
+      "schema": "public",
+      "values": [
+        "PENDING",
+        "SENT",
+        "FAILED"
+      ]
+    }
+  },
   "schemas": {},
   "sequences": {},
   "roles": {},
