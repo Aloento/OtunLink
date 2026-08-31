@@ -49,8 +49,9 @@
 | --- | --- |
 | 目录（租户）ID | `9ed42989-9bdb-439d-80e7-c709641d1f08` |
 | 应用程序（客户端）ID | `0edca98e-17df-41f2-b254-a579095ffcb7` |
+| API 暴露范围（scope） | `https://SoarCraft.onmicrosoft.com/OtunLink/API`（发布者域形式；token `aud` 即此 URI） |
 | 注册 | 见 `docs/auth-setup.md`；Redirect URI 需含 `https://app.otun.musi.land/auth/callback` |
-| 本地配置 | `apps/api/.dev.vars`（`ENTRA_TENANT_ID/CLIENT_ID`）、`apps/web/.env.local`（`VITE_ENTRA_*`） |
+| 本地配置 | `apps/api/.dev.vars`：`ENTRA_TENANT_ID/CLIENT_ID/AUDIENCE`（AUDIENCE 已设为真实 scope）；`apps/web/.env.local`：`VITE_ENTRA_*` + `VITE_API_SCOPE`（已设为真实 scope） |
 
 ## 5. 本地开发配置
 

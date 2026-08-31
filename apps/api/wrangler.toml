@@ -2,6 +2,11 @@ name = "otunlink-api"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 
+# 自定义域（musi.land zone 已在 Cloudflare 托管；部署时自动创建 CNAME 与证书）
+routes = [
+  { pattern = "api.otun.musi.land", custom_domain = true },
+]
+
 # ── Cloudflare 资源绑定（真实值由用户回传，见 docs/cloud-config.md）────────
 [[hyperdrive]]
 binding = "HYPERDRIVE"
