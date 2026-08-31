@@ -2,8 +2,10 @@ import { ErrorCodes, Permissions, reviewRejectSchema } from '@otunlink/shared';
 import { Hono } from 'hono';
 
 import { requirePermission } from '../auth/middleware';
+import { createMailer } from '../lib/email';
 import { discrepancyReviewDto } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import { notify } from '../lib/notify';
 import type { AppEnv } from '../types';
 
 // 差异修订审批（design.md §3.2 / §5.1 / 附录 A）。
@@ -33,6 +35,13 @@ export function reviewsRouter(): Hono<AppEnv> {
     try {
       const updated = await repos.shipments.approveReview(review.id, user.id);
       if (!updated) return notFound(c, '差异修订不存在');
+      await notify(repos, createMailer(c.env), {
+        type: 'REVIEW_APPROVED',
+        title: `发货单 ${shipment.shipmentNo} 差异修订已审批通过`,
+        content: '差异修订已通过，发货单进入 READY 可确认入库。',
+        link: `/shipments/${shipment.id}`,
+        unitId: shipment.receiverUnitId,
+      });
       return ok(c, discrepancyReviewDto(updated));
     } catch (cause) {
       if (isReviewAlreadyProcessed(cause)) {
@@ -65,6 +74,13 @@ export function reviewsRouter(): Hono<AppEnv> {
     try {
       const updated = await repos.shipments.rejectReview(review.id, user.id, parsed.data.reason);
       if (!updated) return notFound(c, '差异修订不存在');
+      await notify(repos, createMailer(c.env), {
+        type: 'REVIEW_REJECTED',
+        title: `发货单 ${shipment.shipmentNo} 差异修订被驳回`,
+        content: `差异修订被驳回，请根据理由调整后重新提交。理由：${parsed.data.reason ?? '无'}`,
+        link: `/shipments/${shipment.id}`,
+        unitId: shipment.receiverUnitId,
+      });
       return ok(c, discrepancyReviewDto(updated));
     } catch (cause) {
       if (isReviewAlreadyProcessed(cause)) {

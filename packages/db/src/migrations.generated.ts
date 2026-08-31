@@ -18,5 +18,9 @@ export const migrations: Migration[] = [
   {
     "name": "0005_early_zarek",
     "sql": "ALTER TYPE \"public\".\"batch_source_type\" ADD VALUE 'RETURNS_PENDING';--> statement-breakpoint\nALTER TABLE \"return_order_items\" ADD COLUMN \"sales_order_item_id\" uuid;--> statement-breakpoint\nALTER TABLE \"return_order_items\" ADD COLUMN \"received_qty\" numeric(12, 2);--> statement-breakpoint\nALTER TABLE \"return_order_items\" ADD CONSTRAINT \"return_order_items_sales_order_item_id_sales_order_items_id_fk\" FOREIGN KEY (\"sales_order_item_id\") REFERENCES \"public\".\"sales_order_items\"(\"id\") ON DELETE set null ON UPDATE no action;--> statement-breakpoint\nCREATE INDEX \"return_order_items_sales_item_idx\" ON \"return_order_items\" USING btree (\"sales_order_item_id\");"
+  },
+  {
+    "name": "0006_shallow_peter_quill",
+    "sql": "ALTER TABLE \"email_logs\" ADD COLUMN \"body\" text;--> statement-breakpoint\nALTER TABLE \"email_logs\" ADD COLUMN \"attempts\" integer DEFAULT 0 NOT NULL;"
   }
 ];

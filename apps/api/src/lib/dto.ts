@@ -1,11 +1,14 @@
 import type {
+  AuditLogRecord,
   DiscrepancyReviewItemRecord,
   DiscrepancyReviewRecord,
+  EmailLogRecord,
   FileRecord,
   InboundOrderItemRecord,
   InboundOrderRecord,
   ItemImageRecord,
   ItemRecord,
+  NotificationRecord,
   OutboundOrderItemRecord,
   OutboundOrderRecord,
   ReturnOrderItemRecord,
@@ -501,5 +504,47 @@ export function salesOrderDto(
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
     hasPayment: order.hasPayment,
+  };
+}
+
+// ── 通知/邮件/审计 DTO（ck-10）────────────────────────────────────────────────
+
+export function notificationDto(row: NotificationRecord) {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    content: row.content,
+    link: row.link,
+    readAt: row.readAt ? row.readAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function emailLogDto(row: EmailLogRecord) {
+  return {
+    id: row.id,
+    toAddress: row.toAddress,
+    subject: row.subject,
+    status: row.status,
+    provider: row.provider,
+    error: row.error,
+    attempts: row.attempts,
+    sentAt: row.sentAt ? row.sentAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function auditLogDto(row: AuditLogRecord) {
+  return {
+    id: row.id,
+    userId: row.userId,
+    action: row.action,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    before: row.before,
+    after: row.after,
+    ip: row.ip,
+    createdAt: row.createdAt.toISOString(),
   };
 }

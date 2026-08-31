@@ -37,6 +37,12 @@ export interface Env extends Record<string, unknown> {
   HYPERDRIVE?: unknown;
   DATABASE_URL?: string;
   ADMIN_SECRET?: string;
+  // 邮件桥（ck-10 §8.8）：BRIDGE_URL/BRIDGE_API_KEY 指向 infra/mail-bridge；
+  // MAIL_PROVIDER=bridge 显式启用，缺省配置时降级为仅站内通知。
+  MAIL_PROVIDER?: string;
+  BRIDGE_URL?: string;
+  BRIDGE_API_KEY?: string;
+  MAIL_FROM?: string;
   // S3 兼容对象存储（华为云 OBS，见 docs/cloud-config.md）
   S3_ENDPOINT?: string;
   S3_REGION?: string;
@@ -1049,7 +1055,7 @@ export interface SalesRepository {
   confirmReceipt(id: string, confirmedBy: string): Promise<SalesOrderRecord | null>;
 }
 
-/** 站内通知行（notifications，ck-08b 先写表，发送端 ck-10 联接）。 */
+/** 站内通知行（notifications，ck-08b 先写表，ck-10 通知中心使用）。 */
 export interface NotificationRecord {
   id: string;
   userId: string | null;
@@ -1062,6 +1068,26 @@ export interface NotificationRecord {
   createdAt: Date;
 }
 
+/** 通知可见范围：本人或所在单元（scope_unit_id 为空时可见全部单元通知）。 */
+export interface NotificationVisibility {
+  userId: string;
+  unitId: string | null;
+}
+
+export interface NotificationListQuery {
+  page?: number;
+  size?: number;
+  /** 仅未读。 */
+  unreadOnly?: boolean;
+}
+
+export interface NotificationListResult {
+  items: NotificationRecord[];
+  total: number;
+  page: number;
+  size: number;
+}
+
 export interface NotificationRepository {
   /** 写入站内通知（user_id 或 unit_id 至少其一，表约束兜底）。 */
   create(input: {
@@ -1072,8 +1098,87 @@ export interface NotificationRepository {
     content?: string | null;
     link?: string | null;
   }): Promise<NotificationRecord>;
-  /** 查询（按单元/用户过滤；ck-10 通知中心使用）。 */
+  /** 按单元/用户过滤查询（通知中心之外的内部场景，如效期扫描单测）。 */
   list(query?: { unitId?: string; userId?: string }): Promise<NotificationRecord[]>;
+  /** 通知中心列表：本人或所在单元（含分页/未读过滤）。 */
+  listForUser(scope: NotificationVisibility, query?: NotificationListQuery): Promise<NotificationListResult>;
+  /** 未读数（导航小红点）。 */
+  countUnread(scope: NotificationVisibility): Promise<number>;
+  /** 批量标记已读（仅限可见范围内的通知），返回实际更新数。 */
+  markRead(scope: NotificationVisibility, ids: string[]): Promise<number>;
+}
+
+/** 邮件发送日志行（email_logs，ck-10 §8.8）。 */
+export interface EmailLogRecord {
+  id: string;
+  toAddress: string;
+  subject: string | null;
+  body: string | null;
+  status: 'PENDING' | 'SENT' | 'FAILED';
+  provider: string | null;
+  error: string | null;
+  attempts: number;
+  sentAt: Date | null;
+  createdAt: Date;
+}
+
+export interface EmailLogRepository {
+  /** 记录一次发送（初始 PENDING）。 */
+  create(input: {
+    toAddress: string;
+    subject?: string | null;
+    body?: string | null;
+    provider?: string | null;
+  }): Promise<EmailLogRecord>;
+  /** 回写终态（SENT/FAILED）与错误/时间/次数。 */
+  markResult(
+    id: string,
+    input: { status: 'SENT' | 'FAILED'; error?: string | null; sentAt?: Date | null; attempts?: number },
+  ): Promise<void>;
+}
+
+/** 审计日志行（audit_logs，ck-10 §6.2 审计）。 */
+export interface AuditLogRecord {
+  id: string;
+  userId: string | null;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  before: unknown;
+  after: unknown;
+  ip: string | null;
+  createdAt: Date;
+}
+
+export interface AuditLogListQuery {
+  page?: number;
+  size?: number;
+  entityType?: string;
+  entityId?: string;
+  actorId?: string;
+  /** ISO 字符串或 YYYY-MM-DD（含端点）。 */
+  from?: string;
+  to?: string;
+}
+
+export interface AuditLogListResult {
+  items: AuditLogRecord[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface AuditLogRepository {
+  create(input: {
+    userId?: string | null;
+    action: string;
+    entityType?: string | null;
+    entityId?: string | null;
+    before?: unknown;
+    after?: unknown;
+    ip?: string | null;
+  }): Promise<AuditLogRecord>;
+  list(query?: AuditLogListQuery): Promise<AuditLogListResult>;
 }
 
 export interface Repos {
@@ -1089,6 +1194,8 @@ export interface Repos {
   retailPrices: RetailPriceRepository;
   sales: SalesRepository;
   notifications: NotificationRepository;
+  emailLogs: EmailLogRepository;
+  auditLogs: AuditLogRepository;
 }
 
 export interface AuthState {

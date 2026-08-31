@@ -4,6 +4,7 @@ export * from './errors';
 export * from './i18n';
 export * from './inbound';
 export * from './items';
+export * from './notifications';
 export * from './outbound';
 export * from './retail';
 export * from './returns';

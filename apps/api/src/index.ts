@@ -5,15 +5,19 @@ import { cors } from 'hono/cors';
 import { authenticate, type AuthDeps } from './auth/middleware';
 import { verifyEntraToken } from './auth/verifier';
 import { createExecutor } from './db';
+import { createMailer, deliverEmail } from './lib/email';
 import { runExpiryScan } from './lib/expiry-scan';
 import { createSqlRepos, defaultGetRepos } from './repos';
 import { adminRouter } from './routes/admin';
 import { adminUnitsRouter } from './routes/admin-units';
 import { adminUsersRouter } from './routes/admin-users';
+import { auditLogsRouter } from './routes/audit-logs';
 import { authRouter } from './routes/auth';
+import { dashboardRouter } from './routes/dashboard';
 import { filesRouter } from './routes/files';
 import { inboundOrdersRouter } from './routes/inbound-orders';
 import { itemsRouter } from './routes/items';
+import { notificationsRouter } from './routes/notifications';
 import { outboundOrdersRouter } from './routes/outbound-orders';
 import { retailPricesRouter } from './routes/retail-prices';
 import { returnOrdersRouter } from './routes/return-orders';
@@ -21,6 +25,7 @@ import { reviewsRouter } from './routes/reviews';
 import { salesOrdersRouter } from './routes/sales-orders';
 import { shipmentsRouter } from './routes/shipments';
 import { stockRouter } from './routes/stock';
+import { testEmailRouter } from './routes/test-email';
 import { unitsRouter } from './routes/units';
 import { usersRouter } from './routes/users';
 import type { AppEnv } from './types';
@@ -108,6 +113,20 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.use('/api/v1/admin/units/*', requireToken);
   app.route('/api/v1/admin/units', adminUnitsRouter());
 
+  // 通知中心（ck-10 §8.5）：本人 + 所属 scope 可见
+  app.use('/api/v1/notifications/*', requireToken);
+  app.route('/api/v1/notifications', notificationsRouter());
+
+  // 工作台待办聚合（ck-10 §8.5）
+  app.use('/api/v1/dashboard/*', requireToken);
+  app.route('/api/v1/dashboard', dashboardRouter());
+
+  // 管理端审计日志 / 邮件测试（ADMIN）
+  app.use('/api/v1/admin/audit-logs/*', requireToken);
+  app.route('/api/v1/admin/audit-logs', auditLogsRouter());
+  app.use('/api/v1/admin/test-email/*', requireToken);
+  app.route('/api/v1/admin/test-email', testEmailRouter());
+
   // 迁移 bootstrap（X-Admin-Secret，不依赖 users 表）
   app.route(
     '/api/v1/admin',
@@ -154,6 +173,30 @@ export async function scheduled(
     console.log(
       `[scheduled] expiry scan done: created=${result.createdCount} expiring=${result.expiringCount} expired=${result.expiredCount}`,
     );
+
+    // ck-10 §8.8：配置了邮件桥时，将效期预警邮件发给对应仓库的活跃用户（无桥则跳过）。
+    const mailer = createMailer(env as unknown as AppEnv);
+    if (mailer && result.alerts.length > 0) {
+      const users = await repos.users.list();
+      let sent = 0;
+      for (const alert of result.alerts) {
+        const recipients = users.filter(
+          (u) =>
+            u.status === 'ACTIVE' &&
+            (u.scopeUnitId === alert.unitId || u.role === 'ADMIN'),
+        );
+        for (const user of recipients) {
+          const outcome = await deliverEmail(repos, mailer, {
+            to: user.email,
+            subject: `[OtunLink] ${alert.title}`,
+            text: `${alert.content}\n所属单元：${alert.unitName ?? '-'}`,
+          });
+          if (outcome.ok) sent += 1;
+          else console.error('[scheduled] expiry alert email failed:', outcome.error);
+        }
+      }
+      console.log(`[scheduled] expiry alert emails sent: ${sent}`);
+    }
   } catch (cause) {
     console.error('[scheduled] expiry scan failed:', cause);
   }

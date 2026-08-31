@@ -426,6 +426,11 @@ export const salesPaymentSchema = z.object({
 /** 确认收货（POST /sales-orders/:id/confirm-receipt）：零售方确认后状态闭环。 */
 export const salesConfirmReceiptSchema = z.object({});
 
+/** 标记通知已读（POST /notifications/read）：批量 id 列表。 */
+export const notificationReadSchema = z.object({
+  ids: z.array(z.uuid()).min(1).max(200),
+});
+
 export type UserSelfPatchInput = z.infer<typeof userSelfPatchSchema>;
 export type AdminUserCreateInput = z.infer<typeof adminUserCreateSchema>;
 export type AdminUserPatchInput = z.infer<typeof adminUserPatchSchema>;
@@ -465,3 +470,4 @@ export type SalesSendAllocationInput = z.infer<typeof salesSendAllocationSchema>
 export type SalesOrderSendInput = z.infer<typeof salesOrderSendSchema>;
 export type SalesPaymentInput = z.infer<typeof salesPaymentSchema>;
 export type SalesConfirmReceiptInput = z.infer<typeof salesConfirmReceiptSchema>;
+export type NotificationReadInput = z.infer<typeof notificationReadSchema>;

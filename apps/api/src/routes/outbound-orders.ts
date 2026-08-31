@@ -10,6 +10,7 @@ import { Hono } from 'hono';
 import { requirePermission, unitScopeFilter } from '../auth/middleware';
 import { outboundDto, outboundItemDto } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import { recordAudit } from '../lib/audit';
 import type { AppEnv, OutboundOrderRecord, Repos } from '../types';
 
 // 手动出库单（design.md §4.3）：DRAFT → POSTED 扣减库存 + 写流水。
@@ -131,6 +132,14 @@ export function outboundOrdersRouter(): Hono<AppEnv> {
     try {
       const posted = await repos.outbounds.post(outbound.id, c.get('auth').user!.id);
       if (!posted) return notFound(c, '出库单不存在');
+      await recordAudit(repos, {
+        userId: c.get('auth').user!.id,
+        action: posted.type === 'LOSS' ? 'OUTBOUND_LOSS_POST' : 'OUTBOUND_POST',
+        entityType: 'outbound_order',
+        entityId: posted.id,
+        before: { status: outbound.status },
+        after: { status: posted.status, type: posted.type },
+      });
       return ok(c, await detailOf(repos, posted));
     } catch (cause) {
       if (isSignal(cause, 'OUTBOUND_STATE_CONFLICT')) {

@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { requirePermission, unitScopeFilter } from '../auth/middleware';
 import { inboundDto, inboundItemDto } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import { recordAudit } from '../lib/audit';
 import type { AppEnv, InboundOrderRecord, Repos } from '../types';
 
 // 入库单（design.md §5.3）：确认收货自动生成的 DRAFT 在 POST 后建档批次 +
@@ -126,6 +127,14 @@ export function inboundOrdersRouter(): Hono<AppEnv> {
     try {
       const posted = await repos.inbounds.post(inbound.id, c.get('auth').user!.id);
       if (!posted) return notFound(c, '入库单不存在');
+      await recordAudit(repos, {
+        userId: c.get('auth').user!.id,
+        action: 'INBOUND_POST',
+        entityType: 'inbound_order',
+        entityId: posted.id,
+        before: { status: inbound.status },
+        after: { status: posted.status },
+      });
       return ok(c, await detailOf(repos, posted));
     } catch (cause) {
       if (isInboundStateConflict(cause)) {

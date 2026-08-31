@@ -6,6 +6,15 @@ import type { Repos } from '../types';
 // 通知只写 notifications 表，发送端由 ck-10 通知中心负责。
 const EXPIRING_WINDOW_DAYS = 7;
 
+export interface ExpiryAlert {
+  unitId: string;
+  unitName: string | null;
+  /** EXPIRING / EXPIRED。 */
+  kind: 'EXPIRING' | 'EXPIRED';
+  title: string;
+  content: string;
+}
+
 export interface ExpiryScanResult {
   /** 本次扫描写入的通知数（不含重复去重：按 单元×类型×日期 幂等可后续优化）。 */
   createdCount: number;
@@ -13,6 +22,8 @@ export interface ExpiryScanResult {
   expiringCount: number;
   /** 已过期的批次行数。 */
   expiredCount: number;
+  /** 本次扫描的预警摘要（供 ck-10 邮件桥叠加发送）。 */
+  alerts: ExpiryAlert[];
 }
 
 export async function runExpiryScan(repos: Repos, now: Date = new Date()): Promise<ExpiryScanResult> {
@@ -30,30 +41,37 @@ export async function runExpiryScan(repos: Repos, now: Date = new Date()): Promi
   }
 
   let createdCount = 0;
+  const alerts: ExpiryAlert[] = [];
   for (const [unitId, group] of byUnit) {
     if (group.expiring.length > 0) {
+      const title = `效期预警：${group.expiring.length} 个批次将在 7 天内到期`;
+      const content = summarize(group.expiring);
       await repos.notifications.create({
         unitId,
         type: 'EXPIRY_ALERT',
-        title: `效期预警：${group.expiring.length} 个批次将在 7 天内到期`,
-        content: summarize(group.expiring),
+        title,
+        content,
         link: `/inventory?tab=expiring`,
       });
       createdCount += 1;
+      alerts.push({ unitId, unitName: group.unitName, kind: 'EXPIRING', title, content });
     }
     if (group.expired.length > 0) {
+      const title = `效期预警：${group.expired.length} 个批次已过期`;
+      const content = summarize(group.expired);
       await repos.notifications.create({
         unitId,
         type: 'EXPIRY_ALERT',
-        title: `效期预警：${group.expired.length} 个批次已过期`,
-        content: summarize(group.expired),
+        title,
+        content,
         link: `/inventory?tab=expired`,
       });
       createdCount += 1;
+      alerts.push({ unitId, unitName: group.unitName, kind: 'EXPIRED', title, content });
     }
   }
 
-  return { createdCount, expiringCount: expiring.length, expiredCount: expired.length };
+  return { createdCount, expiringCount: expiring.length, expiredCount: expired.length, alerts };
 }
 
 function summarize(batches: { itemName: string | null; batchNo: string | null; qty: string; expiryDate: string | null; remainingDays: number | null }[]): string {

@@ -710,9 +710,13 @@ export const emailLogs = pgTable(
     id: pk(),
     toAddress: varchar('to_address', { length: 256 }).notNull(),
     subject: varchar('subject', { length: 512 }),
+    /** 邮件正文（text 备查，不落敏感信息）。 */
+    body: text('body'),
     status: emailLogStatusEnum('status').notNull().default('PENDING'),
     provider: varchar('provider', { length: 64 }),
     error: text('error'),
+    /** 发送尝试次数（PENDING 重试后仍失败则记 2）。 */
+    attempts: integer('attempts').notNull().default(0),
     sentAt: timestamp('sent_at', { withTimezone: true, mode: 'date' }),
     createdAt: createdAt(),
   },

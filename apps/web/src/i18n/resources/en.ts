@@ -44,6 +44,22 @@ export const en: TranslationSchema = {
     yes: 'Yes',
     no: 'No',
   },
+  dashboard: {
+    title: 'Dashboard',
+    description: 'Todos aggregated by role; click a card to jump to the business page.',
+    empty: 'No pending todos. All good.',
+  },
+  notifications: {
+    title: 'Notifications',
+    all: 'All',
+    unread: 'Unread',
+    markAllRead: 'Mark all read',
+    markRead: 'Mark read',
+    viewDetail: 'View detail',
+    empty: 'No notifications',
+    noUnread: 'No unread notifications',
+    total: '{{total}} total',
+  },
   roles: {
     ADMIN: 'Admin',
     COLLECTOR: 'Collector',
@@ -90,18 +106,6 @@ export const en: TranslationSchema = {
     STORAGE_UNAVAILABLE: 'Object storage is unavailable, please try again later',
     NETWORK: 'Network error, please check your connection',
     UNKNOWN: 'An unknown error occurred, please try again later',
-  },
-  dashboard: {
-    title: 'Dashboard',
-    description:
-      'Aggregated to-dos will appear here (pending counting / discrepancies / returns / shipments / vouchers / after-sales / expired batches).',
-    empty: 'No to-dos',
-    pendingReviews: 'Pending discrepancy reviews',
-    noPendingReviews: 'No pending discrepancy reviews',
-    pendingCounting: 'Pending counting',
-    noPendingCounting: 'No shipments awaiting counting',
-    pendingReturns: 'Pending returns',
-    noPendingReturns: 'No returns awaiting processing',
   },
   placeholder: { title: 'In development' },
   forbidden: {

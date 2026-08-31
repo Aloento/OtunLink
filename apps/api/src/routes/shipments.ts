@@ -14,6 +14,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 
 import { requirePermission, unitScopeFilter } from '../auth/middleware';
+import { createMailer } from '../lib/email';
 import {
   discrepancyReviewDto,
   inboundDto,
@@ -24,6 +25,7 @@ import {
   shipmentItemDto,
 } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import { notify } from '../lib/notify';
 import type {
   AppEnv,
   ConfirmReceiptRepoInput,
@@ -215,6 +217,13 @@ export function shipmentsRouter(): Hono<AppEnv> {
     try {
       const sent = await repos.shipments.send(existing.id);
       if (!sent) return notFound(c, '发货单不存在');
+      await notify(repos, createMailer(c.env), {
+        type: 'SHIPMENT_SENT',
+        title: `发货单 ${sent.shipmentNo} 已发出，请点货`,
+        content: '集货方已转交发货单，请仓库核对货物并完成点货。',
+        link: `/shipments/${sent.id}`,
+        unitId: sent.receiverUnitId,
+      });
       return ok(c, await detailOf(repos, sent));
     } catch (cause) {
       if (isStateConflict(cause)) {
@@ -334,6 +343,13 @@ export function shipmentsRouter(): Hono<AppEnv> {
 
     try {
       const inbound = await repos.inbounds.confirmReceipt(existing.id, input);
+      await notify(repos, createMailer(c.env), {
+        type: 'INBOUND_CONFIRMED',
+        title: `发货单 ${existing.shipmentNo} 已确认收货，已建入库单`,
+        content: '仓库完成点货并确认收货，入库单已生成待过账。',
+        link: `/shipments/${existing.id}`,
+        unitId: existing.shipperUnitId,
+      });
       return ok(c, await inboundDetailOf(repos, inbound), 201);
     } catch (cause) {
       if (isShipmentNotReady(cause)) {
@@ -383,6 +399,13 @@ export function shipmentsRouter(): Hono<AppEnv> {
 
     try {
       const order = await repos.returns.createReturn(input);
+      await notify(repos, createMailer(c.env), {
+        type: 'SHIPMENT_RETURN_PENDING',
+        title: `发货单 ${existing.shipmentNo} 发起退货，请处理`,
+        content: '收货方仓库发起退货，需集货方确认处理。',
+        link: `/shipments/${existing.id}`,
+        unitId: existing.shipperUnitId,
+      });
       return ok(c, await returnDetailOf(repos, order), 201);
     } catch (cause) {
       if (isReturnStateConflict(cause)) {
@@ -437,6 +460,13 @@ export function shipmentsRouter(): Hono<AppEnv> {
         photoFileIds: parsed.data.photoFileIds ?? [],
         submittedBy: user.id,
         lines,
+      });
+      await notify(repos, createMailer(c.env), {
+        type: 'REVIEW_PENDING',
+        title: `发货单 ${existing.shipmentNo} 存在数量差异待审批`,
+        content: '收货方提交了差异修订，请集货方审核。',
+        link: `/shipments/${existing.id}`,
+        unitId: existing.shipperUnitId,
       });
       return ok(c, discrepancyReviewDto(review), 201);
     } catch (cause) {

@@ -43,6 +43,13 @@
       "when": 1788191690174,
       "tag": "0005_early_zarek",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788193321509,
+      "tag": "0006_shallow_peter_quill",
+      "breakpoints": true
     }
   ]
 }

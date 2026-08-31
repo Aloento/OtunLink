@@ -1,4 +1,8 @@
 import type {
+  AuditLogListQuery,
+  AuditLogListResult,
+  AuditLogRecord,
+  AuditLogRepository,
   ConfirmReceiptRepoInput,
   CreateFileInput,
   CreateInboundManualRepoInput,
@@ -13,6 +17,8 @@ import type {
   CreateUserInput,
   DiscrepancyReviewItemRecord,
   DiscrepancyReviewRecord,
+  EmailLogRecord,
+  EmailLogRepository,
   FileRecord,
   FileRepository,
   InboundListQuery,
@@ -56,6 +62,8 @@ import type {
   ShipmentTrackingRecord,
   NotificationRecord,
   NotificationRepository,
+  NotificationVisibility,
+  NotificationListResult,
   RetailPriceHistoryRecord,
   RetailPriceListQuery,
   RetailPriceRecord,
@@ -2255,6 +2263,136 @@ class MemoryNotificationRepository implements NotificationRepository {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .map((row) => ({ ...row }));
   }
+
+  /** 可见范围：本人或所在单元（scope 为空 = 全部单元通知）。 */
+  private visible(scope: NotificationVisibility): (row: NotificationRecord) => boolean {
+    return (row) =>
+      row.userId === scope.userId || (scope.unitId ? row.unitId === scope.unitId : row.unitId !== null);
+  }
+
+  async listForUser(
+    scope: NotificationVisibility,
+    query?: { page?: number; size?: number; unreadOnly?: boolean },
+  ): Promise<NotificationListResult> {
+    const size = Math.min(Math.max(query?.size ?? 20, 1), 50);
+    const page = Math.max(query?.page ?? 1, 1);
+    const filtered = this.rows
+      .filter(this.visible(scope))
+      .filter((row) => (query?.unreadOnly ? row.readAt === null : true))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const start = (page - 1) * size;
+    return {
+      items: filtered.slice(start, start + size).map((row) => ({ ...row })),
+      total: filtered.length,
+      page,
+      size,
+    };
+  }
+
+  async countUnread(scope: NotificationVisibility): Promise<number> {
+    return this.rows.filter(this.visible(scope)).filter((row) => row.readAt === null).length;
+  }
+
+  async markRead(scope: NotificationVisibility, ids: string[]): Promise<number> {
+    const idSet = new Set(ids);
+    let updated = 0;
+    for (const row of this.rows) {
+      if (!idSet.has(row.id)) continue;
+      if (!this.visible(scope)(row)) continue;
+      if (row.readAt === null) {
+        row.readAt = new Date();
+        updated += 1;
+      }
+    }
+    return updated;
+  }
+}
+
+/** 内存邮件日志仓储（ck-10 §8.8）。 */
+class MemoryEmailLogRepository implements EmailLogRepository {
+  private rows = new Map<string, EmailLogRecord>();
+
+  async create(input: {
+    toAddress: string;
+    subject?: string | null;
+    body?: string | null;
+    provider?: string | null;
+  }): Promise<EmailLogRecord> {
+    const row: EmailLogRecord = {
+      id: uuid(),
+      toAddress: input.toAddress,
+      subject: input.subject ?? null,
+      body: input.body ?? null,
+      status: 'PENDING',
+      provider: input.provider ?? null,
+      error: null,
+      attempts: 0,
+      sentAt: null,
+      createdAt: new Date(),
+    };
+    this.rows.set(row.id, row);
+    return { ...row };
+  }
+
+  async markResult(
+    id: string,
+    input: { status: 'SENT' | 'FAILED'; error?: string | null; sentAt?: Date | null; attempts?: number },
+  ): Promise<void> {
+    const row = this.rows.get(id);
+    if (!row) return;
+    row.status = input.status;
+    row.error = input.error ?? null;
+    if (input.sentAt) row.sentAt = input.sentAt;
+    if (input.attempts !== undefined) row.attempts = input.attempts;
+  }
+}
+
+/** 内存审计日志仓储（ck-10 审计）。 */
+class MemoryAuditLogRepository implements AuditLogRepository {
+  private rows: AuditLogRecord[] = [];
+
+  async create(input: {
+    userId?: string | null;
+    action: string;
+    entityType?: string | null;
+    entityId?: string | null;
+    before?: unknown;
+    after?: unknown;
+    ip?: string | null;
+  }): Promise<AuditLogRecord> {
+    const row: AuditLogRecord = {
+      id: uuid(),
+      userId: input.userId ?? null,
+      action: input.action,
+      entityType: input.entityType ?? null,
+      entityId: input.entityId ?? null,
+      before: input.before ?? null,
+      after: input.after ?? null,
+      ip: input.ip ?? null,
+      createdAt: new Date(),
+    };
+    this.rows.push(row);
+    return { ...row };
+  }
+
+  async list(query?: AuditLogListQuery): Promise<AuditLogListResult> {
+    const size = Math.min(Math.max(query?.size ?? 20, 1), 50);
+    const page = Math.max(query?.page ?? 1, 1);
+    const filtered = this.rows
+      .filter((row) => (query?.entityType ? row.entityType === query.entityType : true))
+      .filter((row) => (query?.entityId ? row.entityId === query.entityId : true))
+      .filter((row) => (query?.actorId ? row.userId === query.actorId : true))
+      .filter((row) => (query?.from ? row.createdAt >= new Date(query.from) : true))
+      .filter((row) => (query?.to ? row.createdAt <= new Date(`${query.to}T23:59:59.999Z`) : true))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const start = (page - 1) * size;
+    return {
+      items: filtered.slice(start, start + size).map((row) => ({ ...row })),
+      total: filtered.length,
+      page,
+      size,
+    };
+  }
 }
 
 function cloneSalesOrder(row: SalesOrderRecord): SalesOrderRecord {
@@ -2769,5 +2907,7 @@ export function createMemoryRepos(seed?: {
     retailPrices: retailPriceRepo,
     sales: salesRepo,
     notifications: new MemoryNotificationRepository(),
+    emailLogs: new MemoryEmailLogRepository(),
+    auditLogs: new MemoryAuditLogRepository(),
   };
 }

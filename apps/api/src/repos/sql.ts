@@ -2,6 +2,10 @@ import { expiryRemainingDays } from '@otunlink/shared';
 import type { SqlExecutor } from '@otunlink/db';
 
 import type {
+  AuditLogListQuery,
+  AuditLogListResult,
+  AuditLogRecord,
+  AuditLogRepository,
   ConfirmReceiptRepoInput,
   CreateFileInput,
   CreateInboundManualRepoInput,
@@ -16,6 +20,8 @@ import type {
   CreateUserInput,
   DiscrepancyReviewItemRecord,
   DiscrepancyReviewRecord,
+  EmailLogRecord,
+  EmailLogRepository,
   FileRecord,
   InboundListQuery,
   InboundListResult,
@@ -25,8 +31,10 @@ import type {
   ItemListQuery,
   ItemListResult,
   ItemRecord,
+  NotificationListResult,
   NotificationRecord,
   NotificationRepository,
+  NotificationVisibility,
   OutboundListQuery,
   OutboundListResult,
   OutboundOrderItemRecord,
@@ -88,6 +96,11 @@ const quote = (value: unknown): string => {
   if (typeof value === 'number') return String(value);
   if (value instanceof Date) return `'${value.toISOString()}'`;
   return `'${String(value).replace(/'/g, "''")}'`;
+};
+
+const jsonb = (value: unknown): unknown => {
+  if (value === undefined || value === null) return null;
+  return JSON.stringify(value);
 };
 
 const col = (name: string, value: unknown): string => `${name} = ${quote(value)}`;
@@ -477,6 +490,21 @@ function mapRetailPriceHistory(row: Record<string, unknown>): RetailPriceHistory
   };
 }
 
+/** jsonb 列归一化：pg 驱动返回已解析对象，部分桥接驱动返回字符串。 */
+function parseJson(value: unknown): unknown {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (text.length === 0) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
 function mapNotification(row: Record<string, unknown>): NotificationRecord {
   return {
     id: String(row.id),
@@ -487,6 +515,35 @@ function mapNotification(row: Record<string, unknown>): NotificationRecord {
     content: row.content ? String(row.content) : null,
     link: row.link ? String(row.link) : null,
     readAt: row.read_at ? new Date(String(row.read_at)) : null,
+    createdAt: new Date(String(row.created_at)),
+  };
+}
+
+function mapEmailLog(row: Record<string, unknown>): EmailLogRecord {
+  return {
+    id: String(row.id),
+    toAddress: String(row.to_address),
+    subject: row.subject ? String(row.subject) : null,
+    body: row.body ? String(row.body) : null,
+    status: (row.status as EmailLogRecord['status']) ?? 'PENDING',
+    provider: row.provider ? String(row.provider) : null,
+    error: row.error ? String(row.error) : null,
+    attempts: row.attempts != null ? Number(row.attempts) : 0,
+    sentAt: row.sent_at ? new Date(String(row.sent_at)) : null,
+    createdAt: new Date(String(row.created_at)),
+  };
+}
+
+function mapAuditLog(row: Record<string, unknown>): AuditLogRecord {
+  return {
+    id: String(row.id),
+    userId: row.user_id ? String(row.user_id) : null,
+    action: String(row.action),
+    entityType: row.entity_type ? String(row.entity_type) : null,
+    entityId: row.entity_id ? String(row.entity_id) : null,
+    before: parseJson(row.before),
+    after: parseJson(row.after),
+    ip: row.ip ? String(row.ip) : null,
     createdAt: new Date(String(row.created_at)),
   };
 }
@@ -2472,7 +2529,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  // ── ck-08b：站内通知（notifications，发送端 ck-10 联接）────────────────────────
+  // ── ck-08b/ck-10：站内通知（notifications）────────────────────────────────────
 
   const notifications = {
     async create(input: {
@@ -2501,6 +2558,125 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         `SELECT * FROM notifications${where} ORDER BY created_at DESC, id DESC`,
       );
       return rows.map(mapNotification);
+    },
+    /** 可见范围：user_id = 本人 或 unit_id = 所在单元（scope 为空时 = 全部单元通知）。 */
+    async scopeWhere(scope: NotificationVisibility): Promise<string> {
+      if (scope.unitId) {
+        return `(user_id = ${quote(scope.userId)} OR unit_id = ${quote(scope.unitId)})`;
+      }
+      return `(user_id = ${quote(scope.userId)} OR unit_id IS NOT NULL)`;
+    },
+    async listForUser(
+      scope: NotificationVisibility,
+      query?: { page?: number; size?: number; unreadOnly?: boolean },
+    ): Promise<NotificationListResult> {
+      const page = query?.page ?? 1;
+      const size = query?.size ?? 20;
+      const offset = (page - 1) * size;
+      const where = await notifications.scopeWhere(scope);
+      const unread = query?.unreadOnly ? ' AND read_at IS NULL' : '';
+      const { rows } = await exec.query(
+        `SELECT *, COUNT(*) OVER() AS total_count
+         FROM notifications
+         WHERE ${where}${unread}
+         ORDER BY created_at DESC, id DESC
+         LIMIT ${quote(size)} OFFSET ${quote(offset)}`,
+      );
+      const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+      return { items: rows.map(mapNotification), total, page, size };
+    },
+    async countUnread(scope: NotificationVisibility): Promise<number> {
+      const where = await notifications.scopeWhere(scope);
+      const { rows } = await exec.query(
+        `SELECT COUNT(*) AS n FROM notifications WHERE ${where} AND read_at IS NULL`,
+      );
+      return Number(rows[0]?.n ?? 0);
+    },
+    async markRead(scope: NotificationVisibility, ids: string[]): Promise<number> {
+      if (ids.length === 0) return 0;
+      const where = await notifications.scopeWhere(scope);
+      const idList = ids.map((id) => quote(id)).join(', ');
+      const { rows } = await exec.query(
+        `UPDATE notifications SET read_at = now()
+         WHERE id IN (${idList}) AND ${where}
+         RETURNING id`,
+      );
+      return rows.length;
+    },
+  };
+
+  // ── ck-10：邮件日志（email_logs）────────────────────────────────────────────
+
+  const emailLogs = {
+    async create(input: {
+      toAddress: string;
+      subject?: string | null;
+      body?: string | null;
+      provider?: string | null;
+    }): Promise<EmailLogRecord> {
+      const { rows } = await exec.query(
+        `INSERT INTO email_logs (to_address, subject, body, provider)
+         VALUES (${quote(input.toAddress)}, ${quote(input.subject ?? null)},
+                 ${quote(input.body ?? null)}, ${quote(input.provider ?? null)})
+         RETURNING *`,
+      );
+      return mapEmailLog(rows[0]);
+    },
+    async markResult(
+      id: string,
+      input: { status: 'SENT' | 'FAILED'; error?: string | null; sentAt?: Date | null; attempts?: number },
+    ): Promise<void> {
+      const sets = [`status = ${quote(input.status)}`];
+      sets.push(`error = ${quote(input.error ?? null)}`);
+      if (input.sentAt) sets.push(`sent_at = ${quote(input.sentAt)}`);
+      if (input.attempts !== undefined) sets.push(`attempts = ${quote(input.attempts)}`);
+      await exec.query(
+        `UPDATE email_logs SET ${sets.join(', ')} WHERE id = ${quote(id)}`,
+      );
+    },
+  };
+
+  // ── ck-10：审计日志（audit_logs）────────────────────────────────────────────
+
+  const auditLogs = {
+    async create(input: {
+      userId?: string | null;
+      action: string;
+      entityType?: string | null;
+      entityId?: string | null;
+      before?: unknown;
+      after?: unknown;
+      ip?: string | null;
+    }): Promise<AuditLogRecord> {
+      const { rows } = await exec.query(
+        `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, before, after, ip)
+         VALUES (${quote(input.userId ?? null)}, ${quote(input.action)},
+                 ${quote(input.entityType ?? null)}, ${quote(input.entityId ?? null)},
+                 ${quote(jsonb(input.before))}, ${quote(jsonb(input.after))},
+                 ${quote(input.ip ?? null)})
+         RETURNING *`,
+      );
+      return mapAuditLog(rows[0]);
+    },
+    async list(query?: AuditLogListQuery): Promise<AuditLogListResult> {
+      const page = query?.page ?? 1;
+      const size = query?.size ?? 20;
+      const offset = (page - 1) * size;
+      const parts: string[] = [];
+      if (query?.entityType) parts.push(`entity_type = ${quote(query.entityType)}`);
+      if (query?.entityId) parts.push(`entity_id = ${quote(query.entityId)}`);
+      if (query?.actorId) parts.push(`user_id = ${quote(query.actorId)}`);
+      if (query?.from) parts.push(`created_at >= ${quote(new Date(query.from))}`);
+      if (query?.to) parts.push(`created_at <= ${quote(new Date(`${query.to}T23:59:59.999Z`))}`);
+      const where = parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
+      const { rows } = await exec.query(
+        `SELECT a.*, COUNT(*) OVER() AS total_count
+         FROM audit_logs a${where}
+         ORDER BY a.created_at DESC, a.id DESC
+         LIMIT ${quote(size)} OFFSET ${quote(offset)}`,
+      );
+      const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+      return { items: rows.map(mapAuditLog), total, page, size };
     },
   };
 
@@ -2982,7 +3158,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  return { users, units, items, files, shipments, inbounds, returns, outbounds, stock, retailPrices, sales, notifications };
+  return { users, units, items, files, shipments, inbounds, returns, outbounds, stock, retailPrices, sales, notifications, emailLogs, auditLogs };
 }
 
 // 将 undefined/空字符串归一化为 null（写入 DB 的 NULL）。

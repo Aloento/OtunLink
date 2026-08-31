@@ -100,7 +100,12 @@ describe('ck-08b 每日效期预警扫描', () => {
     mk('b-none', 'B-NONE', 1, null);
 
     const result = await runExpiryScan(repos);
-    expect(result).toEqual({ createdCount: 2, expiringCount: 1, expiredCount: 1 });
+    expect(result.createdCount).toBe(2);
+    expect(result.expiringCount).toBe(1);
+    expect(result.expiredCount).toBe(1);
+    expect(result.alerts).toHaveLength(2);
+    const alertKinds = result.alerts.map((a) => a.kind).sort();
+    expect(alertKinds).toEqual(['EXPIRED', 'EXPIRING']);
 
     const rows = await repos.notifications.list({ unitId: WAREHOUSE_UNIT });
     expect(rows).toHaveLength(2);

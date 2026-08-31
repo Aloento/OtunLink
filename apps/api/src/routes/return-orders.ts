@@ -10,8 +10,11 @@ import {
 import { Hono } from 'hono';
 
 import { requireAnyPermission, requirePermission, unitScopeFilter } from '../auth/middleware';
+import { createMailer } from '../lib/email';
 import { returnDto, returnItemDto } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import { recordAudit } from '../lib/audit';
+import { notify } from '../lib/notify';
 import type { AppEnv, Repos, ReturnOrderRecord } from '../types';
 
 // 退货单（design.md §5.2 SHIPMENT 分支 + §5.5 SALES 售后分支）：
@@ -98,6 +101,21 @@ export function returnOrdersRouter(): Hono<AppEnv> {
     try {
       const updated = await repos.returns.accept(order.id, user.id, parsed.data.note ?? null);
       if (!updated) return notFound(c, '退货单不存在');
+      await notify(repos, createMailer(c.env), {
+        type: 'RETURN_ACCEPTED',
+        title: `退货单 ${updated.returnNo} 已确认，请安排退回`,
+        content: '集货方已确认收货方的退货申请，请安排退回。',
+        link: `/returns/${updated.id}`,
+        unitId: updated.fromUnitId,
+      });
+      await recordAudit(repos, {
+        userId: user.id,
+        action: 'RETURN_ACCEPT',
+        entityType: 'return_order',
+        entityId: updated.id,
+        before: { status: order.status },
+        after: { status: updated.status },
+      });
       return ok(c, await detailOf(repos, updated));
     } catch (cause) {
       if (isReturnAlreadyProcessed(cause)) {
@@ -132,6 +150,24 @@ export function returnOrdersRouter(): Hono<AppEnv> {
           ? await repos.returns.rejectSales(order.id, user.id, parsed.data.note)
           : await repos.returns.reject(order.id, user.id, parsed.data.note);
       if (!updated) return notFound(c, '退货单不存在');
+      await notify(repos, createMailer(c.env), {
+        type: order.sourceType === 'SALES' ? 'AFTER_SALE_REJECTED' : 'RETURN_REJECTED',
+        title:
+          order.sourceType === 'SALES'
+            ? `售后退货单 ${updated.returnNo} 已被驳回`
+            : `退货单 ${updated.returnNo} 已被驳回`,
+        content: `驳回原因：${parsed.data.note ?? '未填写'}`,
+        link: `/returns/${updated.id}`,
+        unitId: updated.fromUnitId,
+      });
+      await recordAudit(repos, {
+        userId: user.id,
+        action: order.sourceType === 'SALES' ? 'AFTER_SALE_REJECT' : 'RETURN_REJECT',
+        entityType: 'return_order',
+        entityId: updated.id,
+        before: { status: order.status },
+        after: { status: updated.status },
+      });
       return ok(c, await detailOf(repos, updated));
     } catch (cause) {
       return mapReturnSignal(c, cause);
@@ -169,6 +205,21 @@ export function returnOrdersRouter(): Hono<AppEnv> {
         parsed.data.note ?? null,
       );
       if (!updated) return notFound(c, '退货单不存在');
+      await notify(repos, createMailer(c.env), {
+        type: 'AFTER_SALE_APPROVED',
+        title: `售后退货单 ${updated.returnNo} 已审核通过，请寄回`,
+        content: '仓库已审核售后申请，请零售方寄回退货。',
+        link: `/returns/${updated.id}`,
+        unitId: updated.fromUnitId,
+      });
+      await recordAudit(repos, {
+        userId: user.id,
+        action: 'AFTER_SALE_APPROVE',
+        entityType: 'return_order',
+        entityId: updated.id,
+        before: { status: order.status },
+        after: { status: updated.status },
+      });
       return ok(c, await detailOf(repos, updated));
     } catch (cause) {
       return mapReturnSignal(c, cause);
@@ -209,6 +260,21 @@ export function returnOrdersRouter(): Hono<AppEnv> {
         parsed.data.note ?? null,
       );
       if (!updated) return notFound(c, '退货单不存在');
+      await notify(repos, createMailer(c.env), {
+        type: 'AFTER_SALE_RETURNED',
+        title: `售后退货单 ${updated.returnNo} 已收货完成`,
+        content: '仓库已收到退货并完成入库，退款状态请与零售方确认。',
+        link: `/returns/${updated.id}`,
+        unitId: updated.fromUnitId,
+      });
+      await recordAudit(repos, {
+        userId: user.id,
+        action: 'AFTER_SALE_RECEIVE',
+        entityType: 'return_order',
+        entityId: updated.id,
+        before: { status: order.status },
+        after: { status: updated.status },
+      });
       return ok(c, await detailOf(repos, updated));
     } catch (cause) {
       return mapReturnSignal(c, cause);

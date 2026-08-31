@@ -1,8 +1,10 @@
 import { useMsal } from '@azure/msal-react';
-import { Button } from '@fluentui/react-components';
+import { Badge, Button } from '@fluentui/react-components';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet } from 'react-router-dom';
 
+import { getUnreadCount } from '../api/notifications';
 import { useSession } from '../auth/SessionProvider';
 import { LanguageSwitch } from '../components/LanguageSwitch';
 import { canAccessPermissions } from '../routes/access';
@@ -61,6 +63,13 @@ export function AppLayout() {
   const roleLabel = me?.role ? t(`roles.${me.role}`) : t('common.notAssigned');
   const logout = () => instance.logoutRedirect();
 
+  const unread = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: getUnreadCount,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
   return (
     <div className="flex min-h-screen flex-col bg-neutral-50">
       <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-neutral-200 bg-white px-4">
@@ -69,6 +78,22 @@ export function AppLayout() {
         <span className="hidden text-sm text-neutral-500 sm:inline">
           {me?.name} · {roleLabel}
         </span>
+        <NavLink to={ROUTES.notifications.path} className="relative inline-flex items-center" aria-label={t('notifications.title')}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+          {Boolean(unread.data?.count) && (
+            <Badge
+              appearance="filled"
+              color="danger"
+              size="tiny"
+              className="absolute -right-1.5 -top-1.5"
+            >
+              {unread.data!.count! > 99 ? '99+' : unread.data!.count!}
+            </Badge>
+          )}
+        </NavLink>
         <LanguageSwitch />
         <Button size="small" appearance="subtle" onClick={logout}>
           {t('common.logout')}

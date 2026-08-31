@@ -8,6 +8,7 @@ import { AppLayout } from './layout/AppLayout';
 import { CallbackPage } from './pages/CallbackPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { ItemDetailPage } from './pages/items/ItemDetailPage';
 import { ItemFormPage } from './pages/items/ItemFormPage';
 import { ItemsPage } from './pages/items/ItemsPage';
@@ -30,8 +31,8 @@ import { ShipmentsPage } from './pages/shipments/ShipmentsPage';
 import { RequireActive, RequireAuth, RequirePermission } from './routes/guards';
 import { CALLBACK_PATH, LOGIN_PATH, ROUTES, type RouteKey } from './routes/routes';
 
-// 业务页面（除工作台、物品目录、发货/入库/出库/库存/退货/销售外）在 ck-03/ck-04 以「开发中」占位。
-const PLACEHOLDER_KEYS = ['notifications', 'adminUsers', 'adminUnits'] as const satisfies readonly RouteKey[];
+// 业务页面（除工作台、通知、物品目录、发货/入库/出库/库存/退货/销售外）在 ck-03/ck-04 以「开发中」占位。
+const PLACEHOLDER_KEYS = ['adminUsers', 'adminUnits'] as const satisfies readonly RouteKey[];
 
 export default function App() {
   const { t } = useTranslation();
@@ -55,6 +56,14 @@ export default function App() {
           element={
             <RequirePermission permissions={ROUTES.dashboard.permissions}>
               <DashboardPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={ROUTES.notifications.path}
+          element={
+            <RequirePermission permissions={ROUTES.notifications.permissions}>
+              <NotificationsPage />
             </RequirePermission>
           }
         />

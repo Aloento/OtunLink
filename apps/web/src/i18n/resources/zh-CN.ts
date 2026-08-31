@@ -41,6 +41,22 @@ export const zhCN = {
     yes: '是',
     no: '否',
   },
+  dashboard: {
+    title: '工作台',
+    description: '按角色汇总的待办事项，点击卡片直达对应业务页。',
+    empty: '暂无待办事项，一切正常。',
+  },
+  notifications: {
+    title: '通知中心',
+    all: '全部',
+    unread: '未读',
+    markAllRead: '全部已读',
+    markRead: '标记已读',
+    viewDetail: '查看详情',
+    empty: '暂无通知',
+    noUnread: '没有未读通知',
+    total: '共 {{total}} 条',
+  },
   roles: {
     ADMIN: '管理员',
     COLLECTOR: '集货',
@@ -87,18 +103,6 @@ export const zhCN = {
     STORAGE_UNAVAILABLE: '对象存储不可用，请稍后重试',
     NETWORK: '网络异常，请检查网络连接',
     UNKNOWN: '发生未知错误，请稍后重试',
-  },
-  dashboard: {
-    title: '工作台',
-    description:
-      '待办聚合将在这里展示（待点货 / 待处理差异 / 待处理退货 / 待发送 / 待确认凭证 / 待处理售后 / 过期批次预警）。',
-    empty: '暂无待办',
-    pendingReviews: '待处理差异',
-    noPendingReviews: '暂无待处理差异',
-    pendingCounting: '待点货',
-    noPendingCounting: '暂无待点货发货单',
-    pendingReturns: '待处理退货',
-    noPendingReturns: '暂无待处理退货',
   },
   placeholder: { title: '开发中' },
   forbidden: {

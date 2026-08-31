@@ -5,6 +5,7 @@ import type { Context } from 'hono';
 import { requirePermission, unitScopeFilter } from '../auth/middleware';
 import { retailPriceDto, retailPriceHistoryDto } from '../lib/dto';
 import { dbUnavailable, forbidden, notFound, ok, validationError } from '../lib/http';
+import { recordAudit } from '../lib/audit';
 import type { AppEnv } from '../types';
 
 // 零售价管理（design.md §4.2 retail_prices）：仓库 × 物品当前价 + 历史。
@@ -56,12 +57,24 @@ export function retailPricesRouter(): Hono<AppEnv> {
     }
     if (!item) return notFound(c, '物品不存在');
 
-    const record = await repos.retailPrices.setPrice({
-      unitId: input.unitId,
-      itemId: input.itemId,
-      price: input.price,
-      currency: input.currency ?? 'CNY',
-      updatedBy: c.get('auth').user!.id,
+    const [record, current] = await Promise.all([
+      repos.retailPrices.setPrice({
+        unitId: input.unitId,
+        itemId: input.itemId,
+        price: input.price,
+        currency: input.currency ?? 'CNY',
+        updatedBy: c.get('auth').user!.id,
+      }),
+      repos.retailPrices.list({ unitId: input.unitId, itemId: input.itemId }),
+    ]);
+    const before = current[0] ?? null;
+    await recordAudit(repos, {
+      userId: c.get('auth').user!.id,
+      action: 'RETAIL_PRICE_UPDATE',
+      entityType: 'retail_price',
+      entityId: record.id,
+      before: before ? { price: before.price, currency: before.currency } : null,
+      after: { price: record.price, currency: record.currency },
     });
     return ok(c, retailPriceDto(record));
   });

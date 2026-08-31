@@ -12,6 +12,7 @@ import {
 import { Hono } from 'hono';
 
 import { requireAnyPermission, requirePermission, unitScopeFilter } from '../auth/middleware';
+import { createMailer } from '../lib/email';
 import {
   returnDto,
   returnItemDto,
@@ -21,6 +22,8 @@ import {
   salesPaymentDto,
 } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import { recordAudit } from '../lib/audit';
+import { notify } from '../lib/notify';
 import type { AppEnv, ReturnOrderRecord, SalesOrderRecord, Repos } from '../types';
 
 // 销售单（design.md §4.2/§5.5）：DRAFT → SENT（FEFO/手工分配）→ PAYMENT_UPLOADED → CONFIRMED；
@@ -193,6 +196,21 @@ export function salesOrdersRouter(): Hono<AppEnv> {
         c.get('auth').user!.id,
       );
       if (!sent) return notFound(c, '销售单不存在');
+      await notify(repos, createMailer(c.env), {
+        type: 'SALES_SENT',
+        title: `销售单 ${sent.salesNo} 已发货，请查收并支付`,
+        content: '仓库已发货，请零售方收货后上传支付凭证。',
+        link: `/sales-orders/${sent.id}`,
+        unitId: sent.buyerUnitId,
+      });
+      await recordAudit(repos, {
+        userId: c.get('auth').user!.id,
+        action: 'SALES_SEND',
+        entityType: 'sales_order',
+        entityId: sent.id,
+        before: { status: order.status },
+        after: { status: sent.status },
+      });
       return ok(c, await detailOf(repos, sent));
     } catch (cause) {
       return mapSalesSignal(c, cause);
@@ -212,6 +230,21 @@ export function salesOrdersRouter(): Hono<AppEnv> {
     try {
       const cancelled = await repos.sales.cancel(order.id, c.get('auth').user!.id);
       if (!cancelled) return notFound(c, '销售单不存在');
+      await notify(repos, createMailer(c.env), {
+        type: 'SALES_CANCELLED',
+        title: `销售单 ${cancelled.salesNo} 已取消`,
+        content: '该销售单已被取消，库存已回补。',
+        link: `/sales-orders/${cancelled.id}`,
+        unitId: cancelled.buyerUnitId,
+      });
+      await recordAudit(repos, {
+        userId: c.get('auth').user!.id,
+        action: 'SALES_CANCEL',
+        entityType: 'sales_order',
+        entityId: cancelled.id,
+        before: { status: order.status },
+        after: { status: cancelled.status },
+      });
       return ok(c, await detailOf(repos, cancelled));
     } catch (cause) {
       return mapSalesSignal(c, cause);
@@ -248,6 +281,13 @@ export function salesOrdersRouter(): Hono<AppEnv> {
         uploadedBy: c.get('auth').user!.id,
       });
       if (!payment) return notFound(c, '销售单不存在');
+      await notify(repos, createMailer(c.env), {
+        type: 'SALES_PAYMENT_UPLOADED',
+        title: `销售单 ${order.salesNo} 已上传支付凭证，请确认`,
+        content: '零售方已上传支付凭证，请仓库确认到账。',
+        link: `/sales-orders/${order.id}`,
+        unitId: order.sellerUnitId,
+      });
       return ok(c, { ...salesPaymentDto(payment) }, 201);
     } catch (cause) {
       return mapSalesSignal(c, cause);
@@ -271,6 +311,13 @@ export function salesOrdersRouter(): Hono<AppEnv> {
     try {
       const confirmed = await repos.sales.confirmReceipt(order.id, c.get('auth').user!.id);
       if (!confirmed) return notFound(c, '销售单不存在');
+      await notify(repos, createMailer(c.env), {
+        type: 'SALES_CONFIRMED',
+        title: `销售单 ${confirmed.salesNo} 已确认收货，交易完成`,
+        content: '零售方已确认收货，该销售单已完成。',
+        link: `/sales-orders/${confirmed.id}`,
+        unitId: confirmed.sellerUnitId,
+      });
       return ok(c, await detailOf(repos, confirmed));
     } catch (cause) {
       return mapSalesSignal(c, cause);
@@ -315,6 +362,13 @@ export function salesOrdersRouter(): Hono<AppEnv> {
           qty: String(l.qty),
           reason: l.reason ?? null,
         })),
+      });
+      await notify(repos, createMailer(c.env), {
+        type: 'AFTER_SALE_REQUESTED',
+        title: `销售单 ${order.salesNo} 发起售后退货，请审核`,
+        content: '零售方发起了售后退货申请，请仓库审核处理。',
+        link: `/sales-orders/${order.id}`,
+        unitId: order.sellerUnitId,
       });
       return ok(c, await returnDetailOf(repos, created), 201);
     } catch (cause) {

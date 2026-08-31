@@ -29,3 +29,14 @@
 
 ## 参考
 design.md：§8.5 通知、§8.8 邮件、§6.2/§6.1、§9 非功能、§10 P10、§11 风险 2。
+
+## 完成情况（ck-10 收官，2026-08-31）
+- ✅ 站内通知：关键事件接入 notifications.create（发货转交 SHIPMENT_SENT、确认入库 INBOUND_CONFIRMED、差异 REVIEW_PENDING、发货退货/售后、销售发送/支付/确认、效期 EXPIRY_ALERT 沿用 ck-08b）；新增 `GET /api/v1/notifications`（本人+scope 分页/unreadOnly）、`GET /api/v1/notifications/unread-count`（导航小红点）、`POST /api/v1/notifications/read`（批量已读）；`GET /api/v1/dashboard/todos` 按角色+scope 聚合待办（复用各列表查询）。前端：AppLayout 铃铛+未读徽标、/notifications 页、工作台 `/` 页（加载/空/错误态）。
+- ✅ 邮件（§8.8）：`EmailProvider`（lib/email.ts）+ bridge 适配器（POST {BRIDGE_URL}/send，X-API-KEY）、api 适配器预留（未配置报错降级）；`BRIDGE_URL/BRIDGE_API_KEY/MAIL_FROM/MAIL_PROVIDER`；email_logs 记录 to/subject/body/status/error/attempts/sent_at，异步发送+1 次重试（deliverEmail）；`POST /api/v1/admin/test-email` 连通性测试（未配置返回降级原因）；无桥降级为仅站内通知。`infra/mail-bridge` 独立零依赖 Node 样例（HTTP → SMTP，25/465，不入 pnpm workspace，未本地跑真实 SMTP）。
+- ✅ 审计：关键写操作（入库过账/出库过账/报损/销售发送/取消/售后审核/收货/零售价修改/退货确认）写 audit_logs（actor/entity/before/after 摘要）；`GET /api/v1/admin/audit-logs` 分页 + entityType/entityId/actorId/时间范围筛选，仅 ADMIN。
+- ✅ 效期预警：runExpiryScan 输出 alerts（EXPIRING/EXPIRED），scheduled() 在有邮件桥配置时同步发邮件（无则跳过）。
+- ✅ 冒烟：新增 `apps/api/src/smoke.test.ts`（vitest 全链路：集货发货单→仓库点货→确认入库→入库过账→手动出库→零售价→销售单发送/支付/确认→售后退货申请/审核/收货 + 通知/审计/工作台校验），纳入 `pnpm -r test`。未新增 Playwright（仓库无 e2e 框架）。
+- ✅ 上线文档：`docs/deploy.md`（Pages/Workers/Hyperdrive/域名 CNAME/Env 清单/drizzle-kit migrate/回滚）、`docs/go-live-checklist.md`（分阶段）、README 快速开始补通知/邮件说明。
+- ⏭️ 数据导入（可选）：**按父任务要求跳过**（物品 CSV/Excel 导入未实现，留待后续迭代）。
+- ℹ️ 说明：email_logs 表在迁移 0000 已存在（ck-08b 前置），本 checkpoint 仅新增迁移 `0006_shallow_peter_quill`（补 `body`/`attempts` 列 + meta snapshot）。
+- 验证：`pnpm -r typecheck`（4/4 通过）、`pnpm -r test`（33 文件 / 200 用例全过：shared 16、db 8、api 136、web 40）、`pnpm -r build`（shared/db tsc、web vite、api wrangler dry-run 均通过）。
