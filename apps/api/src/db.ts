@@ -2,10 +2,8 @@ import type { SqlExecutor } from '@otunlink/db';
 
 // 惰性动态导入 pg，避免将 Node 专属驱动打进 Worker bundle。
 // 仅在运行时确实需要（本地 dev / 无 Hyperdrive 且配置了 DATABASE_URL）时才加载。
-const lazyImport = new Function(
-  'specifier',
-  'return import(specifier)',
-) as (specifier: string) => Promise<Record<string, unknown>>;
+type LazyImporter = (specifier: 'pg') => Promise<Record<string, unknown>>;
+const lazyImport: LazyImporter = (specifier) => import(specifier);
 
 interface PgLike {
   query(sql: string): Promise<{ rows: Record<string, unknown>[] }>;
