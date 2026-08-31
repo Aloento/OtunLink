@@ -1,34 +1,31 @@
-import { Button, Body1, Title1 } from '@fluentui/react-components';
 import { useMsal } from '@azure/msal-react';
-import { APP_NAME } from '@otunlink/shared';
+import { Body1, Button, Title1 } from '@fluentui/react-components';
+import { useTranslation } from 'react-i18next';
 
 import { envAuthConfig } from '../auth/msalConfig';
 
 export function LoginPage() {
   const { instance } = useMsal();
+  const { t } = useTranslation();
   const config = envAuthConfig();
 
   const login = () => {
     if (!config) return;
-    const { loginScopes } = config;
-    instance.loginRedirect({ scopes: loginScopes });
+    instance.loginRedirect({ scopes: config.loginScopes });
   };
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <Title1 as="h1">{APP_NAME}</Title1>
+      <Title1 as="h1">{t('app.name')}</Title1>
       {config ? (
         <>
-          <Body1>使用公司 Entra ID（Microsoft 365）账号登录</Body1>
+          <Body1>{t('login.description')}</Body1>
           <Button appearance="primary" onClick={login}>
-            登录
+            {t('login.button')}
           </Button>
         </>
       ) : (
-        <Body1>
-          未配置 Entra ID 环境变量（VITE_ENTRA_TENANT_ID / VITE_ENTRA_CLIENT_ID），
-          请参考 docs/auth-setup.md。
-        </Body1>
+        <Body1>{t('login.unconfigured')}</Body1>
       )}
     </div>
   );

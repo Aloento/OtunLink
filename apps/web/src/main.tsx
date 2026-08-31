@@ -1,41 +1,57 @@
-import { Body1, Title1, FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { Body1, FluentProvider, Title1, webLightTheme } from '@fluentui/react-components';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { useTranslation } from 'react-i18next';
+import { BrowserRouter } from 'react-router-dom';
 
 import App from './App';
+import { createQueryClient } from './api/queryClient';
 import { AuthProvider } from './auth/AuthProvider';
 import { getMsalInstance } from './auth/msal';
+import { SessionProvider } from './auth/SessionProvider';
+import { initI18n } from './i18n';
+import { LocaleProvider } from './i18n/LocaleProvider';
 import './index.css';
 
-const queryClient = new QueryClient();
+initI18n();
+const queryClient = createQueryClient();
+const msalInstance = getMsalInstance();
 
 function ConfigMissing() {
+  const { t } = useTranslation();
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <Title1 as="h1">OtunLink 未配置</Title1>
-      <Body1>
-        缺少 Entra ID 环境变量（VITE_ENTRA_TENANT_ID / VITE_ENTRA_CLIENT_ID），
-        请参考 docs/auth-setup.md 创建 .env。
-      </Body1>
+      <Title1 as="h1">{t('app.name')}</Title1>
+      <Body1>{t('login.unconfigured')}</Body1>
     </div>
   );
 }
 
-const msalInstance = getMsalInstance();
-
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
+function Root() {
+  return (
     <FluentProvider theme={webLightTheme}>
-      <QueryClientProvider client={queryClient}>
-        {msalInstance ? (
-          <AuthProvider instance={msalInstance}>
-            <App />
-          </AuthProvider>
-        ) : (
-          <ConfigMissing />
-        )}
-      </QueryClientProvider>
+      <LocaleProvider>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            {msalInstance ? (
+              <AuthProvider instance={msalInstance}>
+                <SessionProvider>
+                  <App />
+                </SessionProvider>
+              </AuthProvider>
+            ) : (
+              <ConfigMissing />
+            )}
+          </BrowserRouter>
+        </QueryClientProvider>
+      </LocaleProvider>
     </FluentProvider>
-  </React.StrictMode>,
+  );
+}
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <Root />
+  </StrictMode>,
 );

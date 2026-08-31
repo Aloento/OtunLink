@@ -16,10 +16,13 @@
     "@fluentui/react-components": "^9.74.7",
     "@otunlink/shared": "workspace:*",
     "@tanstack/react-query": "^5.102.8",
+    "@tanstack/react-query-persist-client": "^5.102.8",
     "i18next": "^26.4.0",
+    "idb-keyval": "^6.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-i18next": "^17.0.12",
+    "react-router-dom": "^7.18.3",
     "zod": "^4.5.4"
   },
   "devDependencies": {

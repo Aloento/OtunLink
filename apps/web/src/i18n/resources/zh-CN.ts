@@ -1,0 +1,80 @@
+// 中文文案资源（canonical）。en.ts 以本文件的结构为准做类型约束，避免键漂移。
+export const zhCN = {
+  app: { name: 'OtunLink' },
+  nav: {
+    dashboard: '工作台',
+    shipments: '发货单',
+    items: '物品目录',
+    inbound: '入库单',
+    outbound: '出库单',
+    returns: '退货单',
+    sales: '销售单',
+    inventory: '库存',
+    notifications: '通知中心',
+    adminUsers: '用户管理',
+    adminUnits: '业务单元',
+  },
+  login: {
+    title: 'OtunLink',
+    description: '使用公司 Entra ID（Microsoft 365）账号登录',
+    button: '登录',
+    unconfigured:
+      '未配置 Entra ID 环境变量（VITE_ENTRA_TENANT_ID / VITE_ENTRA_CLIENT_ID），请参考 docs/auth-setup.md。',
+  },
+  pending: {
+    title: '等待管理员分配岗位',
+    waiting: '您的账号尚未分配岗位，请等待管理员在「用户管理」中完成分配后刷新。',
+    disabled: '您的账号已停用，请联系管理员。',
+    refresh: '刷新',
+    logout: '登出',
+  },
+  callback: { message: '正在完成登录…' },
+  common: {
+    loading: '正在加载…',
+    logout: '登出',
+    switchLanguage: '切换语言',
+    refresh: '刷新',
+    backHome: '返回工作台',
+    notAssigned: '未分配',
+    development: '开发中',
+  },
+  roles: {
+    ADMIN: '管理员',
+    COLLECTOR: '集货',
+    WAREHOUSE: '仓库',
+    RETAILER: '零售',
+  },
+  status: {
+    ACTIVE: '正常',
+    PENDING: '待分配',
+    DISABLED: '已停用',
+  },
+  errors: {
+    VALIDATION_ERROR: '输入校验失败，请检查填写内容',
+    UNAUTHORIZED: '登录已过期，请重新登录',
+    FORBIDDEN: '没有权限执行此操作',
+    NOT_FOUND: '请求的资源不存在',
+    CONFLICT: '操作与当前状态冲突，请刷新后重试',
+    INTERNAL_ERROR: '服务器内部错误，请稍后重试',
+    DATABASE_UNAVAILABLE: '数据库暂时不可用，请稍后重试',
+    AUTH_CONFIGURATION_ERROR: '认证服务配置错误，请联系管理员',
+    MIGRATION_DISABLED: '数据迁移已停用',
+    MIGRATION_UNAVAILABLE: '数据迁移暂不可用',
+    MIGRATION_FAILED: '数据迁移失败',
+    NETWORK: '网络异常，请检查网络连接',
+    UNKNOWN: '发生未知错误，请稍后重试',
+  },
+  dashboard: {
+    title: '工作台',
+    description:
+      '待办聚合将在这里展示（待点货 / 待处理差异 / 待处理退货 / 待发送 / 待确认凭证 / 待处理售后 / 过期批次预警）。',
+    empty: '暂无待办',
+  },
+  placeholder: { title: '开发中' },
+  forbidden: {
+    title: '无权访问',
+    description: '当前岗位没有访问该页面的权限。',
+  },
+};
+
+export type TranslationSchema = typeof zhCN;

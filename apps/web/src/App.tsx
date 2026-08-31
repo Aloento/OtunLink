@@ -1,70 +1,70 @@
-import { useIsAuthenticated, useMsal } from '@azure/msal-react';
-import { Spinner } from '@fluentui/react-components';
-import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Navigate, Route, Routes } from 'react-router-dom';
 
-import { acquireAccessToken, apiBaseUrl, fetchMe, type MeUser } from './api/client';
-import { envAuthConfig } from './auth/msalConfig';
-import { selectView } from './auth/view';
+import { PlaceholderPage } from './components/PlaceholderPage';
+import { AppLayout } from './layout/AppLayout';
 import { CallbackPage } from './pages/CallbackPage';
-import { HomePage } from './pages/HomePage';
+import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
-import { PendingPage } from './pages/PendingPage';
+import { RequireActive, RequireAuth, RequirePermission } from './routes/guards';
+import { CALLBACK_PATH, LOGIN_PATH, ROUTES, type RouteKey } from './routes/routes';
+
+// 业务页面（除工作台外）在 ck-03 一律以「开发中」占位。
+const PLACEHOLDER_KEYS = [
+  'shipments',
+  'items',
+  'inbound',
+  'outbound',
+  'returns',
+  'sales',
+  'inventory',
+  'notifications',
+  'adminUsers',
+  'adminUnits',
+] as const satisfies readonly RouteKey[];
 
 export default function App() {
-  const { instance, accounts } = useMsal();
-  const authenticated = useIsAuthenticated();
-  const [me, setMe] = useState<MeUser | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
 
-  const pathname = window.location.pathname;
+  return (
+    <Routes>
+      <Route path={LOGIN_PATH} element={<LoginPage />} />
+      <Route path={CALLBACK_PATH} element={<CallbackPage />} />
 
-  const loadMe = useCallback(async () => {
-    const config = envAuthConfig();
-    if (!config) {
-      setError('未配置 Entra ID 环境变量');
-      return;
-    }
-    const token = await acquireAccessToken(instance, [config.apiScope]);
-    if (!token) {
-      setError('无法获取访问令牌，请重新登录');
-      return;
-    }
-    try {
-      const user = await fetchMe(apiBaseUrl(), token);
-      setMe(user);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, [instance]);
+      <Route
+        element={
+          <RequireAuth>
+            <RequireActive>
+              <AppLayout />
+            </RequireActive>
+          </RequireAuth>
+        }
+      >
+        <Route
+          path={ROUTES.dashboard.path}
+          element={
+            <RequirePermission permissions={ROUTES.dashboard.permissions}>
+              <DashboardPage />
+            </RequirePermission>
+          }
+        />
+        {PLACEHOLDER_KEYS.map((key) => {
+          const route = ROUTES[key];
+          return (
+            <Route
+              key={route.path}
+              path={route.path}
+              element={
+                <RequirePermission permissions={route.permissions}>
+                  <PlaceholderPage title={t(`nav.${route.navKey}`)} />
+                </RequirePermission>
+              }
+            />
+          );
+        })}
+      </Route>
 
-  useEffect(() => {
-    if (authenticated && accounts.length > 0) {
-      void loadMe();
-    }
-  }, [authenticated, accounts.length, loadMe]);
-
-  // /auth/callback 仅用于接收重定向，处理完立即回到首页。
-  useEffect(() => {
-    if (pathname.endsWith('/auth/callback')) {
-      window.location.replace('/');
-    }
-  }, [pathname]);
-
-  if (pathname.endsWith('/auth/callback')) {
-    return <CallbackPage />;
-  }
-
-  const view = selectView(pathname, authenticated, me?.status ?? null);
-
-  if (view === 'login') return <LoginPage />;
-  if (view === 'loading' || !me) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Spinner label={error ?? '正在加载账号信息…'} />
-      </div>
-    );
-  }
-  if (view === 'pending') return <PendingPage me={me} onRefresh={loadMe} />;
-  return <HomePage me={me} />;
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
 }
