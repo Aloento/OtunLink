@@ -155,6 +155,13 @@ export function apiPost<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
+export function apiPut<T>(path: string, body?: unknown): Promise<T> {
+  return apiRequest<T>(path, {
+    method: 'PUT',
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
 export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
   return apiRequest<T>(path, {
     method: 'PATCH',

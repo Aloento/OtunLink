@@ -2,8 +2,8 @@ import { Permissions } from '@otunlink/shared';
 import { Hono } from 'hono';
 
 import { requirePermission, unitScopeFilter } from '../auth/middleware';
-import { stockMovementDto, stockRowDto } from '../lib/dto';
-import { dbUnavailable, ok } from '../lib/http';
+import { stockBatchDto, stockMovementDto, stockRowDto } from '../lib/dto';
+import { dbUnavailable, ok, validationError } from '../lib/http';
 import type { AppEnv } from '../types';
 
 // 库存台账（design.md §4.3）：仓库 × 物品 × 批次维度只读查询（STOCK_READ）。
@@ -51,6 +51,36 @@ export function stockRouter(): Hono<AppEnv> {
       batchId: batchId || undefined,
     });
     return ok(c, { ...result, items: result.items.map(stockMovementDto) });
+  });
+
+  // 效期视图（ck-08b）：全部有库存批次 + 剩余天数；已过期（remainingDays < 0）。
+  router.get('/batches', read, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const unitId = c.req.query('unitId')?.trim() ?? undefined;
+    const itemId = c.req.query('itemId')?.trim() ?? undefined;
+    const scope = unitScopeFilter(c.get('auth'));
+
+    const items = await repos.stock.listBatches({
+      unitId: unitId || scope?.unitId,
+      itemId: itemId || undefined,
+    });
+    return ok(c, { items: items.map(stockBatchDto) });
+  });
+
+  // 已过期批次（ck-08b）：必须指定 unitId，或无 scope 时返回 400。
+  router.get('/expired', read, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const rawUnitId = c.req.query('unitId')?.trim() ?? undefined;
+    const scope = unitScopeFilter(c.get('auth'));
+    const unitId = rawUnitId || scope?.unitId;
+    if (!unitId) return validationError(c, 'unitId is required');
+
+    const items = await repos.stock.listExpired({ unitId });
+    return ok(c, { items: items.map(stockBatchDto) });
   });
 
   return router;

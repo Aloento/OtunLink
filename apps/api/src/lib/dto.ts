@@ -10,9 +10,12 @@ import type {
   OutboundOrderRecord,
   ReturnOrderItemRecord,
   ReturnOrderRecord,
+  RetailPriceHistoryRecord,
+  RetailPriceRecord,
   ShipmentItemRecord,
   ShipmentRecord,
   ShipmentTrackingRecord,
+  StockBatchRecord,
   StockMovementRecord,
   StockRowRecord,
   UnitRecord,
@@ -375,5 +378,47 @@ export function stockMovementDto(movement: StockMovementRecord) {
     note: movement.note,
     operatorId: movement.operatorId,
     createdAt: movement.createdAt.toISOString(),
+  };
+}
+
+// ── 效期视图与零售价 DTO（ck-08b）────────────────────────────────────────────
+
+export function stockBatchDto(row: StockBatchRecord) {
+  return {
+    ...stockRowDto(row),
+    remainingDays: row.remainingDays,
+    isExpired: row.isExpired,
+  };
+}
+
+export function retailPriceDto(row: RetailPriceRecord) {
+  return {
+    id: row.id,
+    unitId: row.unitId,
+    unitName: row.unitName,
+    itemId: row.itemId,
+    itemName: row.itemName,
+    spec: row.spec,
+    price: row.price,
+    currency: row.currency,
+    unitCost: row.unitCost,
+    updatedBy: row.updatedBy,
+    updatedByName: row.updatedByName,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export function retailPriceHistoryDto(row: RetailPriceHistoryRecord) {
+  return {
+    id: row.id,
+    unitId: row.unitId,
+    unitName: row.unitName,
+    itemId: row.itemId,
+    itemName: row.itemName,
+    price: row.price,
+    currency: row.currency,
+    updatedBy: row.updatedBy,
+    updatedByName: row.updatedByName,
+    updatedAt: row.updatedAt.toISOString(),
   };
 }

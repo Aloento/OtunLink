@@ -5,7 +5,8 @@ import { cors } from 'hono/cors';
 import { authenticate, type AuthDeps } from './auth/middleware';
 import { verifyEntraToken } from './auth/verifier';
 import { createExecutor } from './db';
-import { defaultGetRepos } from './repos';
+import { runExpiryScan } from './lib/expiry-scan';
+import { createSqlRepos, defaultGetRepos } from './repos';
 import { adminRouter } from './routes/admin';
 import { adminUnitsRouter } from './routes/admin-units';
 import { adminUsersRouter } from './routes/admin-users';
@@ -14,6 +15,7 @@ import { filesRouter } from './routes/files';
 import { inboundOrdersRouter } from './routes/inbound-orders';
 import { itemsRouter } from './routes/items';
 import { outboundOrdersRouter } from './routes/outbound-orders';
+import { retailPricesRouter } from './routes/retail-prices';
 import { returnOrdersRouter } from './routes/return-orders';
 import { reviewsRouter } from './routes/reviews';
 import { shipmentsRouter } from './routes/shipments';
@@ -87,6 +89,10 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.use('/api/v1/stock/*', requireToken);
   app.route('/api/v1/stock', stockRouter());
 
+  // 零售价管理（登录用户，RBAC 见各路由）
+  app.use('/api/v1/retail-prices/*', requireToken);
+  app.route('/api/v1/retail-prices', retailPricesRouter());
+
   // 图片上传 / 预签名 URL（登录用户，RBAC 见各路由）
   app.use('/api/v1/files/*', requireToken);
   app.route('/api/v1/files', filesRouter());
@@ -122,3 +128,28 @@ export const defaultApp = createApp({
 });
 
 export default defaultApp;
+
+/**
+ * 每日效期预警 cron（ck-08b）：扫描 7 天内到期 + 已过期批次，写 notifications 表。
+ * 失败仅记录日志，不影响 Worker 调度。
+ */
+export async function scheduled(
+  event: { cron: string },
+  env: Record<string, unknown>,
+  ctx: { waitUntil: (promise: Promise<unknown>) => void },
+) {
+  const exec = await createExecutor(env);
+  if (!exec) {
+    console.error('[scheduled] DB unavailable, expiry scan skipped');
+    return;
+  }
+  try {
+    const repos = createSqlRepos(exec);
+    const result = await runExpiryScan(repos);
+    console.log(
+      `[scheduled] expiry scan done: created=${result.createdCount} expiring=${result.expiringCount} expired=${result.expiredCount}`,
+    );
+  } catch (cause) {
+    console.error('[scheduled] expiry scan failed:', cause);
+  }
+}

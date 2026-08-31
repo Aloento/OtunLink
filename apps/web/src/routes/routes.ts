@@ -48,6 +48,11 @@ export const ROUTES = {
     navKey: 'inventory',
     permissions: [Permissions.STOCK_READ],
   },
+  retailPrices: {
+    path: '/retail-prices',
+    navKey: 'retailPrices',
+    permissions: [Permissions.RETAIL_PRICES_READ],
+  },
   notifications: { path: '/notifications', navKey: 'notifications', permissions: [] },
   adminUsers: {
     path: '/admin/users',

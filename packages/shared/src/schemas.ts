@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { UNIT_TYPES, USER_ROLES, USER_STATUSES } from './auth';
 import { ITEM_STATUSES, SPEC_UNITS } from './items';
+import { OUTBOUND_TYPES } from './outbound';
 
 // 认证/岗位/业务单元相关的请求校验（ck-02 范围）。
 // 放在 shared 供 api 使用；api 包不直接依赖 zod，通过 shared 复用。
@@ -233,13 +234,53 @@ export const outboundLineSchema = z.object({
   batchId: z.uuid().optional().nullable(),
 });
 
-/** 新建手工出库单（POST /outbound-orders）：type=NORMAL（报损留给 ck-08b）。 */
-export const outboundCreateSchema = z.object({
-  warehouseUnitId: z.uuid(),
-  counterpartyUnitId: z.uuid().optional().nullable(),
-  remark: z.string().trim().max(4096).optional().nullable(),
-  photoFileIds: z.array(z.uuid()).max(9).optional(),
-  lines: z.array(outboundLineSchema).min(1).max(500),
+/**
+ * 新建出库单（POST /outbound-orders）：type=NORMAL 手工出库；
+ * type=LOSS 报损（ck-08b §5.4）：报损原因必填、至少 1 张附图、每行必须指定批次。
+ */
+export const outboundCreateSchema = z
+  .object({
+    warehouseUnitId: z.uuid(),
+    counterpartyUnitId: z.uuid().optional().nullable(),
+    type: z.enum(OUTBOUND_TYPES).default('NORMAL'),
+    lossReason: z.string().trim().min(1).max(2000).optional().nullable(),
+    remark: z.string().trim().max(4096).optional().nullable(),
+    photoFileIds: z.array(z.uuid()).max(9).optional(),
+    lines: z.array(outboundLineSchema).min(1).max(500),
+  })
+  .superRefine((value, ctx) => {
+    if (value.type !== 'LOSS') return;
+    if (!value.lossReason) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['lossReason'],
+        message: '报损单必须填写报损原因',
+      });
+    }
+    if ((value.photoFileIds ?? []).length < 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['photoFileIds'],
+        message: '报损单必须至少附带 1 张图片',
+      });
+    }
+    for (const [index, line] of value.lines.entries()) {
+      if (!line.batchId) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['lines', index, 'batchId'],
+          message: '报损单每行必须指定批次',
+        });
+      }
+    }
+  });
+
+/** 设置零售价（PUT /retail-prices）：仓库 × 物品；unit_cost（入库原价）不可经此接口修改。 */
+export const retailPricePutSchema = z.object({
+  unitId: z.uuid(),
+  itemId: z.uuid(),
+  price: shipmentMoney,
+  currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional(),
 });
 
 // ── 确认入库与发货退货（ck-07）─────────────────────────────────────────────────
@@ -311,3 +352,4 @@ export type InboundManualLineInput = z.infer<typeof inboundManualLineSchema>;
 export type InboundManualCreateInput = z.infer<typeof inboundManualCreateSchema>;
 export type OutboundLineInput = z.infer<typeof outboundLineSchema>;
 export type OutboundCreateInput = z.infer<typeof outboundCreateSchema>;
+export type RetailPricePutInput = z.infer<typeof retailPricePutSchema>;

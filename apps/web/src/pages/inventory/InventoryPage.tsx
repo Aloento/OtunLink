@@ -1,24 +1,46 @@
 import { Button, Select, Spinner, Tab, TabList, Text, Title1 } from '@fluentui/react-components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
-import type { StockMovementDto, StockRowDto } from '@otunlink/shared';
+import {
+  Permissions,
+  expiryRemainingDays,
+  hasPermission,
+  type StockBatchDto,
+  type StockMovementDto,
+  type StockRowDto,
+} from '@otunlink/shared';
 
 import { listItems } from '../../api/items';
-import { listStock, listStockMovements } from '../../api/stock';
+import { listExpiredBatches, listStock, listStockMovements } from '../../api/stock';
 import { listUnits } from '../../api/units';
+import { useSession } from '../../auth/SessionProvider';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
 
-type View = 'stock' | 'movements';
+type View = 'stock' | 'movements' | 'expired';
 
-// 库存台账（ck-08a §4.3）：仓库 × 物品 × 批次维度只读列表 + 只增不改删的流水。
+/** 效期列着色：已过期红、≤30 天黄。 */
+function expiryCell(expiryDate: string | null): ReactNode {
+  if (!expiryDate) return '—';
+  const days = expiryRemainingDays(expiryDate);
+  if (days !== null && days < 0) return <span className="font-medium text-red-600">{expiryDate}</span>;
+  if (days !== null && days <= 30) return <span className="font-medium text-amber-600">{expiryDate}</span>;
+  return expiryDate;
+}
+
+// 库存台账（ck-08a §4.3 / ck-08b §5.4）：库存 / 流水 / 已过期批次视图 + 一键报损 + 零售价入口。
 export function InventoryPage() {
   const { t } = useTranslation();
+  const { me } = useSession();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const [view, setView] = useState<View>('stock');
+  const initialView: View = searchParams.get('tab') === 'expired' ? 'expired' : 'stock';
+  const [view, setView] = useState<View>(initialView);
   const [unitId, setUnitId] = useState('');
   const [itemId, setItemId] = useState('');
   const [page, setPage] = useState(1);
@@ -59,17 +81,40 @@ export function InventoryPage() {
     placeholderData: keepPreviousData,
   });
 
-  const activeQuery = view === 'stock' ? stockQuery : movementsQuery;
+  // 已过期批次视图（GET /stock/expired 必须指定仓库：优先筛选值，其次账号 scope，再退首个仓库）。
+  const effectiveUnitId = unitId || me?.scopeUnitId || warehouses[0]?.id || '';
+  const expiredQuery = useQuery({
+    queryKey: ['stock', 'expired', effectiveUnitId, itemId],
+    queryFn: () => listExpiredBatches({ unitId: effectiveUnitId, itemId: itemId || undefined }),
+    enabled: view === 'expired' && Boolean(effectiveUnitId),
+    placeholderData: keepPreviousData,
+  });
+
+  const activeQuery = view === 'stock' ? stockQuery : view === 'movements' ? movementsQuery : expiredQuery;
 
   const stockColumns: ResponsiveTableColumn<StockRowDto>[] = [
     { key: 'unit', header: t('inventory.unit'), render: (row) => row.unitName ?? row.unitId },
     { key: 'item', header: t('inventory.item'), render: (row) => row.itemName ?? row.itemId },
     { key: 'spec', header: t('inventory.spec'), render: (row) => row.spec ?? '—' },
     { key: 'batchNo', header: t('inventory.batchNo'), render: (row) => row.batchNo ?? '—' },
-    { key: 'expiry', header: t('inventory.expiry'), render: (row) => row.expiryDate ?? '—' },
+    { key: 'expiry', header: t('inventory.expiry'), render: (row) => expiryCell(row.expiryDate) },
     { key: 'qty', header: t('inventory.qty'), render: (row) => row.qty },
     { key: 'avgCost', header: t('inventory.avgCost'), render: (row) => row.avgCost },
     { key: 'available', header: t('inventory.available'), render: (row) => row.availableQty },
+  ];
+
+  const expiredColumns: ResponsiveTableColumn<StockBatchDto>[] = [
+    { key: 'unit', header: t('inventory.unit'), render: (row) => row.unitName ?? row.unitId },
+    { key: 'item', header: t('inventory.item'), render: (row) => row.itemName ?? row.itemId },
+    { key: 'batchNo', header: t('inventory.batchNo'), render: (row) => row.batchNo ?? '—' },
+    { key: 'expiry', header: t('inventory.expiry'), render: (row) => expiryCell(row.expiryDate) },
+    {
+      key: 'remainingDays',
+      header: t('inventory.remainingDays'),
+      render: (row) =>
+        row.remainingDays === null ? '—' : t('inventory.remainingDaysValue', { days: row.remainingDays }),
+    },
+    { key: 'qty', header: t('inventory.qty'), render: (row) => row.qty },
   ];
 
   const movementColumns: ResponsiveTableColumn<StockMovementDto>[] = [
@@ -82,17 +127,43 @@ export function InventoryPage() {
     { key: 'refNo', header: t('inventory.refNo'), render: (row) => row.refNo ?? '—' },
   ];
 
-  const total = (view === 'stock' ? stockQuery.data?.total : movementsQuery.data?.total) ?? 0;
+  const total =
+    view === 'expired'
+      ? (expiredQuery.data?.items ?? []).length
+      : ((view === 'stock' ? stockQuery.data?.total : movementsQuery.data?.total) ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const canWriteStock = hasPermission(me?.role, Permissions.STOCK_WRITE);
+  const canReadRetailPrices = hasPermission(me?.role, Permissions.RETAIL_PRICES_READ);
+
+  /** 一键报损：预填全部过期批次（数量可在报损单中调整）。 */
+  const handleCreateLossOrder = (rows: StockBatchDto[]) => {
+    const prefill = rows.map((r) => ({ itemId: r.itemId, qty: String(r.qty), batchId: r.batchId }));
+    const params = new URLSearchParams({
+      type: 'LOSS',
+      warehouseUnitId: effectiveUnitId,
+      reason: t('inventory.expiredReason'),
+      prefill: JSON.stringify(prefill),
+    });
+    navigate(`/outbound/new?${params.toString()}`);
+  };
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('inventory.title')}</Title1>
-        <TabList selectedValue={view} onTabSelect={(_, d) => setView(d.value as View)}>
-          <Tab value="stock">{t('inventory.tabStock')}</Tab>
-          <Tab value="movements">{t('inventory.tabMovements')}</Tab>
-        </TabList>
+        <div className="flex items-center gap-2">
+          {canReadRetailPrices && (
+            <Link to="/retail-prices">
+              <Button appearance="secondary">{t('retailPrices.title')}</Button>
+            </Link>
+          )}
+          <TabList selectedValue={view} onTabSelect={(_, d) => setView(d.value as View)}>
+            <Tab value="stock">{t('inventory.tabStock')}</Tab>
+            <Tab value="movements">{t('inventory.tabMovements')}</Tab>
+            <Tab value="expired">{t('inventory.tabExpired')}</Tab>
+          </TabList>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -132,6 +203,29 @@ export function InventoryPage() {
         <Spinner label={t('common.loading')} />
       ) : activeQuery.isError ? (
         <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
+      ) : view === 'expired' ? (
+        <>
+          {!effectiveUnitId && <Text className="text-amber-600">{t('inventory.expiredNeedUnit')}</Text>}
+          {canWriteStock && (expiredQuery.data?.items.length ?? 0) > 0 && (
+            <div>
+              <Button
+                appearance="primary"
+                onClick={() => handleCreateLossOrder(expiredQuery.data?.items ?? [])}
+              >
+                {t('inventory.createLossFromExpired')}
+              </Button>
+            </div>
+          )}
+          <ResponsiveTable
+            columns={expiredColumns}
+            items={expiredQuery.data?.items ?? []}
+            rowKey={(row) => row.batchId}
+            emptyText={t('inventory.noExpired')}
+          />
+          <div className="flex items-center justify-between text-sm text-neutral-600">
+            <span>{t('inventory.total', { total })}</span>
+          </div>
+        </>
       ) : (
         <>
           {view === 'stock' ? (

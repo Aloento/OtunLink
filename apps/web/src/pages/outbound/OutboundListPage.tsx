@@ -1,4 +1,4 @@
-import { Button, Select, Spinner, Text, Title1 } from '@fluentui/react-components';
+import { Button, Select, Spinner, Tab, TabList, Text, Title1 } from '@fluentui/react-components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -77,21 +77,20 @@ export function OutboundListPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('outbound.title')}</Title1>
         <div className="flex items-center gap-2">
-          <Select
-            value={type}
-            onChange={(_, d) => {
-              setType(d.value as OutboundType | '');
+          <TabList
+            selectedValue={type || 'all'}
+            onTabSelect={(_, d) => {
+              setType(d.value === 'all' ? '' : (d.value as OutboundType));
               setPage(1);
             }}
-            aria-label={t('outbound.type')}
           >
-            <option value="">{t('outbound.allTypes')}</option>
+            <Tab value="all">{t('outbound.allTypes')}</Tab>
             {OUTBOUND_TYPES.map((v) => (
-              <option key={v} value={v}>
+              <Tab key={v} value={v}>
                 {t(`outbound.types.${v}`)}
-              </option>
+              </Tab>
             ))}
-          </Select>
+          </TabList>
           <Select
             value={status}
             onChange={(_, d) => {

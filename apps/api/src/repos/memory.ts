@@ -42,6 +42,14 @@ import type {
   ShipmentRecord,
   ShipmentRepository,
   ShipmentTrackingRecord,
+  NotificationRecord,
+  NotificationRepository,
+  RetailPriceHistoryRecord,
+  RetailPriceListQuery,
+  RetailPriceRecord,
+  RetailPriceRepository,
+  StockBatchListQuery,
+  StockBatchRecord,
   StockListQuery,
   StockListResult,
   StockMovementListQuery,
@@ -58,6 +66,7 @@ import type {
   UserRecord,
   UserRepository,
 } from '../types';
+import { expiryRemainingDays } from '@otunlink/shared';
 import { mergeInboundLines, qtyEqual, type MergedInboundLine } from './inbound-lines';
 
 // 内存实现：供单元测试/本地无 DB 联调使用；生产必须走 Drizzle（见 repos/sql.ts 注释）。
@@ -1601,11 +1610,11 @@ class MemoryOutboundRepository implements OutboundRepository {
     const order: OutboundOrderRecord = {
       id: uuid(),
       outboundNo: this.nextOutboundNo(),
-      type: 'NORMAL',
+      type: input.type ?? 'NORMAL',
       warehouseUnitId: input.warehouseUnitId,
       counterpartyUnitId: normalizeEmpty(input.counterpartyUnitId),
       status: 'DRAFT',
-      lossReason: null,
+      lossReason: input.lossReason ?? null,
       photoFileIds: [...input.photoFileIds],
       remark: normalizeEmpty(input.remark),
       postedBy: null,
@@ -1637,6 +1646,8 @@ class MemoryOutboundRepository implements OutboundRepository {
 
     const now = new Date();
     const allocated: OutboundOrderItemRecord[] = [];
+    // ck-08b：报损（type=LOSS）→ OUTBOUND_LOSS 流水；手工出库 → OUTBOUND_NORMAL。
+    const movementType = existing.type === 'LOSS' ? 'OUTBOUND_LOSS' : 'OUTBOUND_NORMAL';
     for (const line of this.items.get(id) ?? []) {
       const qty = Number(line.qty);
       if (!Number.isFinite(qty) || qty <= 0) throw new Error(INSUFFICIENT_STOCK_MESSAGE);
@@ -1646,7 +1657,7 @@ class MemoryOutboundRepository implements OutboundRepository {
         itemId: line.itemId,
         qty,
         batchId: line.batchId,
-        type: 'OUTBOUND_NORMAL',
+        type: movementType,
         orderType: 'outbound',
         orderId: existing.id,
         refNo: existing.outboundNo,
@@ -1685,6 +1696,39 @@ class MemoryStockRepository implements StockRepository {
     private readonly itemRepo: MemoryItemRepository,
   ) {}
 
+  private async hydrate(row: MemoryStockRecord): Promise<StockRowRecord> {
+    const [unit, item, batch] = await Promise.all([
+      this.unitRepo.findById(row.unitId),
+      this.itemRepo.findById(row.itemId),
+      Promise.resolve(this.ledger.batches.get(row.batchId) ?? null),
+    ]);
+    return {
+      unitId: row.unitId,
+      unitName: unit?.name ?? null,
+      itemId: row.itemId,
+      itemName: item?.name ?? null,
+      spec: item?.specUnit ?? null,
+      batchId: row.batchId,
+      batchNo: batch?.batchNo ?? null,
+      productionDate: batch?.productionDate ?? null,
+      expiryDate: batch?.expiryDate ?? null,
+      qty: String(row.qty),
+      avgCost: String(row.avgCost),
+      version: row.version,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  private async hydrateBatches(rows: MemoryStockRecord[]): Promise<StockBatchRecord[]> {
+    const items: StockBatchRecord[] = [];
+    for (const row of rows) {
+      const base = await this.hydrate(row);
+      const remainingDays = expiryRemainingDays(base.expiryDate, new Date());
+      items.push({ ...base, remainingDays, isExpired: remainingDays !== null && remainingDays < 0 });
+    }
+    return items;
+  }
+
   async list(query: StockListQuery): Promise<StockListResult> {
     const rows = [...this.ledger.stock.values()]
       .filter((row) => row.qty > 0)
@@ -1699,28 +1743,27 @@ class MemoryStockRepository implements StockRepository {
     const start = (page - 1) * size;
     const items: StockRowRecord[] = [];
     for (const row of rows.slice(start, start + size)) {
-      const [unit, item, batch] = await Promise.all([
-        this.unitRepo.findById(row.unitId),
-        this.itemRepo.findById(row.itemId),
-        Promise.resolve(this.ledger.batches.get(row.batchId) ?? null),
-      ]);
-      items.push({
-        unitId: row.unitId,
-        unitName: unit?.name ?? null,
-        itemId: row.itemId,
-        itemName: item?.name ?? null,
-        spec: item?.specUnit ?? null,
-        batchId: row.batchId,
-        batchNo: batch?.batchNo ?? null,
-        productionDate: batch?.productionDate ?? null,
-        expiryDate: batch?.expiryDate ?? null,
-        qty: String(row.qty),
-        avgCost: String(row.avgCost),
-        version: row.version,
-        updatedAt: row.updatedAt,
-      });
+      items.push(await this.hydrate(row));
     }
     return { items, total: rows.length, page, size };
+  }
+
+  async listBatches(query: StockBatchListQuery): Promise<StockBatchRecord[]> {
+    const rows = [...this.ledger.stock.values()]
+      .filter((row) => row.qty > 0)
+      .filter((row) => (query.unitId ? row.unitId === query.unitId : true))
+      .filter((row) => (query.itemId ? row.itemId === query.itemId : true))
+      .sort((a, b) => {
+        const ea = this.ledger.batches.get(a.batchId)?.expiryDate ?? '9999-12-31';
+        const eb = this.ledger.batches.get(b.batchId)?.expiryDate ?? '9999-12-31';
+        return ea.localeCompare(eb) || `${a.unitId}|${a.itemId}`.localeCompare(`${b.unitId}|${b.itemId}`);
+      });
+    return this.hydrateBatches(rows);
+  }
+
+  async listExpired(query: StockBatchListQuery): Promise<StockBatchRecord[]> {
+    const all = await this.listBatches(query);
+    return all.filter((row) => row.isExpired);
   }
 
   async listMovements(query: StockMovementListQuery): Promise<StockMovementListResult> {
@@ -1762,6 +1805,135 @@ class MemoryStockRepository implements StockRepository {
       });
     }
     return { items, total: filtered.length, page, size };
+  }
+}
+
+// ── ck-08b 内存实现：零售价 + 站内通知。 ──────────────────────────────────────
+
+/** 内存零售价仓储：持有当前价 + 历史；unit_cost 只读（从台账加权平均计算）。 */
+class MemoryRetailPriceRepository implements RetailPriceRepository {
+  private prices = new Map<string, RetailPriceRecord>();
+  private history: RetailPriceHistoryRecord[] = [];
+
+  constructor(
+    private readonly ledger: MemoryStockLedger,
+    private readonly unitRepo: MemoryUnitRepository,
+    private readonly itemRepo: MemoryItemRepository,
+    private readonly userRepo: MemoryUserRepository,
+  ) {}
+
+  private key(unitId: string, itemId: string): string {
+    return `${unitId}|${itemId}`;
+  }
+
+  /** 入库加权平均进价（只读参考）：SUM(qty*avg_cost)/SUM(qty)，无库存为 null。 */
+  private unitCostOf(unitId: string, itemId: string): string | null {
+    const rows = [...this.ledger.stock.values()].filter(
+      (row) => row.unitId === unitId && row.itemId === itemId && row.qty > 0,
+    );
+    const totalQty = rows.reduce((sum, row) => sum + row.qty, 0);
+    if (totalQty <= 0) return null;
+    const totalCost = rows.reduce((sum, row) => sum + row.qty * row.avgCost, 0);
+    return round2(totalCost / totalQty).toFixed(2);
+  }
+
+  async list(query: RetailPriceListQuery): Promise<RetailPriceRecord[]> {
+    const rows = [...this.prices.values()]
+      .filter((row) => (query.unitId ? row.unitId === query.unitId : true))
+      .filter((row) => (query.itemId ? row.itemId === query.itemId : true))
+      .sort((a, b) =>
+        `${a.unitName ?? ''}|${a.itemName ?? ''}|${a.itemId}`.localeCompare(
+          `${b.unitName ?? ''}|${b.itemName ?? ''}|${b.itemId}`,
+        ),
+      );
+    return rows.map((row) => ({ ...row, unitCost: this.unitCostOf(row.unitId, row.itemId) }));
+  }
+
+  async setPrice(input: {
+    unitId: string;
+    itemId: string;
+    price: string;
+    currency: string;
+    updatedBy: string;
+  }): Promise<RetailPriceRecord> {
+    const [unit, item, user] = await Promise.all([
+      this.unitRepo.findById(input.unitId),
+      this.itemRepo.findById(input.itemId),
+      this.userRepo.findById(input.updatedBy),
+    ]);
+    const now = new Date();
+    const existing = this.prices.get(this.key(input.unitId, input.itemId));
+    const record: RetailPriceRecord = {
+      id: existing?.id ?? uuid(),
+      unitId: input.unitId,
+      unitName: unit?.name ?? null,
+      itemId: input.itemId,
+      itemName: item?.name ?? null,
+      spec: item?.specUnit ?? null,
+      price: input.price,
+      currency: input.currency,
+      unitCost: this.unitCostOf(input.unitId, input.itemId),
+      updatedBy: input.updatedBy,
+      updatedByName: user?.name ?? null,
+      updatedAt: now,
+    };
+    this.prices.set(this.key(input.unitId, input.itemId), { ...record });
+    this.history.push({
+      id: uuid(),
+      unitId: input.unitId,
+      unitName: record.unitName,
+      itemId: input.itemId,
+      itemName: record.itemName,
+      price: input.price,
+      currency: input.currency,
+      updatedBy: input.updatedBy,
+      updatedByName: record.updatedByName,
+      updatedAt: now,
+    });
+    return { ...record };
+  }
+
+  async listHistory(unitId: string, itemId: string): Promise<RetailPriceHistoryRecord[]> {
+    return this.history
+      .filter((row) => row.unitId === unitId && row.itemId === itemId)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .map((row) => ({ ...row }));
+  }
+}
+
+/** 内存站内通知仓储（ck-08b 只写；ck-10 通知中心使用）。 */
+class MemoryNotificationRepository implements NotificationRepository {
+  private rows: NotificationRecord[] = [];
+
+  async create(input: {
+    userId?: string | null;
+    unitId?: string | null;
+    type: string;
+    title: string;
+    content?: string | null;
+    link?: string | null;
+  }): Promise<NotificationRecord> {
+    const row: NotificationRecord = {
+      id: uuid(),
+      userId: input.userId ?? null,
+      unitId: input.unitId ?? null,
+      type: input.type,
+      title: input.title,
+      content: input.content ?? null,
+      link: input.link ?? null,
+      readAt: null,
+      createdAt: new Date(),
+    };
+    this.rows.push(row);
+    return { ...row };
+  }
+
+  async list(query?: { unitId?: string; userId?: string }): Promise<NotificationRecord[]> {
+    return this.rows
+      .filter((row) => (query?.unitId ? row.unitId === query.unitId : true))
+      .filter((row) => (query?.userId ? row.userId === query.userId : true))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((row) => ({ ...row }));
   }
 }
 
@@ -1809,8 +1981,9 @@ export function createMemoryRepos(seed?: {
   });
   const unitRepo = new MemoryUnitRepository(seed?.units);
   const itemRepo = new MemoryItemRepository(seed?.items);
+  const userRepo = new MemoryUserRepository(seed?.users);
   return {
-    users: new MemoryUserRepository(seed?.users),
+    users: userRepo,
     units: unitRepo,
     items: itemRepo,
     files: new MemoryFileRepository(seed?.files),
@@ -1822,5 +1995,7 @@ export function createMemoryRepos(seed?: {
       outboundItems: seed?.outboundItems,
     }),
     stock: new MemoryStockRepository(stockLedger, unitRepo, itemRepo),
+    retailPrices: new MemoryRetailPriceRepository(stockLedger, unitRepo, itemRepo, userRepo),
+    notifications: new MemoryNotificationRepository(),
   };
 }

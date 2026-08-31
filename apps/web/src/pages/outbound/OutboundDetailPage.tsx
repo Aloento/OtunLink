@@ -9,6 +9,7 @@ import { Permissions, hasPermission, type OutboundOrderItemDto } from '@otunlink
 import { errorI18nKey, isApiError } from '../../api/http';
 import { getOutboundOrder, postOutboundOrder } from '../../api/outbound';
 import { useSession } from '../../auth/SessionProvider';
+import { FileImage } from '../../components/FileImage';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 // 出库单详情（ck-08a §4.3）：批次分配结果 + 草稿过账（扣减库存 / 写台账流水）。
@@ -64,6 +65,9 @@ export function OutboundDetailPage() {
     [t('outbound.createdAt'), data.createdAt],
     [t('outbound.postedAt'), data.postedAt ?? '—'],
   ];
+  if (data.type === 'LOSS') {
+    rows.splice(4, 0, [t('outbound.lossReason'), data.lossReason ?? '—']);
+  }
 
   const columns: ResponsiveTableColumn<OutboundOrderItemDto>[] = [
     { key: 'itemName', header: t('outbound.itemName'), render: (item) => item.itemName ?? item.itemId },
@@ -117,6 +121,19 @@ export function OutboundDetailPage() {
       </dl>
 
       {data.remark && <Body1>{data.remark}</Body1>}
+
+      {data.type === 'LOSS' && data.photoFileIds.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <Text as="h2" weight="semibold" size={400}>
+            {t('outbound.lossPhotos')}
+          </Text>
+          <div className="flex flex-wrap gap-3">
+            {data.photoFileIds.map((fileId) => (
+              <FileImage key={fileId} fileId={fileId} className="h-24 w-24 rounded object-cover" alt={fileId} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <Text as="h2" weight="semibold" size={400}>

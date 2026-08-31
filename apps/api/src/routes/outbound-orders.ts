@@ -89,6 +89,8 @@ export function outboundOrdersRouter(): Hono<AppEnv> {
     const created = await repos.outbounds.create({
       warehouseUnitId: input.warehouseUnitId,
       counterpartyUnitId: input.counterpartyUnitId ?? null,
+      type: input.type,
+      lossReason: input.lossReason ?? null,
       remark: input.remark ?? null,
       photoFileIds: input.photoFileIds ?? [],
       createdBy: c.get('auth').user!.id,

@@ -653,10 +653,13 @@ export interface OutboundOrderItemRecord {
   batchNo?: string | null;
 }
 
-/** 新建手工出库单（POST /outbound-orders, type=NORMAL）仓库入参。 */
+/** 新建出库单（POST /outbound-orders）：NORMAL 手工出库 / LOSS 报损（ck-08b）。 */
 export interface CreateOutboundRepoInput {
   warehouseUnitId: string;
   counterpartyUnitId: string | null;
+  type: OutboundType;
+  /** 报损原因（type=LOSS 必填；路由层已校验）。 */
+  lossReason: string | null;
   remark: string | null;
   photoFileIds: string[];
   createdBy: string;
@@ -764,9 +767,103 @@ export interface StockMovementListResult {
   size: number;
 }
 
+/** 库存批次视图记录（叠加效期计算字段，ck-08b）。 */
+export interface StockBatchRecord extends StockRowRecord {
+  /** 剩余天数（按 UTC 当日）；null = 无到期日。 */
+  remainingDays: number | null;
+  /** 已过期（remainingDays < 0）。 */
+  isExpired: boolean;
+}
+
+export interface StockBatchListQuery {
+  unitId?: string;
+  itemId?: string;
+}
+
 export interface StockRepository {
   list(query: StockListQuery): Promise<StockListResult>;
   listMovements(query: StockMovementListQuery): Promise<StockMovementListResult>;
+  /** 全部非零库存批次（效期视图）：含 remainingDays/isExpired，按到期日升序。 */
+  listBatches(query: StockBatchListQuery): Promise<StockBatchRecord[]>;
+  /** 已过期批次（expiry_date < 今日 UTC，qty > 0）。 */
+  listExpired(query: StockBatchListQuery): Promise<StockBatchRecord[]>;
+}
+
+/** 零售价行（retail_prices JOIN units/items + unit_cost 加权参考）。 */
+export interface RetailPriceRecord {
+  id: string;
+  unitId: string;
+  unitName: string | null;
+  itemId: string;
+  itemName: string | null;
+  spec: string | null;
+  price: string;
+  currency: string;
+  /** 入库加权平均进价（只读参考；无库存为 null）。 */
+  unitCost: string | null;
+  updatedBy: string | null;
+  updatedByName: string | null;
+  updatedAt: Date;
+}
+
+/** 零售价历史行（retail_price_history）。 */
+export interface RetailPriceHistoryRecord {
+  id: string;
+  unitId: string;
+  unitName: string | null;
+  itemId: string;
+  itemName: string | null;
+  price: string;
+  currency: string;
+  updatedBy: string | null;
+  updatedByName: string | null;
+  updatedAt: Date;
+}
+
+export interface RetailPriceListQuery {
+  unitId?: string;
+  itemId?: string;
+}
+
+/** 零售价仓储（design.md §4.2）：upsert 当前价并写历史；无 unit_cost 写入口。 */
+export interface RetailPriceRepository {
+  list(query: RetailPriceListQuery): Promise<RetailPriceRecord[]>;
+  /** 设置/更新零售价：写入 retail_prices（唯一 unit×item）+ retail_price_history。 */
+  setPrice(input: {
+    unitId: string;
+    itemId: string;
+    price: string;
+    currency: string;
+    updatedBy: string;
+  }): Promise<RetailPriceRecord>;
+  listHistory(unitId: string, itemId: string): Promise<RetailPriceHistoryRecord[]>;
+}
+
+/** 站内通知行（notifications，ck-08b 先写表，发送端 ck-10 联接）。 */
+export interface NotificationRecord {
+  id: string;
+  userId: string | null;
+  unitId: string | null;
+  type: string;
+  title: string;
+  content: string | null;
+  link: string | null;
+  readAt: Date | null;
+  createdAt: Date;
+}
+
+export interface NotificationRepository {
+  /** 写入站内通知（user_id 或 unit_id 至少其一，表约束兜底）。 */
+  create(input: {
+    userId?: string | null;
+    unitId?: string | null;
+    type: string;
+    title: string;
+    content?: string | null;
+    link?: string | null;
+  }): Promise<NotificationRecord>;
+  /** 查询（按单元/用户过滤；ck-10 通知中心使用）。 */
+  list(query?: { unitId?: string; userId?: string }): Promise<NotificationRecord[]>;
 }
 
 export interface Repos {
@@ -779,6 +876,8 @@ export interface Repos {
   returns: ReturnRepository;
   outbounds: OutboundRepository;
   stock: StockRepository;
+  retailPrices: RetailPriceRepository;
+  notifications: NotificationRepository;
 }
 
 export interface AuthState {

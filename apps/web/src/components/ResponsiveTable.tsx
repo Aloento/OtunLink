@@ -26,11 +26,14 @@ export function ResponsiveTable<T>({
   items,
   rowKey,
   emptyText,
+  actions,
 }: {
   columns: ResponsiveTableColumn<T>[];
   items: T[];
   rowKey: (item: T) => string;
   emptyText: string;
+  /** 可选操作列（桌面为末列，移动端渲染在卡片底部）。 */
+  actions?: (item: T) => ReactNode;
 }) {
   const isMobile = useMediaQuery('(max-width: 767px)');
 
@@ -49,6 +52,7 @@ export function ResponsiveTable<T>({
                 <div className="text-right">{col.render(item)}</div>
               </div>
             ))}
+            {actions && <div className="flex items-center justify-end gap-2">{actions(item)}</div>}
           </Card>
         ))}
       </div>
@@ -63,6 +67,7 @@ export function ResponsiveTable<T>({
             {columns.map((col) => (
               <TableHeaderCell key={col.key}>{col.header}</TableHeaderCell>
             ))}
+            {actions && <TableHeaderCell />}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -71,6 +76,7 @@ export function ResponsiveTable<T>({
               {columns.map((col) => (
                 <TableCell key={col.key}>{col.render(item)}</TableCell>
               ))}
+              {actions && <TableCell>{actions(item)}</TableCell>}
             </TableRow>
           ))}
         </TableBody>

@@ -1,3 +1,4 @@
+import { expiryRemainingDays } from '@otunlink/shared';
 import type { SqlExecutor } from '@otunlink/db';
 
 import type {
@@ -22,11 +23,17 @@ import type {
   ItemListQuery,
   ItemListResult,
   ItemRecord,
+  NotificationRecord,
+  NotificationRepository,
   OutboundListQuery,
   OutboundListResult,
   OutboundOrderItemRecord,
   OutboundOrderRecord,
   Repos,
+  RetailPriceHistoryRecord,
+  RetailPriceListQuery,
+  RetailPriceRecord,
+  RetailPriceRepository,
   ReturnListQuery,
   ReturnListResult,
   ReturnOrderItemRecord,
@@ -38,6 +45,8 @@ import type {
   ShipmentListResult,
   ShipmentRecord,
   ShipmentTrackingRecord,
+  StockBatchListQuery,
+  StockBatchRecord,
   StockListQuery,
   StockListResult,
   StockMovementListQuery,
@@ -384,6 +393,12 @@ function mapStockRow(row: Record<string, unknown>): StockRowRecord {
   };
 }
 
+/** 在库存行上叠加效期计算字段（UTC 当日基准，与 shared 纯函数一致）。 */
+function attachExpiry(row: StockRowRecord): StockBatchRecord {
+  const remainingDays = expiryRemainingDays(row.expiryDate, new Date());
+  return { ...row, remainingDays, isExpired: remainingDays !== null && remainingDays < 0 };
+}
+
 function mapStockMovement(row: Record<string, unknown>): StockMovementRecord {
   return {
     id: String(row.id),
@@ -404,6 +419,52 @@ function mapStockMovement(row: Record<string, unknown>): StockMovementRecord {
     refNo: row.ref_no ? String(row.ref_no) : null,
     note: row.note ? String(row.note) : null,
     operatorId: row.operator_id ? String(row.operator_id) : null,
+    createdAt: new Date(String(row.created_at)),
+  };
+}
+
+function mapRetailPrice(row: Record<string, unknown>): RetailPriceRecord {
+  return {
+    id: String(row.id),
+    unitId: String(row.unit_id),
+    unitName: row.unit_name ? String(row.unit_name) : null,
+    itemId: String(row.item_id),
+    itemName: row.item_name ? String(row.item_name) : null,
+    spec: row.spec ? String(row.spec) : null,
+    price: row.price != null ? String(row.price) : '0',
+    currency: String(row.currency ?? 'CNY'),
+    unitCost: row.unit_cost != null ? String(row.unit_cost) : null,
+    updatedBy: row.updated_by ? String(row.updated_by) : null,
+    updatedByName: row.updated_by_name ? String(row.updated_by_name) : null,
+    updatedAt: new Date(String(row.updated_at)),
+  };
+}
+
+function mapRetailPriceHistory(row: Record<string, unknown>): RetailPriceHistoryRecord {
+  return {
+    id: String(row.id),
+    unitId: String(row.unit_id),
+    unitName: row.unit_name ? String(row.unit_name) : null,
+    itemId: String(row.item_id),
+    itemName: row.item_name ? String(row.item_name) : null,
+    price: row.price != null ? String(row.price) : '0',
+    currency: String(row.currency ?? 'CNY'),
+    updatedBy: row.updated_by ? String(row.updated_by) : null,
+    updatedByName: row.updated_by_name ? String(row.updated_by_name) : null,
+    updatedAt: new Date(String(row.updated_at)),
+  };
+}
+
+function mapNotification(row: Record<string, unknown>): NotificationRecord {
+  return {
+    id: String(row.id),
+    userId: row.user_id ? String(row.user_id) : null,
+    unitId: row.unit_id ? String(row.unit_id) : null,
+    type: String(row.type),
+    title: String(row.title),
+    content: row.content ? String(row.content) : null,
+    link: row.link ? String(row.link) : null,
+    readAt: row.read_at ? new Date(String(row.read_at)) : null,
     createdAt: new Date(String(row.created_at)),
   };
 }
@@ -1669,9 +1730,10 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         const { rows } = await exec.query(
           `INSERT INTO outbound_orders
              (outbound_no, type, warehouse_unit_id, counterparty_unit_id, status,
-              remark, photo_file_ids, created_by)
-           VALUES (${quote(outboundNo)}, 'NORMAL', ${quote(input.warehouseUnitId)},
-                  ${quote(input.counterpartyUnitId)}, 'DRAFT', ${quote(nn(input.remark))},
+              loss_reason, remark, photo_file_ids, created_by)
+           VALUES (${quote(outboundNo)}, ${quote(input.type)}, ${quote(input.warehouseUnitId)},
+                  ${quote(input.counterpartyUnitId)}, 'DRAFT', ${quote(nn(input.lossReason))},
+                  ${quote(nn(input.remark))},
                   ${photoArray(input.photoFileIds)}, ${quote(input.createdBy)})
            RETURNING *`,
         );
@@ -1711,6 +1773,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
            ORDER BY ooi.created_at ASC, ooi.id ASC`,
         );
         const items = itemRows.map(mapOutboundItem);
+        // ck-08b：报损（type=LOSS）→ OUTBOUND_LOSS 流水；手工出库 → OUTBOUND_NORMAL。
+        const movementType = outbound.type === 'LOSS' ? 'OUTBOUND_LOSS' : 'OUTBOUND_NORMAL';
         const allocations: { itemId: string; batchId: string; qty: number; unitCost: string }[] = [];
         for (const line of items) {
           const qty = Number(line.qty);
@@ -1784,7 +1848,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
                (unit_id, item_id, batch_id, type, qty_delta, qty_before, qty_after, unit_cost,
                 order_type, order_id, ref_no, operator_id)
              VALUES (${quote(outbound.warehouseUnitId)}, ${quote(alloc.itemId)},
-                    ${quote(alloc.batchId)}, 'OUTBOUND_NORMAL',
+                    ${quote(alloc.batchId)}, ${quote(movementType)},
                     ${quote(`-${alloc.qty.toFixed(2)}`)}, ${quote(qtyBefore.toFixed(2))},
                     ${quote(qtyAfter.toFixed(2))}, ${quote(alloc.unitCost)}, 'outbound',
                     ${quote(outbound.id)}, ${quote(outbound.outboundNo)}, ${quote(postedBy)})`,
@@ -1870,9 +1934,149 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       );
       return { items: rows.map(mapStockMovement), total, page, size };
     },
+    async listBatches(query: StockBatchListQuery): Promise<StockBatchRecord[]> {
+      const where = (alias: string): string => {
+        const parts: string[] = [`${alias}qty > 0`];
+        if (query.unitId) parts.push(`${alias}unit_id = ${quote(query.unitId)}`);
+        if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
+        return ` WHERE ${parts.join(' AND ')}`;
+      };
+      const { rows } = await exec.query(
+        `SELECT s.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+                b.batch_no, b.production_date, b.expiry_date
+         FROM stock s
+         JOIN business_units bu ON bu.id = s.unit_id
+         JOIN items i ON i.id = s.item_id
+         JOIN batches b ON b.id = s.batch_id
+         ${where('s.')}
+         ORDER BY bu.name ASC, i.name ASC, b.expiry_date ASC NULLS LAST, s.batch_id ASC`,
+      );
+      return rows.map(mapStockRow).map(attachExpiry);
+    },
+    async listExpired(query: StockBatchListQuery): Promise<StockBatchRecord[]> {
+      const where = (alias: string): string => {
+        const parts: string[] = [
+          `${alias}qty > 0`,
+          `${alias}expiry_date IS NOT NULL AND ${alias}expiry_date < CURRENT_DATE`,
+        ];
+        if (query.unitId) parts.push(`${alias}unit_id = ${quote(query.unitId)}`);
+        if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
+        return ` WHERE ${parts.join(' AND ')}`;
+      };
+      const { rows } = await exec.query(
+        `SELECT s.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+                b.batch_no, b.production_date, b.expiry_date
+         FROM stock s
+         JOIN business_units bu ON bu.id = s.unit_id
+         JOIN items i ON i.id = s.item_id
+         JOIN batches b ON b.id = s.batch_id
+         ${where('s.')}
+         ORDER BY b.expiry_date ASC NULLS LAST, bu.name ASC, i.name ASC`,
+      );
+      return rows.map(mapStockRow).map(attachExpiry);
+    },
   };
 
-  return { users, units, items, files, shipments, inbounds, returns, outbounds, stock };
+  // ── ck-08b：零售价（retail_prices + retail_price_history）─────────────────────────
+
+  const retailPrices: RetailPriceRepository = {
+    async list(query: RetailPriceListQuery): Promise<RetailPriceRecord[]> {
+      const where = (alias: string): string => {
+        const parts: string[] = [];
+        if (query.unitId) parts.push(`${alias}unit_id = ${quote(query.unitId)}`);
+        if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
+        return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
+      };
+      const { rows } = await exec.query(
+        `SELECT rp.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+                bu2.name AS updated_by_name,
+                (SELECT CASE WHEN SUM(s.qty) > 0
+                        THEN ROUND(SUM(s.qty * s.avg_cost) / SUM(s.qty), 2)
+                        ELSE NULL END
+                 FROM stock s
+                 WHERE s.unit_id = rp.unit_id AND s.item_id = rp.item_id) AS unit_cost
+         FROM retail_prices rp
+         JOIN business_units bu ON bu.id = rp.unit_id
+         JOIN items i ON i.id = rp.item_id
+         LEFT JOIN users bu2 ON bu2.id = rp.updated_by
+         ${where('rp.')}
+         ORDER BY bu.name ASC, i.name ASC`,
+      );
+      return rows.map(mapRetailPrice);
+    },
+    async setPrice(input: {
+      unitId: string;
+      itemId: string;
+      price: string;
+      currency: string;
+      updatedBy: string;
+    }): Promise<RetailPriceRecord> {
+      const now = 'now()';
+      const { rows } = await exec.query(
+        `INSERT INTO retail_prices (unit_id, item_id, price, currency, updated_by, updated_at)
+         VALUES (${quote(input.unitId)}, ${quote(input.itemId)}, ${quote(input.price)},
+                 ${quote(input.currency)}, ${quote(input.updatedBy)}, ${now})
+         ON CONFLICT (unit_id, item_id)
+         DO UPDATE SET price = EXCLUDED.price, currency = EXCLUDED.currency,
+                       updated_by = EXCLUDED.updated_by, updated_at = now()
+         RETURNING *`,
+      );
+      await exec.query(
+        `INSERT INTO retail_price_history (unit_id, item_id, price, currency, updated_by, updated_at)
+         VALUES (${quote(input.unitId)}, ${quote(input.itemId)}, ${quote(input.price)},
+                 ${quote(input.currency)}, ${quote(input.updatedBy)}, ${now})`,
+      );
+      const hydrated = await retailPrices.list({ unitId: input.unitId, itemId: input.itemId });
+      return hydrated[0] ?? mapRetailPrice(rows[0]);
+    },
+    async listHistory(unitId: string, itemId: string): Promise<RetailPriceHistoryRecord[]> {
+      const { rows } = await exec.query(
+        `SELECT h.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+                u.name AS updated_by_name
+         FROM retail_price_history h
+         JOIN business_units bu ON bu.id = h.unit_id
+         JOIN items i ON i.id = h.item_id
+         LEFT JOIN users u ON u.id = h.updated_by
+         WHERE h.unit_id = ${quote(unitId)} AND h.item_id = ${quote(itemId)}
+         ORDER BY h.updated_at DESC, h.id DESC`,
+      );
+      return rows.map(mapRetailPriceHistory);
+    },
+  };
+
+  // ── ck-08b：站内通知（notifications，发送端 ck-10 联接）────────────────────────
+
+  const notifications = {
+    async create(input: {
+      userId?: string | null;
+      unitId?: string | null;
+      type: string;
+      title: string;
+      content?: string | null;
+      link?: string | null;
+    }): Promise<NotificationRecord> {
+      const { rows } = await exec.query(
+        `INSERT INTO notifications (user_id, unit_id, type, title, content, link)
+         VALUES (${quote(input.userId ?? null)}, ${quote(input.unitId ?? null)},
+                 ${quote(input.type)}, ${quote(input.title)},
+                 ${quote(input.content ?? null)}, ${quote(input.link ?? null)})
+         RETURNING *`,
+      );
+      return mapNotification(rows[0]);
+    },
+    async list(query?: { unitId?: string; userId?: string }): Promise<NotificationRecord[]> {
+      const parts: string[] = [];
+      if (query?.unitId) parts.push(`unit_id = ${quote(query.unitId)}`);
+      if (query?.userId) parts.push(`user_id = ${quote(query.userId)}`);
+      const where = parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
+      const { rows } = await exec.query(
+        `SELECT * FROM notifications${where} ORDER BY created_at DESC, id DESC`,
+      );
+      return rows.map(mapNotification);
+    },
+  };
+
+  return { users, units, items, files, shipments, inbounds, returns, outbounds, stock, retailPrices, notifications };
 }
 
 // 将 undefined/空字符串归一化为 null（写入 DB 的 NULL）。

@@ -25,3 +25,7 @@ id = "24881a3ca1404761a800540a6e809d8d"
 S3_ENDPOINT = "https://obs.eu-de.otc.t-systems.com"
 S3_REGION = "eu-de"
 S3_BUCKET = "ims-test-images"
+
+# ── 每日效期预警（ck-08b）：UTC 00:00 扫描 7 天内到期与已过期批次 ──────────────
+[triggers]
+crons = ["0 0 * * *"]

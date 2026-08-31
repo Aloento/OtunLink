@@ -18,6 +18,7 @@ import { InventoryPage } from './pages/inventory/InventoryPage';
 import { OutboundDetailPage } from './pages/outbound/OutboundDetailPage';
 import { OutboundFormPage } from './pages/outbound/OutboundFormPage';
 import { OutboundListPage } from './pages/outbound/OutboundListPage';
+import { RetailPricesPage } from './pages/retail-prices/RetailPricesPage';
 import { ReturnDetailPage } from './pages/returns/ReturnDetailPage';
 import { ReturnsListPage } from './pages/returns/ReturnsListPage';
 import { ShipmentDetailPage } from './pages/shipments/ShipmentDetailPage';
@@ -171,6 +172,14 @@ export default function App() {
           element={
             <RequirePermission permissions={ROUTES.inventory.permissions}>
               <InventoryPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={ROUTES.retailPrices.path}
+          element={
+            <RequirePermission permissions={ROUTES.retailPrices.permissions}>
+              <RetailPricesPage />
             </RequirePermission>
           }
         />

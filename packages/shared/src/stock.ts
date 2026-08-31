@@ -32,6 +32,30 @@ export interface StockRowDto {
   updatedAt: string;
 }
 
+/**
+ * 剩余天数（UTC 当日为基准，design.md §11.7 时间统一按 UTC 存储）：
+ * 正数 = 距到期天数，0 = 今日到期，负数 = 已过期，null = 无到期日/格式不识别。
+ */
+export function expiryRemainingDays(
+  expiryDate: string | null | undefined,
+  today: Date = new Date(),
+): number | null {
+  if (!expiryDate) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiryDate);
+  if (!match) return null;
+  const utc = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  return Math.round((utc - todayUtc) / 86_400_000);
+}
+
+/** 库存批次视图（GET /stock/batches、/stock/expired）：在库存行上附带效期计算字段。 */
+export interface StockBatchDto extends StockRowDto {
+  /** 剩余天数（按 UTC 当日）；null = 无到期日。 */
+  remainingDays: number | null;
+  /** 已过期（remainingDays < 0）。 */
+  isExpired: boolean;
+}
+
 /** 台账流水 DTO（stock_movements，只增不改删）。 */
 export interface StockMovementDto {
   id: string;
