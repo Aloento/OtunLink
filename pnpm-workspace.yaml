@@ -1,12 +1,9 @@
 packages:
   - "apps/*"
   - "packages/*"
-
-onlyBuiltDependencies:
-  - esbuild
-  - sharp
-  - workerd
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true
   sharp: set this to true or false
-  workerd: set this to true or false
+  workerd: true
+minimumReleaseAgeExclude:
+  - '@cloudflare/workers-types@5.20260831.1'
