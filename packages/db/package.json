@@ -15,12 +15,18 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate && node scripts/embed-migrations.mjs",
+    "db:migrate": "node src/cli.ts migrate",
+    "db:push": "drizzle-kit push",
+    "db:ping": "node src/cli.ts ping",
+    "seed": "node src/cli.ts seed"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
+    "@types/pg": "^8.15.5",
     "drizzle-kit": "^0.31.10",
     "typescript": "~7.0.2",
     "vitest": "^4.1.11"

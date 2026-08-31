@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@otunlink/db": "workspace:*",
+    "@otunlink/shared": "workspace:*",
     "hono": "^4.13.5"
   },
   "devDependencies": {

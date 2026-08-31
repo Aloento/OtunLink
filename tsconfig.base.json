@@ -11,10 +11,10 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
-    "baseUrl": ".",
+    "allowImportingTsExtensions": true,
     "paths": {
-      "@otunlink/shared": ["packages/shared/src/index.ts"],
-      "@otunlink/db": ["packages/db/src/index.ts"]
+      "@otunlink/shared": ["./packages/shared/src/index.ts"],
+      "@otunlink/db": ["./packages/db/src/index.ts"]
     }
   }
 }
