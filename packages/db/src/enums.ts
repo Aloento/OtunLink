@@ -22,7 +22,11 @@ export const shipmentStatusEnum = pgEnum('shipment_status', [
 
 export const reviewStatusEnum = pgEnum('discrepancy_review_status', ['PENDING', 'APPROVED', 'REJECTED']);
 
-export const batchSourceTypeEnum = pgEnum('batch_source_type', ['SHIPMENT', 'MANUAL']);
+export const batchSourceTypeEnum = pgEnum('batch_source_type', [
+  'SHIPMENT',
+  'MANUAL',
+  'RETURNS_PENDING',
+]);
 
 export const inboundSourceTypeEnum = pgEnum('inbound_source_type', ['SHIPMENT', 'MANUAL']);
 export const inboundStatusEnum = pgEnum('inbound_status', ['DRAFT', 'POSTED']);

@@ -11,15 +11,19 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 
-import type {
-  FileDto,
-  SalesBatchAllocationDto,
-  SalesOrderDetailDto,
-  SalesOrderItemDto,
+import {
+  Permissions,
+  hasPermission,
+  type FileDto,
+  type ReturnOrderDto,
+  type SalesBatchAllocationDto,
+  type SalesOrderDetailDto,
+  type SalesOrderItemDto,
 } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { listItems } from '../../api/items';
+import { createSalesReturn, listReturns } from '../../api/returns';
 import { cancelSalesOrder, confirmSaleReceipt, getSalesOrder, sendSalesOrder, uploadSalePayment } from '../../api/sales';
 import { listStockBatches } from '../../api/stock';
 import { useSession } from '../../auth/SessionProvider';
@@ -262,6 +266,164 @@ export function SalesDetailPage() {
           </div>
         </div>
       )}
+
+      <AfterSaleSection order={order} />
+    </div>
+  );
+}
+
+/** 售后面板（ck-09b）：展示该销售单的售后记录；零售方可在已发送/已上传支付/已确认后发起退货。 */
+function AfterSaleSection({ order }: { order: SalesOrderDetailDto }) {
+  const { t } = useTranslation();
+  const { me } = useSession();
+  const queryClient = useQueryClient();
+
+  const { data: returns, isLoading } = useQuery({
+    queryKey: ['return-orders', 'list', 'SALES', order.id],
+    queryFn: () => listReturns({ sourceType: 'SALES', salesOrderId: order.id, page: 1, size: 20 }),
+    staleTime: 15_000,
+  });
+
+  const canCreate =
+    hasPermission(me?.role, Permissions.AFTER_SALE_CREATE) &&
+    (!me?.scopeUnitId || me.scopeUnitId === order.buyerUnitId) &&
+    (order.status === 'SENT' ||
+      order.status === 'PAYMENT_UPLOADED' ||
+      order.status === 'CONFIRMED');
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ['return-orders', 'list', 'SALES', order.id] });
+  };
+
+  return (
+    <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
+      <Text as="h2" weight="semibold" size={400}>
+        {t('sales.afterSale')}
+      </Text>
+      {isLoading ? (
+        <Spinner size="tiny" label={t('common.loading')} />
+      ) : (returns?.items.length ?? 0) === 0 ? (
+        <Text size={200} className="text-neutral-500">
+          {t('sales.noAfterSale')}
+        </Text>
+      ) : (
+        <div className="flex flex-col gap-1 text-sm">
+          {returns?.items.map((r) => (
+            <Link key={r.id} to={`/returns/${r.id}`} className="flex flex-wrap items-center gap-2 text-blue-600 hover:underline">
+              <span>{r.returnNo}</span>
+              <span className="text-neutral-500">{t(`returns.statuses.${r.status}`)}</span>
+              <span className="text-neutral-500">{r.createdAt}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+      {canCreate && <SalesReturnForm order={order} onCreated={refresh} />}
+    </div>
+  );
+}
+
+/** 发起售后表单：行级退货数量（≤ 实收未退）+ 行原因 + 照片（files 管线）。 */
+function SalesReturnForm({
+  order,
+  onCreated,
+}: {
+  order: SalesOrderDetailDto;
+  onCreated: () => void;
+}) {
+  const { t } = useTranslation();
+  const [lines, setLines] = useState<Record<string, { qty: string; reason: string }>>(() =>
+    Object.fromEntries(order.items.map((item) => [item.id, { qty: '', reason: '' }])),
+  );
+  const [reason, setReason] = useState('');
+  const [photos, setPhotos] = useState<FileDto[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    const items = order.items
+      .map((line) => {
+        const row = lines[line.id] ?? { qty: '', reason: '' };
+        return { line, qty: row.qty.trim(), reason: row.reason.trim() };
+      })
+      .filter((row) => row.qty !== '');
+    if (items.length === 0) {
+      setError(t('sales.afterSaleLineRequired'));
+      return;
+    }
+    for (const row of items) {
+      const value = Number(row.qty);
+      if (!Number.isFinite(value) || value <= 0) {
+        setError(t('errors.VALIDATION_ERROR'));
+        return;
+      }
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await createSalesReturn(order.id, {
+        items: items.map((row) => ({
+          salesOrderItemId: row.line.id,
+          qty: row.qty,
+          reason: row.reason || null,
+        })),
+        reason: reason.trim() || null,
+        photoFileIds: photos.map((f) => f.id),
+      });
+      setLines(Object.fromEntries(order.items.map((item) => [item.id, { qty: '', reason: '' }])));
+      setReason('');
+      setPhotos([]);
+      onCreated();
+    } catch (cause) {
+      setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 rounded border border-neutral-100 p-3">
+      <Text weight="semibold">{t('sales.startAfterSale')}</Text>
+      <div className="flex flex-col gap-1">
+        {order.items.map((line) => {
+          const row = lines[line.id] ?? { qty: '', reason: '' };
+          return (
+            <div key={line.id} className="flex flex-wrap items-center gap-2">
+              <span className="min-w-40 truncate text-sm">{line.itemName ?? line.itemId}</span>
+              <Input
+                size="small"
+                type="number"
+                min={0}
+                style={{ maxWidth: 120 }}
+                value={row.qty}
+                onChange={(_, d) =>
+                  setLines((prev) => ({ ...prev, [line.id]: { ...row, qty: d.value } }))
+                }
+                placeholder={t('sales.afterSaleQtyPlaceholder')}
+              />
+              <Input
+                size="small"
+                style={{ maxWidth: 260 }}
+                value={row.reason}
+                onChange={(_, d) =>
+                  setLines((prev) => ({ ...prev, [line.id]: { ...row, reason: d.value } }))
+                }
+                placeholder={t('sales.afterSaleLineReason')}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <Input
+        value={reason}
+        onChange={(_, d) => setReason(d.value)}
+        placeholder={t('sales.afterSaleReason')}
+      />
+      <ImageUpload value={photos} onChange={setPhotos} />
+      {error && <Text className="text-red-600">{error}</Text>}
+      <div>
+        <Button appearance="primary" disabled={saving} onClick={() => void submit()}>
+          {saving ? <Spinner size="tiny" /> : t('sales.startAfterSale')}
+        </Button>
+      </div>
     </div>
   );
 }

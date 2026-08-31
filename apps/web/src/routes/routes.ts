@@ -36,6 +36,7 @@ export const ROUTES = {
       Permissions.SHIPMENT_RETURNS_CREATE,
       Permissions.SHIPMENT_RETURNS_HANDLE,
       Permissions.AFTER_SALE_CREATE,
+      Permissions.AFTER_SALE_RECEIVE,
     ],
   },
   sales: {

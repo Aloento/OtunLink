@@ -481,6 +481,8 @@ export interface ReturnOrderRecord {
   returnNo: string;
   sourceType: ReturnSourceType;
   shipmentId: string | null;
+  /** SALES 来源退货关联到销售单。 */
+  salesOrderId: string | null;
   fromUnitId: string;
   toUnitId: string;
   status: ReturnStatus;
@@ -502,12 +504,18 @@ export interface ReturnOrderItemRecord {
   returnOrderId: string;
   itemId: string;
   shipmentItemId: string | null;
+  /** SALES 来源退货关联到销售单行。 */
+  salesOrderItemId: string | null;
   qty: string;
+  /** 实收退货数量（SALES 退回收货后写入；null = 未收货）。 */
+  receivedQty: string | null;
   originalBatchId: string | null;
   reason: string | null;
   createdAt: Date;
   /** 联表带出（列表/详情展示用）。 */
   itemName?: string | null;
+  /** 回补批次是否为「退货待检批次」（RETURNS_PENDING，需质检后放行）。 */
+  pendingQc?: boolean;
 }
 
 /** 确认收货（POST /shipments/:id/confirm-receipt）仓库入参。 */
@@ -528,6 +536,23 @@ export interface CreateReturnRepoInput {
   returnTrackingNo: string | null;
   createdBy: string;
   lines: { shipmentItemId: string; qty: string; reason: string | null }[];
+}
+
+/** 发起零售售后退货（POST /sales-orders/:id/returns）零售方入参。 */
+export interface CreateSalesReturnRepoInput {
+  salesOrderId: string;
+  reason: string | null;
+  note: string | null;
+  photoFileIds: string[];
+  createdBy: string;
+  lines: { salesOrderItemId: string; qty: string; reason: string | null }[];
+}
+
+/** 退回收货行（POST /return-orders/:id/receive）：实收数量 ≤ 申请数量。 */
+export interface SalesReturnReceiveLineInput {
+  returnItemId: string;
+  receivedQty: string;
+  note?: string | null;
 }
 
 /** 新建手动入库单（POST /inbound-orders, sourceType=MANUAL）仓库入参。 */
@@ -567,6 +592,9 @@ export interface ReturnListQuery {
   page?: number;
   size?: number;
   status?: ReturnStatus;
+  sourceType?: ReturnSourceType;
+  /** 仅返回关联到指定销售单的 SALES 退货。 */
+  salesOrderId?: string;
   /** 数据范围：from 或 to 命中即返回。 */
   scopeUnitId?: string;
 }
@@ -619,6 +647,33 @@ export interface ReturnRepository {
    * 非 PENDING 抛 RETURN_ALREADY_PROCESSED 信号。
    */
   reject(id: string, processedBy: string, note: string): Promise<ReturnOrderRecord | null>;
+  /**
+   * 发起零售售后退货（sales_order.status ∈ SENT/PAYMENT_UPLOADED/CONFIRMED）：
+   * 行级退货数量 ≤ 该销售单行实收未退数量（已退 = 非 CANCELLED 退货单已申请量）；
+   * 创建 source_type=SALES / status=REQUESTED 退货单。状态不合法抛 SALES_STATE_CONFLICT，
+   * 行非法/超量抛 RETURN_LINE_INVALID / RETURN_QTY_EXCEEDED 信号。
+   */
+  createFromSales(input: CreateSalesReturnRepoInput): Promise<ReturnOrderRecord>;
+  /**
+   * 仓库审核同意（SALES：REQUESTED → APPROVED，待收货）。非 REQUESTED 抛 RETURN_ALREADY_PROCESSED。
+   */
+  approveSales(id: string, processedBy: string, note: string | null): Promise<ReturnOrderRecord | null>;
+  /**
+   * 仓库审核拒绝（SALES：REQUESTED → CANCELLED，终态附理由）。非 REQUESTED 抛 RETURN_ALREADY_PROCESSED。
+   */
+  rejectSales(id: string, processedBy: string, note: string): Promise<ReturnOrderRecord | null>;
+  /**
+   * 退回收货（SALES：APPROVED → RETURNED）：行级实收数量 ≤ 申请数量，超量抛
+   * RETURN_QTY_EXCEEDED；按 sales_batch_allocations 原批次回补（UNIT_COST 取原
+   * OUTBOUND_SALE 流水），无法确定时回补/新建「退货待检批次」（source_type=RETURNS_PENDING），
+   * 逐批写 stock_movements（RETURN_IN）。非 APPROVED 抛 RETURN_ALREADY_PROCESSED。
+   */
+  receive(
+    id: string,
+    receivedBy: string,
+    lines: SalesReturnReceiveLineInput[],
+    note: string | null,
+  ): Promise<ReturnOrderRecord | null>;
 }
 
 // ── 库存台账与手动出入库（ck-08a）──────────────────────────────────────────────

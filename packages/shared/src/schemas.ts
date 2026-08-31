@@ -326,6 +326,35 @@ export const returnRejectSchema = z.object({
   note: z.string().trim().min(1).max(4096),
 });
 
+// ── 零售售后退货（ck-09b）────────────────────────────────────────────────────
+
+/** 零售售后退货行（POST /sales-orders/:id/returns）：销售单行 + 退货数量 + 原因。 */
+export const salesReturnCreateItemSchema = z.object({
+  salesOrderItemId: z.uuid(),
+  qty: shipmentQty,
+  reason: z.string().trim().max(2000).optional().nullable(),
+});
+
+/** 发起零售售后退货：行级退货数量 ≤ 实收未退数量；状态 REQUESTED。 */
+export const salesReturnCreateSchema = z.object({
+  items: z.array(salesReturnCreateItemSchema).min(1).max(500),
+  reason: z.string().trim().max(4096).optional().nullable(),
+  note: z.string().trim().max(4096).optional().nullable(),
+  photoFileIds: z.array(z.uuid()).max(9).optional(),
+});
+
+/** 退回收货行（POST /return-orders/:id/receive）：实收数量 ≤ 申请数量。 */
+export const salesReturnReceiveLineSchema = z.object({
+  returnItemId: z.uuid(),
+  receivedQty: shipmentActualQty,
+});
+
+/** 退回收货：仓库录入实收数量（可部分收货）→ 回补库存 → 状态 RETURNED。 */
+export const salesReturnReceiveSchema = z.object({
+  items: z.array(salesReturnReceiveLineSchema).min(1).max(500),
+  note: z.string().trim().max(4096).optional().nullable(),
+});
+
 // ── 销售单（ck-09a）──────────────────────────────────────────────────────────
 
 const discountPercent = z
@@ -420,6 +449,10 @@ export type ReturnCreateItemInput = z.infer<typeof returnCreateItemSchema>;
 export type ReturnCreateInput = z.infer<typeof returnCreateSchema>;
 export type ReturnAcceptInput = z.infer<typeof returnAcceptSchema>;
 export type ReturnRejectInput = z.infer<typeof returnRejectSchema>;
+export type SalesReturnCreateItemInput = z.infer<typeof salesReturnCreateItemSchema>;
+export type SalesReturnCreateInput = z.infer<typeof salesReturnCreateSchema>;
+export type SalesReturnReceiveLineInput = z.infer<typeof salesReturnReceiveLineSchema>;
+export type SalesReturnReceiveInput = z.infer<typeof salesReturnReceiveSchema>;
 export type InboundManualLineInput = z.infer<typeof inboundManualLineSchema>;
 export type InboundManualCreateInput = z.infer<typeof inboundManualCreateSchema>;
 export type OutboundLineInput = z.infer<typeof outboundLineSchema>;

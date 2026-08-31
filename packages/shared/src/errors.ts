@@ -37,6 +37,8 @@ export const ErrorCodes = {
   // 销售单（ck-09a）
   SALES_STATE_CONFLICT: 'SALES_STATE_CONFLICT',
   SALES_LINE_INVALID: 'SALES_LINE_INVALID',
+  // 零售售后退货（ck-09b）
+  RETURN_QTY_EXCEEDED: 'RETURN_QTY_EXCEEDED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

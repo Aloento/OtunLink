@@ -523,7 +523,13 @@ export const returnOrderItems = pgTable(
     shipmentItemId: uuid('shipment_item_id').references(() => shipmentItems.id, {
       onDelete: 'set null',
     }),
+    // SALES 来源退货：关联到销售单行（用于计算可退数量与回补原批次）。
+    salesOrderItemId: uuid('sales_order_item_id').references(() => salesOrderItems.id, {
+      onDelete: 'set null',
+    }),
     qty: numeric('qty', { precision: 12, scale: 2 }).notNull(),
+    /** 实收退货数量（SALES 退回收货后写入；null = 未收货）。 */
+    receivedQty: numeric('received_qty', { precision: 12, scale: 2 }),
     originalBatchId: uuid('original_batch_id').references(() => batches.id, {
       onDelete: 'set null',
     }),
@@ -533,6 +539,7 @@ export const returnOrderItems = pgTable(
   (table) => [
     index('return_order_items_order_idx').on(table.returnOrderId),
     index('return_order_items_shipment_item_idx').on(table.shipmentItemId),
+    index('return_order_items_sales_item_idx').on(table.salesOrderItemId),
   ],
 );
 

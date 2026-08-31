@@ -257,8 +257,11 @@ export function returnItemDto(item: ReturnOrderItemRecord) {
     returnOrderId: item.returnOrderId,
     itemId: item.itemId,
     shipmentItemId: item.shipmentItemId,
+    salesOrderItemId: item.salesOrderItemId,
     qty: item.qty,
+    receivedQty: item.receivedQty,
     originalBatchId: item.originalBatchId,
+    pendingQc: item.pendingQc ?? false,
     reason: item.reason,
     createdAt: item.createdAt.toISOString(),
     itemName: item.itemName ?? null,
@@ -271,6 +274,7 @@ export function returnDto(
     fromUnitName: string | null;
     toUnitName: string | null;
     shipmentNo: string | null;
+    salesOrderNo?: string | null;
   },
 ) {
   return {
@@ -278,11 +282,13 @@ export function returnDto(
     returnNo: order.returnNo,
     sourceType: order.sourceType,
     shipmentId: order.shipmentId,
+    salesOrderId: order.salesOrderId,
     fromUnitId: order.fromUnitId,
     toUnitId: order.toUnitId,
     fromUnitName: options.fromUnitName,
     toUnitName: options.toUnitName,
     shipmentNo: options.shipmentNo,
+    salesOrderNo: options.salesOrderNo ?? null,
     status: order.status,
     reason: order.reason,
     note: order.note,

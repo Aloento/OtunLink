@@ -7,6 +7,7 @@ import type {
   CreateReturnRepoInput,
   CreateReviewInput,
   CreateSalesRepoInput,
+  CreateSalesReturnRepoInput,
   CreateShipmentInput,
   CreateUnitInput,
   CreateUserInput,
@@ -44,6 +45,7 @@ import type {
   SalesOrderItemRecord,
   SalesOrderRecord,
   SalesRepository,
+  SalesReturnReceiveLineInput,
   SaveCountResult,
   ShipmentCountRepoInput,
   ShipmentItemRecord,
@@ -412,6 +414,7 @@ const INBOUND_STATE_CONFLICT_MESSAGE = 'INBOUND_STATE_CONFLICT: only DRAFT inbou
 const RETURN_STATE_CONFLICT_MESSAGE = 'RETURN_STATE_CONFLICT: shipment is not READY for return';
 const RETURN_ALREADY_PROCESSED_MESSAGE = 'RETURN_ALREADY_PROCESSED: return order already processed';
 const RETURN_LINE_INVALID_MESSAGE = 'RETURN_LINE_INVALID: return line is invalid';
+const RETURN_QTY_EXCEEDED_MESSAGE = 'RETURN_QTY_EXCEEDED: return qty exceeds returnable';
 const OUTBOUND_STATE_CONFLICT_MESSAGE =
   'OUTBOUND_STATE_CONFLICT: only DRAFT outbound orders can be posted';
 const INSUFFICIENT_STOCK_MESSAGE = 'INSUFFICIENT_STOCK: insufficient stock for outbound';
@@ -1390,6 +1393,8 @@ class MemoryReturnRepository implements ReturnRepository {
   constructor(
     private readonly shipmentRepo: MemoryShipmentRepository,
     private readonly inboundRepo: MemoryInboundRepository,
+    private readonly salesRepo: MemorySalesRepository,
+    private readonly ledger: MemoryStockLedger,
     seed: { returns?: ReturnOrderRecord[]; returnItems?: ReturnOrderItemRecord[] } = {},
   ) {
     for (const row of seed.returns ?? []) this.rows.set(row.id, cloneReturn(row));
@@ -1410,6 +1415,8 @@ class MemoryReturnRepository implements ReturnRepository {
   async list(query: ReturnListQuery): Promise<ReturnListResult> {
     const all = [...this.rows.values()]
       .filter((row) => (query.status ? row.status === query.status : true))
+      .filter((row) => (query.sourceType ? row.sourceType === query.sourceType : true))
+      .filter((row) => (query.salesOrderId ? row.salesOrderId === query.salesOrderId : true))
       .filter((row) =>
         query.scopeUnitId
           ? row.fromUnitId === query.scopeUnitId || row.toUnitId === query.scopeUnitId
@@ -1428,7 +1435,13 @@ class MemoryReturnRepository implements ReturnRepository {
   }
 
   async listItems(returnOrderId: string): Promise<ReturnOrderItemRecord[]> {
-    return (this.items.get(returnOrderId) ?? []).map(cloneReturnItem);
+    return (this.items.get(returnOrderId) ?? []).map((row) => {
+      const batch = row.originalBatchId ? this.ledger.batches.get(row.originalBatchId) : undefined;
+      return cloneReturnItem({
+        ...row,
+        pendingQc: batch?.sourceType === 'RETURNS_PENDING',
+      });
+    });
   }
 
   async createReturn(input: CreateReturnRepoInput): Promise<ReturnOrderRecord> {
@@ -1461,6 +1474,7 @@ class MemoryReturnRepository implements ReturnRepository {
       returnNo: this.nextReturnNo(),
       sourceType: 'SHIPMENT',
       shipmentId: shipment.id,
+      salesOrderId: null,
       fromUnitId: shipment.receiverUnitId,
       toUnitId: shipment.shipperUnitId,
       status: 'PENDING',
@@ -1482,7 +1496,9 @@ class MemoryReturnRepository implements ReturnRepository {
       returnOrderId: order.id,
       itemId: line.itemId,
       shipmentItemId: line.shipmentItemId,
+      salesOrderItemId: null,
       qty: line.qty,
+      receivedQty: null,
       originalBatchId: null,
       reason: line.reason,
       createdAt: now,
@@ -1568,6 +1584,296 @@ class MemoryReturnRepository implements ReturnRepository {
     if (order.shipmentId) {
       this.shipmentRepo.transitionTo(order.shipmentId, 'READY');
     }
+    return cloneReturn(next);
+  }
+
+  // ── ck-09b：零售售后退货（source_type=SALES）────────────────────────────────
+  async createFromSales(input: CreateSalesReturnRepoInput): Promise<ReturnOrderRecord> {
+    const order = await this.salesRepo.findById(input.salesOrderId);
+    if (!order) throw new Error('SALES_NOT_FOUND: sales order does not exist');
+    if (
+      order.status !== 'SENT' &&
+      order.status !== 'PAYMENT_UPLOADED' &&
+      order.status !== 'CONFIRMED'
+    ) {
+      throw new Error(SALES_STATE_CONFLICT_MESSAGE);
+    }
+
+    const lines = await this.salesRepo.listItems(order.id);
+    const byId = new Map(lines.map((l) => [l.id, l]));
+    const returnedByLine = new Map<string, number>();
+    for (const [returnId, itemRows] of this.items) {
+      const ro = this.rows.get(returnId);
+      if (!ro || ro.sourceType !== 'SALES' || ro.status === 'CANCELLED') continue;
+      for (const ri of itemRows) {
+        if (!ri.salesOrderItemId) continue;
+        returnedByLine.set(
+          ri.salesOrderItemId,
+          (returnedByLine.get(ri.salesOrderItemId) ?? 0) + Number(ri.qty),
+        );
+      }
+    }
+
+    // 行级合并（同一销售行允许多行，汇总后校验）。
+    const requested = new Map<string, { qty: number; reason: string | null }>();
+    for (const l of input.lines) {
+      const item = byId.get(l.salesOrderItemId);
+      if (!item) throw new Error(RETURN_LINE_INVALID_MESSAGE);
+      const qty = Number(l.qty);
+      if (!Number.isFinite(qty) || qty <= 0) throw new Error(RETURN_LINE_INVALID_MESSAGE);
+      const prev = requested.get(item.id) ?? { qty: 0, reason: null };
+      requested.set(item.id, {
+        qty: round2(prev.qty + qty),
+        reason: normalizeEmpty(l.reason) ?? prev.reason,
+      });
+    }
+    if (requested.size === 0) throw new Error(RETURN_LINE_INVALID_MESSAGE);
+    const finalLines: { salesOrderItemId: string; itemId: string; qty: string; reason: string | null }[] = [];
+    for (const [lineId, req] of requested) {
+      const item = byId.get(lineId)!;
+      const returnable = round2(Number(item.qty) - (returnedByLine.get(lineId) ?? 0));
+      if (req.qty > returnable + 1e-9) throw new Error(RETURN_QTY_EXCEEDED_MESSAGE);
+      finalLines.push({
+        salesOrderItemId: item.id,
+        itemId: item.itemId,
+        qty: req.qty.toFixed(2),
+        reason: req.reason,
+      });
+    }
+
+    const now = new Date();
+    const record: ReturnOrderRecord = {
+      id: uuid(),
+      returnNo: this.nextReturnNo(),
+      sourceType: 'SALES',
+      shipmentId: null,
+      salesOrderId: order.id,
+      fromUnitId: order.buyerUnitId,
+      toUnitId: order.sellerUnitId,
+      status: 'REQUESTED',
+      reason: normalizeEmpty(input.reason),
+      note: normalizeEmpty(input.note),
+      photoFileIds: [...input.photoFileIds],
+      returnCarrier: null,
+      returnTrackingNo: null,
+      createdBy: input.createdBy,
+      processedBy: null,
+      processedAt: null,
+      processedNote: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(record.id, cloneReturn(record));
+    this.items.set(
+      record.id,
+      finalLines.map<ReturnOrderItemRecord>((line) => ({
+        id: uuid(),
+        returnOrderId: record.id,
+        itemId: line.itemId,
+        shipmentItemId: null,
+        salesOrderItemId: line.salesOrderItemId,
+        qty: line.qty,
+        receivedQty: null,
+        originalBatchId: null,
+        reason: line.reason,
+        createdAt: now,
+      })),
+    );
+    return cloneReturn(record);
+  }
+
+  async approveSales(
+    id: string,
+    processedBy: string,
+    note: string | null,
+  ): Promise<ReturnOrderRecord | null> {
+    const order = this.rows.get(id);
+    if (!order) return null;
+    if (order.sourceType !== 'SALES') throw new Error(RETURN_STATE_CONFLICT_MESSAGE);
+    if (order.status !== 'REQUESTED') throw new Error(RETURN_ALREADY_PROCESSED_MESSAGE);
+
+    const now = new Date();
+    const next: ReturnOrderRecord = {
+      ...order,
+      status: 'APPROVED',
+      processedBy,
+      processedAt: now,
+      processedNote: normalizeEmpty(note),
+      updatedAt: now,
+    };
+    this.rows.set(id, cloneReturn(next));
+    return cloneReturn(next);
+  }
+
+  async rejectSales(
+    id: string,
+    processedBy: string,
+    note: string,
+  ): Promise<ReturnOrderRecord | null> {
+    const order = this.rows.get(id);
+    if (!order) return null;
+    if (order.sourceType !== 'SALES') throw new Error(RETURN_STATE_CONFLICT_MESSAGE);
+    if (order.status !== 'REQUESTED') throw new Error(RETURN_ALREADY_PROCESSED_MESSAGE);
+
+    const now = new Date();
+    const next: ReturnOrderRecord = {
+      ...order,
+      status: 'CANCELLED',
+      processedBy,
+      processedAt: now,
+      processedNote: note,
+      updatedAt: now,
+    };
+    this.rows.set(id, cloneReturn(next));
+    return cloneReturn(next);
+  }
+
+  async receive(
+    id: string,
+    receivedBy: string,
+    lines: SalesReturnReceiveLineInput[],
+    note: string | null,
+  ): Promise<ReturnOrderRecord | null> {
+    const order = this.rows.get(id);
+    if (!order) return null;
+    if (order.sourceType !== 'SALES') throw new Error(RETURN_STATE_CONFLICT_MESSAGE);
+    if (order.status !== 'APPROVED') throw new Error(RETURN_ALREADY_PROCESSED_MESSAGE);
+    const salesOrder = order.salesOrderId ? await this.salesRepo.findById(order.salesOrderId) : null;
+    if (!salesOrder) throw new Error('SALES_NOT_FOUND: sales order does not exist');
+
+    const returnItems = (this.items.get(id) ?? []).map(cloneReturnItem);
+    const byId = new Map(returnItems.map((i) => [i.id, i]));
+
+    // 校验：每行实收数量 0 ≤ receivedQty ≤ 申请数量；所有退货行必须录入。
+    const receivedByItem = new Map<string, number>();
+    for (const line of lines) {
+      const item = byId.get(line.returnItemId);
+      if (!item) throw new Error(RETURN_LINE_INVALID_MESSAGE);
+      const rqty = Number(line.receivedQty);
+      if (!Number.isFinite(rqty) || rqty < 0) throw new Error(RETURN_LINE_INVALID_MESSAGE);
+      if (rqty > Number(item.qty) + 1e-9) throw new Error(RETURN_QTY_EXCEEDED_MESSAGE);
+      receivedByItem.set(item.id, round2((receivedByItem.get(item.id) ?? 0) + rqty));
+    }
+    if (receivedByItem.size !== returnItems.length) throw new Error(RETURN_LINE_INVALID_MESSAGE);
+    for (const [itemId, total] of receivedByItem) {
+      const item = byId.get(itemId)!;
+      if (total > Number(item.qty) + 1e-9) throw new Error(RETURN_QTY_EXCEEDED_MESSAGE);
+    }
+
+    // 原批次 unit_cost 快照（取该销售单 OUTBOUND_SALE 流水，按批次取最新一条）。
+    const unitCostByBatch = new Map<string, number>();
+    for (const m of this.ledger.movements) {
+      if (
+        m.orderType === 'sales' &&
+        m.orderId === salesOrder.id &&
+        m.type === 'OUTBOUND_SALE' &&
+        !unitCostByBatch.has(m.batchId)
+      ) {
+        unitCostByBatch.set(m.batchId, m.unitCost);
+      }
+    }
+
+    // 按销售行分配记录确定原批次（按分配顺序依次回补，量不足则转待检批次）。
+    const allocations = await this.salesRepo.listAllocations(salesOrder.id);
+    const allocByItem = new Map<string, { batchId: string; qty: number }[]>();
+    for (const a of allocations) {
+      const list = allocByItem.get(a.orderItemId) ?? [];
+      list.push({ batchId: a.batchId, qty: Number(a.qty) });
+      allocByItem.set(a.orderItemId, list);
+    }
+
+    const ensurePendingBatch = (itemId: string): string => {
+      const existing = [...this.ledger.batches.values()].find(
+        (b) =>
+          b.itemId === itemId &&
+          b.sourceType === 'RETURNS_PENDING' &&
+          b.productionDate === null &&
+          b.expiryDate === null,
+      );
+      if (existing) return existing.id;
+      const batchId = uuid();
+      this.ledger.batches.set(batchId, {
+        id: batchId,
+        itemId,
+        batchNo: null,
+        productionDate: null,
+        expiryDate: null,
+        sourceType: 'RETURNS_PENDING',
+        sourceOrderId: order.id,
+        createdBy: receivedBy,
+      });
+      return batchId;
+    };
+
+    const replenish = (itemId: string, batchId: string, rqty: number, unitCost: number) => {
+      const key = this.ledger.stockKey(salesOrder.sellerUnitId, itemId, batchId);
+      const before = this.ledger.stock.get(key);
+      const qtyBefore = before ? before.qty : 0;
+      const qtyAfter = round2(qtyBefore + rqty);
+      this.ledger.stock.set(key, {
+        unitId: salesOrder.sellerUnitId,
+        itemId,
+        batchId,
+        qty: qtyAfter,
+        avgCost: before ? before.avgCost : unitCost,
+        version: (before ? before.version : 0) + 1,
+        updatedAt: new Date(),
+      });
+      this.ledger.movements.push({
+        unitId: salesOrder.sellerUnitId,
+        itemId,
+        batchId,
+        type: 'RETURN_IN',
+        qtyDelta: round2(rqty),
+        qtyBefore: round2(qtyBefore),
+        qtyAfter,
+        unitCost,
+        orderType: 'sales',
+        orderId: salesOrder.id,
+        refNo: order.returnNo,
+        operatorId: receivedBy,
+        createdAt: new Date(),
+      });
+    };
+
+    const now = new Date();
+    const nextItems = (this.items.get(id) ?? []).map(cloneReturnItem);
+    for (const item of nextItems) {
+      const rqty = receivedByItem.get(item.id) ?? 0;
+      if (rqty <= 0) continue;
+      let remaining = rqty;
+      const allocs = item.salesOrderItemId ? (allocByItem.get(item.salesOrderItemId) ?? []) : [];
+      const targets: { batchId: string; qty: number; unitCost: number }[] = [];
+      for (const alloc of allocs) {
+        if (remaining <= 0) break;
+        const take = Math.min(alloc.qty, remaining);
+        targets.push({
+          batchId: alloc.batchId,
+          qty: take,
+          unitCost: unitCostByBatch.get(alloc.batchId) ?? 0,
+        });
+        remaining = round2(remaining - take);
+      }
+      if (remaining > 0) {
+        targets.push({ batchId: ensurePendingBatch(item.itemId), qty: remaining, unitCost: 0 });
+      }
+      for (const target of targets) {
+        replenish(item.itemId, target.batchId, target.qty, target.unitCost);
+      }
+      item.receivedQty = rqty.toFixed(2);
+      item.originalBatchId = targets[0]?.batchId ?? null;
+    }
+    this.items.set(id, nextItems);
+
+    const next: ReturnOrderRecord = {
+      ...order,
+      status: 'RETURNED',
+      processedBy: receivedBy,
+      processedAt: now,
+      processedNote: normalizeEmpty(note),
+      updatedAt: now,
+    };
+    this.rows.set(id, cloneReturn(next));
     return cloneReturn(next);
   }
 }
@@ -2433,14 +2739,20 @@ export function createMemoryRepos(seed?: {
     inbounds: seed?.inbounds,
     inboundItems: seed?.inboundItems,
   }, stockLedger);
-  const returnRepo = new MemoryReturnRepository(shipmentRepo, inboundRepo, {
-    returns: seed?.returns,
-    returnItems: seed?.returnItems,
-  });
   const unitRepo = new MemoryUnitRepository(seed?.units);
   const itemRepo = new MemoryItemRepository(seed?.items);
   const userRepo = new MemoryUserRepository(seed?.users);
   const retailPriceRepo = new MemoryRetailPriceRepository(stockLedger, unitRepo, itemRepo, userRepo);
+  const salesRepo = new MemorySalesRepository(stockLedger, retailPriceRepo, unitRepo, itemRepo, {
+    salesOrders: seed?.salesOrders,
+    salesItems: seed?.salesItems,
+    salesAllocations: seed?.salesAllocations,
+    payments: seed?.payments,
+  });
+  const returnRepo = new MemoryReturnRepository(shipmentRepo, inboundRepo, salesRepo, stockLedger, {
+    returns: seed?.returns,
+    returnItems: seed?.returnItems,
+  });
   return {
     users: userRepo,
     units: unitRepo,
@@ -2455,12 +2767,7 @@ export function createMemoryRepos(seed?: {
     }),
     stock: new MemoryStockRepository(stockLedger, unitRepo, itemRepo),
     retailPrices: retailPriceRepo,
-    sales: new MemorySalesRepository(stockLedger, retailPriceRepo, unitRepo, itemRepo, {
-      salesOrders: seed?.salesOrders,
-      salesItems: seed?.salesItems,
-      salesAllocations: seed?.salesAllocations,
-      payments: seed?.payments,
-    }),
+    sales: salesRepo,
     notifications: new MemoryNotificationRepository(),
   };
 }

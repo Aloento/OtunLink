@@ -6,19 +6,22 @@ import {
   salesOrderPatchSchema,
   salesOrderSendSchema,
   salesPaymentSchema,
+  salesReturnCreateSchema,
   type SalesStatus,
 } from '@otunlink/shared';
 import { Hono } from 'hono';
 
 import { requireAnyPermission, requirePermission, unitScopeFilter } from '../auth/middleware';
 import {
+  returnDto,
+  returnItemDto,
   salesAllocationDto,
   salesOrderDto,
   salesOrderItemDto,
   salesPaymentDto,
 } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
-import type { AppEnv, SalesOrderRecord, Repos } from '../types';
+import type { AppEnv, ReturnOrderRecord, SalesOrderRecord, Repos } from '../types';
 
 // 销售单（design.md §4.2/§5.5）：DRAFT → SENT（FEFO/手工分配）→ PAYMENT_UPLOADED → CONFIRMED；
 // DRAFT/SENT/PAYMENT_UPLOADED → CANCELLED（回补）。买方=零售单元、卖方=仓库单元。
@@ -274,6 +277,51 @@ export function salesOrdersRouter(): Hono<AppEnv> {
     }
   });
 
+  // ── ck-09b：零售售后退货（source_type=SALES）───────────────────────────────
+  router.post('/:id/returns', requirePermission(Permissions.AFTER_SALE_CREATE), async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const order = await repos.sales.findById(c.req.param('id'));
+    if (!order) return notFound(c, '销售单不存在');
+    if (!isScopeOf(c.get('auth').user?.scopeUnitId ?? null, order.buyerUnitId)) {
+      return forbidden(c, '数据范围越界（scope_unit_id 不匹配）');
+    }
+
+    const body = await readJson(c);
+    if (body === undefined) return validationError(c, '请求体不是合法 JSON');
+    const parsed = salesReturnCreateSchema.safeParse(body);
+    if (!parsed.success) return validationError(c, '参数不合法', parsed.error.flatten());
+    const input = parsed.data;
+
+    const photoIds = [...new Set(input.photoFileIds ?? [])];
+    if (photoIds.length > 0) {
+      const files = await Promise.all(photoIds.map((id) => repos.files.findById(id)));
+      const missing = photoIds.filter((id, index) => !files[index]);
+      if (missing.length > 0) {
+        return validationError(c, '部分退货照片不存在', { photoFileIds: missing });
+      }
+    }
+
+    try {
+      const created = await repos.returns.createFromSales({
+        salesOrderId: order.id,
+        reason: input.reason ?? null,
+        note: input.note ?? null,
+        photoFileIds: photoIds,
+        createdBy: c.get('auth').user!.id,
+        lines: input.items.map((l) => ({
+          salesOrderItemId: l.salesOrderItemId,
+          qty: String(l.qty),
+          reason: l.reason ?? null,
+        })),
+      });
+      return ok(c, await returnDetailOf(repos, created), 201);
+    } catch (cause) {
+      return mapReturnCreateSignal(c, cause);
+    }
+  });
+
   return router;
 }
 
@@ -314,6 +362,38 @@ function mapSalesSignal(c: Parameters<typeof error>[0], cause: unknown) {
     return error(c, 409, ErrorCodes.STOCK_BATCH_NOT_FOUND, '指定批次在当前仓库无库存');
   }
   throw cause;
+}
+
+/** 创建售后退货单业务信号 → HTTP 错误（与 shared/src/errors.ts 错误码一致）。 */
+function mapReturnCreateSignal(c: Parameters<typeof error>[0], cause: unknown) {
+  if (isSignal(cause, 'SALES_STATE_CONFLICT')) {
+    return error(c, 409, ErrorCodes.SALES_STATE_CONFLICT, '销售单当前状态不允许发起售后');
+  }
+  if (isSignal(cause, 'RETURN_LINE_INVALID')) {
+    return error(c, 400, ErrorCodes.RETURN_LINE_INVALID, '退货行不合法（明细不存在或数量无效）');
+  }
+  if (isSignal(cause, 'RETURN_QTY_EXCEEDED')) {
+    return error(c, 409, ErrorCodes.RETURN_QTY_EXCEEDED, '退货数量超出可退数量');
+  }
+  throw cause;
+}
+
+async function returnDetailOf(repos: Repos, order: ReturnOrderRecord) {
+  const [from, to, salesOrder, items] = await Promise.all([
+    repos.units.findById(order.fromUnitId),
+    repos.units.findById(order.toUnitId),
+    order.salesOrderId ? repos.sales.findById(order.salesOrderId) : Promise.resolve(null),
+    repos.returns.listItems(order.id),
+  ]);
+  return {
+    ...returnDto(order, {
+      fromUnitName: from?.name ?? null,
+      toUnitName: to?.name ?? null,
+      shipmentNo: null,
+      salesOrderNo: salesOrder?.salesNo ?? null,
+    }),
+    items: items.map(returnItemDto),
+  };
 }
 
 async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<unknown | undefined> {
