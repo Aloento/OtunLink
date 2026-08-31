@@ -1,0 +1,21 @@
+# 本地开发配置：`wrangler dev --config wrangler.local.toml`
+# 与 wrangler.toml 的区别：
+# 1. 不含 [[hyperdrive]] —— Miniflare 的 Hyperdrive 本地模拟在部分
+#    wrangler/miniflare 版本上无法建立代理连接（proxy request failed），
+#    本地开发直接由 postgres.js 经 DATABASE_URL 直连（workerd 出站 socket 正常）。
+#    生产环境仍使用 wrangler.toml 中的 Hyperdrive binding。
+# 2. 不含 routes/custom_domain —— 本地不需要自定义域名。
+name = "otunlink-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "JWKS_CACHE"
+id = "24881a3ca1404761a800540a6e809d8d"
+
+[vars]
+S3_ENDPOINT = "https://obs.eu-de.otc.t-systems.com"
+S3_REGION = "eu-de"
+S3_BUCKET = "ims-test-images"

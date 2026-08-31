@@ -2,17 +2,13 @@
 
 > ck-01 产物。记录私有 PostgreSQL 的连通方式、迁移执行方式与本次验证结论。
 
-## 1. 当前验证结论（⚠️ BLOCKED）
+## 1. 当前验证结论（✅ 已连通，ck-02）
 
-截至 ck-01 提交，本机环境**无任何可用 PostgreSQL**：
-
-- `psql --version`：未安装
-- `docker`：未安装 / 不可用
-- 本地 `127.0.0.1:5432`：端口未监听
-- `DATABASE_URL` 环境变量：未设置
-- Cloudflare Hyperdrive 绑定：未配置（需用户提供私有 PG 连接串后创建）
-
-因此**「迁移实际执行 + `SELECT 1` 验证」这一验收项为 BLOCKED**。全部代码（schema、迁移生成、迁移执行器、`POST /api/v1/admin/migrate`、种子脚本）已就绪并通过类型检查与单元测试；一旦用户提供 `DATABASE_URL` / Hyperdrive 配置，即可按第 3 节步骤完成验证。
+- 连接串已配置在 `apps/api/.dev.vars`（gitignored）：`postgresql://<user>:<pwd>@164.30.21.203:5432/otunlink`
+- `pnpm --filter db db:migrate` 已应用（`schema_migrations` 有记录、业务表存在）
+- `pnpm --filter db db:ping` 直连与经 relay 均 OK
+- Worker 内 `/api/v1/auth/me` 经 postgres.js（`cloudflare:sockets`）直连返回 **200 OK**（登录闭环实测，见 3.3b）
+- 本地直连未启用 SSL；生产 Hyperdrive 连接由 Cloudflare 隧道 + Hyperdrive 数据库配置（建议 SSL）承担
 
 ## 2. 架构与连接方式
 
@@ -67,6 +63,23 @@ pnpm --filter db seed            # 写入示例业务单元（幂等）
 DATABASE_URL='postgres://...' pnpm --filter db db:migrate
 DATABASE_URL='postgres://...' pnpm --filter db seed
 ```
+
+### 3.3b 本地开发注意事项（ck-02 实测）
+
+1. **Miniflare 的 Hyperdrive 本地模拟不可用**（wrangler 4.127.x + miniflare 5 alpha）：
+   报 `proxy request failed, cannot connect to the specified address`——即使目标是本机 relay
+   （127.0.0.1）。workerd 的 `cloudflare:sockets` 出站本身正常（已用最小 worker 验证），
+   是 Hyperdrive 模拟层的问题。
+   **workaround**：本地开发使用 [apps/api/wrangler.local.toml]（不含 `[[hyperdrive]]`），
+   即 `wrangler dev --config wrangler.local.toml`；此时 db.ts 回退到 `DATABASE_URL` 直连
+   （postgres.js 经 `cloudflare:sockets` 出站）。生产部署仍用 `wrangler.toml`
+   （Hyperdrive binding，不受影响）。
+2. **postgres.js 必须每个请求创建**（`db.ts` 的 `createExecutor` 不做模块级缓存）：
+   workerd 禁止跨请求复用 I/O 对象，缓存单例会抛
+   `Cannot perform I/O on behalf of a different request. (I/O type: Writable)`。
+   连接池复用由 Hyperdrive（生产）承担；本地直连时每请求建连开销可接受。
+3. **端口残留**：多次重启 `wrangler dev` 前先确认 8787 已释放
+   （`Get-NetTCPConnection -LocalPort 8787 -State Listen`），否则浏览器请求可能打到旧实例。
 
 ### 3.4 Worker 内验证
 

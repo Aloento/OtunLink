@@ -15,7 +15,8 @@
     "@otunlink/shared": "workspace:*",
     "aws4fetch": "^1.0.20",
     "hono": "^4.13.5",
-    "jose": "^6.2.10"
+    "jose": "^6.2.10",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260831.1",

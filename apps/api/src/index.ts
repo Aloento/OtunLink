@@ -1,5 +1,6 @@
 import { ErrorCodes } from '@otunlink/shared';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 
 import { authenticate, type AuthDeps } from './auth/middleware';
 import { verifyEntraToken } from './auth/verifier';
@@ -25,6 +26,17 @@ export interface AppDeps extends AuthDeps {}
  */
 export function createApp(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
+
+  // CORS：SPA 与 API 分离部署（CF Pages + CF Workers），仅放行自有前端域名。
+  app.use(
+    '*',
+    cors({
+      origin: ['http://localhost:5173', 'https://otun.musi.land'],
+      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization', 'X-Admin-Secret'],
+      maxAge: 86400,
+    }),
+  );
 
   app.get('/api/v1/health', (c) => c.json({ ok: true }));
 
