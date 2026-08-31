@@ -1,9 +1,7 @@
-import { useTranslation } from 'react-i18next';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { Permissions } from '@otunlink/shared';
 
-import { PlaceholderPage } from './components/PlaceholderPage';
 import { AppLayout } from './layout/AppLayout';
 import { CallbackPage } from './pages/CallbackPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -28,15 +26,17 @@ import { SalesListPage } from './pages/sales/SalesListPage';
 import { ShipmentDetailPage } from './pages/shipments/ShipmentDetailPage';
 import { ShipmentFormPage } from './pages/shipments/ShipmentFormPage';
 import { ShipmentsPage } from './pages/shipments/ShipmentsPage';
+import { AdminUsersPage } from './pages/admin/AdminUsersPage';
+import { AdminUnitsPage } from './pages/admin/AdminUnitsPage';
+import { AuditLogsPage } from './pages/admin/AuditLogsPage';
+import { TestEmailPage } from './pages/admin/TestEmailPage';
 import { RequireActive, RequireAuth, RequirePermission } from './routes/guards';
-import { CALLBACK_PATH, LOGIN_PATH, ROUTES, type RouteKey } from './routes/routes';
+import { CALLBACK_PATH, LOGIN_PATH, ROUTES } from './routes/routes';
 
-// 业务页面（除工作台、通知、物品目录、发货/入库/出库/库存/退货/销售外）在 ck-03/ck-04 以「开发中」占位。
-const PLACEHOLDER_KEYS = ['adminUsers', 'adminUnits'] as const satisfies readonly RouteKey[];
+// 业务页面均已实现为真实页面（工作台、通知、物品目录、发货/入库/出库/库存/退货/销售/零售价 + 管理端）。
+// 原「开发中」占位已移除。
 
 export default function App() {
-  const { t } = useTranslation();
-
   return (
     <Routes>
       <Route path={LOGIN_PATH} element={<LoginPage />} />
@@ -243,20 +243,38 @@ export default function App() {
             </RequirePermission>
           }
         />
-        {PLACEHOLDER_KEYS.map((key) => {
-          const route = ROUTES[key];
-          return (
-            <Route
-              key={route.path}
-              path={route.path}
-              element={
-                <RequirePermission permissions={route.permissions}>
-                  <PlaceholderPage title={t(`nav.${route.navKey}`)} />
-                </RequirePermission>
-              }
-            />
-          );
-        })}
+        <Route
+          path={ROUTES.adminUsers.path}
+          element={
+            <RequirePermission permissions={ROUTES.adminUsers.permissions}>
+              <AdminUsersPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={ROUTES.adminUnits.path}
+          element={
+            <RequirePermission permissions={ROUTES.adminUnits.permissions}>
+              <AdminUnitsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={ROUTES.adminAuditLogs.path}
+          element={
+            <RequirePermission permissions={ROUTES.adminAuditLogs.permissions}>
+              <AuditLogsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={ROUTES.adminTestEmail.path}
+          element={
+            <RequirePermission permissions={ROUTES.adminTestEmail.permissions}>
+              <TestEmailPage />
+            </RequirePermission>
+          }
+        />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -41,7 +41,14 @@ export function RetailPricesPage() {
 
   const [unitId, setUnitId] = useState('');
   const [itemId, setItemId] = useState('');
-  const [editing, setEditing] = useState<RetailPriceDto | null>(null);
+  const [draft, setDraft] = useState<{
+    mode: 'edit' | 'create';
+    id?: string;
+    unitId: string;
+    itemId: string;
+    unitName: string | null;
+    itemName: string | null;
+  } | null>(null);
   const [priceInput, setPriceInput] = useState('');
   const [currencyInput, setCurrencyInput] = useState<string>('CNY');
   const [historyOf, setHistoryOf] = useState<RetailPriceDto | null>(null);
@@ -76,24 +83,48 @@ export function RetailPricesPage() {
   const saveMutation = useMutation({
     mutationFn: () =>
       putRetailPrice({
-        unitId: editing!.unitId,
-        itemId: editing!.itemId,
+        unitId: draft!.unitId,
+        itemId: draft!.itemId,
         price: priceInput.trim(),
         currency: currencyInput,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['retail-prices'] });
-      setEditing(null);
+      setDraft(null);
     },
   });
 
   const canWrite = hasPermission(me?.role, Permissions.RETAIL_PRICES_WRITE);
 
   const openEdit = (row: RetailPriceDto) => {
-    setEditing(row);
+    setDraft({
+      mode: 'edit',
+      id: row.id,
+      unitId: row.unitId,
+      itemId: row.itemId,
+      unitName: row.unitName,
+      itemName: row.itemName,
+    });
     setPriceInput(row.price);
     setCurrencyInput(row.currency);
   };
+
+  const openCreate = () => {
+    setDraft({
+      mode: 'create',
+      unitId: unitId || '',
+      itemId: itemId || '',
+      unitName: null,
+      itemName: null,
+    });
+    setPriceInput('');
+    setCurrencyInput('CNY');
+  };
+
+  const canSave =
+    Boolean(draft) &&
+    Boolean(priceInput.trim()) &&
+    (draft!.mode === 'edit' || (Boolean(draft!.unitId) && Boolean(draft!.itemId)));
 
   const columns: ResponsiveTableColumn<RetailPriceDto>[] = [
     { key: 'unit', header: t('retailPrices.unit'), render: (row) => row.unitName ?? row.unitId },
@@ -141,9 +172,16 @@ export function RetailPricesPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('retailPrices.title')}</Title1>
-        <Text size={200} className="text-neutral-500">
-          {t('retailPrices.unitCostHint')}
-        </Text>
+        <div className="flex items-center gap-2">
+          <Text size={200} className="text-neutral-500">
+            {t('retailPrices.unitCostHint')}
+          </Text>
+          {canWrite && (
+            <Button appearance="primary" onClick={openCreate}>
+              {t('retailPrices.add')}
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -190,16 +228,53 @@ export function RetailPricesPage() {
         />
       )}
 
-      <Dialog open={editing !== null} onOpenChange={(_, d) => !d.open && setEditing(null)}>
+      <Dialog open={draft !== null} onOpenChange={(_, d) => !d.open && setDraft(null)}>
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>{t('retailPrices.editTitle')}</DialogTitle>
+            <DialogTitle>
+              {draft?.mode === 'create' ? t('retailPrices.createTitle') : t('retailPrices.editTitle')}
+            </DialogTitle>
             <DialogContent>
-              {editing && (
+              {draft && (
                 <div className="flex flex-col gap-3">
-                  <Text>
-                    {editing.unitName ?? editing.unitId} · {editing.itemName ?? editing.itemId}
-                  </Text>
+                  {draft.mode === 'edit' ? (
+                    <Text>
+                      {draft.unitName ?? draft.unitId} · {draft.itemName ?? draft.itemId}
+                    </Text>
+                  ) : (
+                    <>
+                      <Field label={t('retailPrices.unit')} required>
+                        <Select
+                          value={draft.unitId}
+                          onChange={(_, d) =>
+                            setDraft((prev) => (prev ? { ...prev, unitId: d.value, unitName: null } : prev))
+                          }
+                        >
+                          <option value="">{t('retailPrices.selectUnit')}</option>
+                          {warehouses.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <Field label={t('retailPrices.item')} required>
+                        <Select
+                          value={draft.itemId}
+                          onChange={(_, d) =>
+                            setDraft((prev) => (prev ? { ...prev, itemId: d.value, itemName: null } : prev))
+                          }
+                        >
+                          <option value="">{t('retailPrices.selectItem')}</option>
+                          {(itemPage?.items ?? []).map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                    </>
+                  )}
                   <Field label={t('retailPrices.price')} required>
                     <Input
                       type="number"
@@ -225,12 +300,12 @@ export function RetailPricesPage() {
             <DialogActions>
               <Button
                 appearance="primary"
-                disabled={saveMutation.isPending || !priceInput.trim()}
+                disabled={saveMutation.isPending || !canSave}
                 onClick={() => saveMutation.mutate()}
               >
                 {saveMutation.isPending ? <Spinner size="tiny" /> : t('retailPrices.save')}
               </Button>
-              <Button appearance="secondary" onClick={() => setEditing(null)}>
+              <Button appearance="secondary" onClick={() => setDraft(null)}>
                 {t('retailPrices.cancel')}
               </Button>
             </DialogActions>

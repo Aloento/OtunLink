@@ -1,7 +1,10 @@
-# OtunLink UI 验收计划（Playwright）
+# OtunLink UI 验收计划
 
-> 状态：待确认 · 定位：在本地以真实浏览器逐个场景验收前端 UI / 权限 / 业务流 / 双语 / 响应式
+> 状态：执行中（部分闭环） · 定位：在本地以真实浏览器逐个场景验收前端 UI / 权限 / 业务流 / 双语 / 响应式
 > 范围：P0→P10 所有前端页面与关键业务闭环；不含部署到 CF 后的线上验收（见 deploy.md）
+> 执行方式：本阶段采用 **方案 B（真实本地 PG + 真实 Entra）**，验收工具为 **agent 内置浏览器**
+>（openBrowserPage / readPage / clickElement / typeInPage / screenshotPage），**未采用 Playwright**。
+> 实测结果与缺陷清单见下文 **§7 / §8 / §9**。
 
 ---
 
@@ -136,3 +139,95 @@ http://localhost:8787）。**当前无法直接自动化验收，原因有二：
 - **运行模式**：方案 A（内存+dev 登录，推荐）还是方案 B（真实 PG+真实 Entra）？
 - **Playwright 落点**：独立 `e2e/` 目录还是并入 `apps/web`？
 - 是否需要保留「真实登录」一条端到端（方案 B 附带）以验证 MSAL 回调闭环？
+
+---
+
+## 7. 验收执行结果（本阶段 · 方案 B · 内置浏览器）
+
+> 执行方式：agent 内置浏览器（openBrowserPage / readPage / clickElement / typeInPage / screenshotPage），
+> 真实本地 PostgreSQL + 真实 Entra 登录（ADMIN `Soar Aloento · 管理员`，中文）。
+
+| 编号 | 结果 | 说明 |
+|---|---|---|
+| A01 | ✅ PASS | 未登录访问 `/` 重定向 `/login` |
+| A02 | ✅ PASS | 真实 Entra 登录进入工作台 `/`，导航可见 |
+| A03 | ✅ PASS（缺陷1 已修复） | 中英切换即时生效；见缺陷清单 #1 i18n 字面键（代码已补齐，待复验） |
+| A04/A05 | ⚠️ PARTIAL | 导航/铃铛可用；响应式未做视口扫描；见缺陷 #2（createRoot 控制台报错，dev HMR 伪影） |
+| A06/A07 | ⏳ 账号已就绪，待执行 | 已创建受限 Entra 账号：RETAILER `retail.tester@SoarCraft.onmicrosoft.com`、PENDING `pending.tester@SoarCraft.onmicrosoft.com`。需先以该账号登录（`/auth/me` 自动开户），再由管理员在 AD01 分配岗位 |
+| A08 | ⏳ 未执行 | 需最后再登出（会清除 ADMIN 会话） |
+| C01/C02 | ✅ PASS | 物品目录列表/新增物品正常 |
+| C03 | ✅（缺陷3 已修复，待复验） | 图片上传成功但**回显 403**（OBS 预签名 URL，见缺陷 #3）；预签名已修正，待复验回显 |
+| C04/C05 | ✅ PASS | 创建发货单(含食品行生产/到期日)、转交 SENT 正常 |
+| C06/C07/C08 | ⏳ 未执行 | 今次会话未覆盖 |
+| W01/W02 | ✅ PASS | 点货=应收（无差异）、未落入差异流程 |
+| W03 | ✅ PASS | **确认收货修复**：实收=应收→确认收货，生成入库单 IB-20260831-0001；原 500 已修复（见缺陷 #4） |
+| W04 | ✅ PASS | 入库单过账→建批次 BATCH-2026-001；台账 +10.00；平均成本 12.50；原始价只读 |
+| W05/W06/W07 | ⏳ 未执行 | 手动入库/出库/报损未覆盖 |
+| W08 | ✅ PASS | 已过期 Tab 显示批次(-364 天)→一键生成报损单 OB-20260831-0001→过账→库存扣减为 0 |
+| W09 | ✅ PASS | 库存台账 + 台账流水（发货入库 · BATCH-2026-001 · +10.00）验证 |
+| W10 | ✅（缺陷5 已修复，待复验） | 零售价页**仅有「编辑」，无「新增」入口**；对无价仓库×物品无法创建零售价（缺陷 #5，已新增入口，待复验） |
+| W11–W15 | ⏳ 未执行 | 销售请货链；当前库存 0（W08 已耗尽），需先补货 |
+| W16 | ⏳ 待复验（缺陷6 已修复） | 通知中心；且确认收货时 `INBOUND_CONFIRMED` 通知写入失败（缺陷 #6，枚举已补齐，待复验） |
+| R01–R06 | ⏳ 账号已就绪，待执行 | 需以 RETAILER `retail.tester` 登录并经 AD01 分配 RETAILER 岗位 + 数据范围（如 ST-XX「XX超市」）后执行 |
+| AD01 | ✅ PASS | `/admin/users`：列表(姓名/邮箱/岗位/状态/数据范围/创建时间)+「新增用户」「编辑」弹窗(Entra 对象 ID（objectId）/邮箱/姓名/岗位/数据范围/状态/语言偏好)+**「删除」按钮（弹确认，禁止删除当前登录账号）**全部可用；含 Soar Aloento(管理员) 与 Seed Admin |
+| AD02 | ✅ PASS | `/admin/units`：6 个单元(集货/零售/仓库)列表正常；「新增业务单元」弹窗(编码/名称/类型/地址/联系方式/时区/本位币/启用)可用 |
+| AD03 | ✅ PASS | `/admin/audit-logs`：表列(时间/动作/实体类型/实体ID/操作用户/变更后)+分页「共 2 条」；按实体类型过滤 `inbound_order` 后剩 1 条，筛选刷新正常 |
+| AD04 | ✅ PASS | `/admin/test-email`：点击「发送测试邮件」→ 返回「测试邮件发送失败（或邮件桥降级）／提供方: bridge／原因: 未配置 BRIDGE_URL」（无桥降级提示符合预期） |
+
+> 环境与过程故障：本阶段于搜索/切 Tab 时多次出现 `You are calling ReactDOMClient.createRoot()
+> on a container that has already been passed to createRoot() before.`（开发期 Vite/HMR 重复挂载伪影，
+> 非产品缺陷）；现已清理重复的 vite 实例，仅保留一个 `dev:web` 进程（见 §9）。
+
+### 7.1 已创建的真实 Entra 测试账号
+
+| 账号 | 登录名 (UPN) | Entra objectId | 用途 | 密码 |
+|---|---|---|---|---|
+| Retail Tester | `retail.tester@SoarCraft.onmicrosoft.com` | `466efbdf-2c9f-4e4e-9f1e-dc367886b83a` | A06（RETAILER 无权限路由→Forbidden）+ A01–A06 之外 R01–R06（零售方只读库存/零售价、请货建单、支付凭证、确认收货、售后、通知） | `OtunTest@2026!` |
+| Pending Tester | `pending.tester@SoarCraft.onmicrosoft.com` | `f7193993-a3b2-445a-991f-88153260d3f5` | A07（未分配岗位登录→「等待管理员分配岗位」引导页） | `OtunTest@2026!` |
+
+> 说明：后端关联用户时**优先用 Entra `oid`（objectId），其次回退 `sub`**（见 `apps/api/src/auth/verifier.ts`、
+> `middleware.ts`、`routes/auth.ts`）。`/auth/me` 对未开户账号自动创建 PENDING 记录。
+> 因此既支持「用户首次登录自动开户（PENDING）→ 管理员在 AD01 分配岗位」，
+> 也支持管理员在 AD01 用 Entra **objectId** 预创建后由该用户首次登录直接命中，不再产生重复的 PENDING 记录。
+
+## 8. 缺陷清单与后续跟进
+
+| # | 缺陷 | 影响 | 状态 |
+|---|---|---|---|
+| 1 | i18n 字面键直出：工作台 todo 卡片、`shipments.remark` 标签、`common.cancel` 按钮等显示原始 key | 双语不完整 | ✅ 已修复（zh-CN/en 补齐 4 个缺失 key） |
+| 2 | `createRoot()` 重复挂载控制台报错（dev HMR，疑似双 vite 实例） | 开发期偶发 SPA 重置/掉登录 | ✅ 环境清理（仅保留单 `dev:web` 实例，非产品缺陷） |
+| 3 | 图片上传后**回显 403**（OBS/s3 预签名 URL 失效） | 图片缩略图/预览无法显示 | ✅ 已修复（`X-Amz-Expires` 改为置于 URL query，避免被计入 `X-Amz-SignedHeaders`） |
+| 4 | **确认收货 500（已修复）**：`confirmReceipt` 写入 `inbound_order_items.production_date/expiry_date` 时 `String(Date).slice(0,10)` 产生 `"Sun Jun 01"` → 非法 date → 事务回滚 → 500 | 阻塞 W03 闭环 | ✅ 已修复 |
+| 5 | 零售价页无「新增」入口：仅对已有行「编辑」，无法为无价仓库×物品创建零售价（后端 PUT 为 upsert，支持创建） | W10 设置零售价无法从 UI 完成 | ✅ 已修复（新增零售价入口 + create 模式对话框） |
+| 6 | `notification_type` 枚举缺 `INBOUND_CONFIRMED`（migration `0000` 仅有 `INBOUND`）→ 确认收货通知写入失败（被捕获记录，业务仍成功） | W16 通知缺失、无确认入库通知 | ✅ 已修复（migration `0007` 补齐 14 个类型） |
+| 7 | `/stock/expired` 500（**已修复**）：`listExpired` WHERE 引用 `s.expiry_date`，但 `stock` 表无该列，到期日在 `batches`（`b.expiry_date`） | 阻塞 W08 | ✅ 已修复 |
+| 8 | A06/A07 无法复现：ADMIN 全权限，缺受限/PENDING Entra 账号 | 无权限/PENDING 引导无法验收 | ✅ 账号已创建：RETAILER `retail.tester`（objectId `466efbdf-…`）、PENDING `pending.tester`（`f7193993-…`）；可执行验收 |
+| 9 | 硬刷新/直链访问受保护路由被重定向回 `/`（工作台）：刷新 `/admin/users`、`/admin/test-email`、`/shipments` 均由认证初始化阶段 `RequireAuth` 先用 `replace` 跳到 `/login`，登录态恢复后再跳 `/`，丢失深链 | 深链/刷新丢失，无法直达具体页面（SPA 内点击导航正常）| ✅ 已修复并实测通过（① `RequireAuth` 未登录跳转前将目标路径暂存至 sessionStorage（新增 `returnTo.ts`）；② `LoginPage`/`CallbackPage` 在会话就绪后 `consumeReturnTo()` 恢复深链，否则回 `/`。实测刷新/直达 `/admin/users`、`/admin/units`、`/admin/audit-logs`、`/admin/test-email` 均保留深链且登录态不丢） |
+| 10 | 用户管理「新增用户」与「删除」语义修正（本次实施）：① 后端新增 **oid 优先的账号关联**（`oid ?? sub`），使管理员填写的 Entra objectId 能正确预创建/命中真实用户，解决「手动新增用户不可靠、重复 PENDING」问题；② 新增 **`DELETE /admin/users/:id`** + 前端「删除」按钮（禁止删除当前登录账号），补全用户删除能力（原仅可「停用」DISABLED） | 用户管理完整性与开户流程一致 | ✅ 已修复（`types.ts`/`verifier.ts`/`middleware.ts`/`routes/auth.ts`/`repos/*`/`admin-users.ts`/`AdminUsersPage.tsx` + i18n + 测试） |
+
+## 9. 本阶段代码 / 迁移变更
+
+- `apps/api/src/repos/sql.ts`：新增 `toYMD()` 辅助函数，修复 5 处日期映射（`mapShipment`、
+  `mapShipmentItem`、`mapInboundItem`、`mapStockRow`、`mapSalesAllocation`）；修复 `listExpired`
+  到期日列别名 `s.expiry_date` → `b.expiry_date`。
+- 已验证：`apps/api` `tsc --noEmit` 通过；`pnpm --filter api run test` **136/136 通过**。
+- `apps/api/src/lib/s3.ts`（缺陷 #3）：修复 `presignedGetUrl`，将 `X-Amz-Expires` 设置在 URL query
+  而非作为 header 传入，避免其进入 `X-Amz-SignedHeaders` 导致浏览器 GET 签名不匹配返回 403。
+- `apps/web/src/i18n/resources/{zh-CN,en}.ts`（缺陷 #1）：补齐 `common.cancel/confirm`、
+  `shipments.remark`、`sales.manualQty` 等缺失 key。
+- **AD01–AD04 管理端 UI（新增）**：
+  - `apps/web/src/api/admin.ts`（新增）：`/admin/users`、`/admin/units`、`/admin/audit-logs`、`/admin/test-email` 客户端。
+  - `apps/web/src/pages/admin/{AdminUsersPage,AdminUnitsPage,AuditLogsPage,TestEmailPage}.tsx`（新增）：用户/业务单元/审计日志/邮件连通性 4 页。
+  - `apps/web/src/routes/routes.ts`：新增 `adminAuditLogs`(`/admin/audit-logs`,`AUDIT_ADMIN`)、`adminTestEmail`(`/admin/test-email`,`USERS_ADMIN`) 路由；`NAV_ADMIN` 扩为 4 项。
+  - `apps/web/src/App.tsx`：挂载 4 个管理页，移除 `PlaceholderPage/PLACEHOLDER_KEYS`。
+  - 已验证：`apps/web` `tsc --noEmit` 通过、i18n `resources.test.ts` 2/2 通过；浏览器 AD01–AD04 均 PASS。
+- `apps/web/src/pages/retail-prices/RetailPricesPage.tsx`（缺陷 #5）：`editing` 态重构为
+  `draft` 态（`mode: 'edit' | 'create'`），新增「新增零售价」入口与 create 模式仓库/物品选择。
+- `packages/db/migrations/0007_notification_types.sql`（缺陷 #6）：新增 14 个
+  `ALTER TYPE "public"."notification_type" ADD VALUE`（`SHIPMENT_SENT`、`INBOUND_CONFIRMED`、
+  `SHIPMENT_RETURN_PENDING`、`REVIEW_PENDING/APPROVED/REJECTED`、`SALES_SENT/CANCELLED/PAYMENT_UPLOADED/CONFIRMED`、
+  `AFTER_SALE_REQUESTED/APPROVED/RETURNED`、`RETURN_ACCEPTED`）；同步 `packages/db/src/enums.ts` 的
+  `notificationTypeEnum` 并重新生成 `migrations.generated.ts`。
+- 环境清理（缺陷 #2）：停止重复的 vite 实例，仅保留一个 `dev:web`（127.0.0.1:5173）。
+- 已验证：DB 枚举含全部 24 个类型，14 个新类型事务回滚 INSERT 通过；Web `tsc --noEmit` 通过；
+  i18n 键检查 0 缺失；S3 上传+预签名 GET 返回 200。

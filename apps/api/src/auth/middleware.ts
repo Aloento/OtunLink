@@ -62,7 +62,10 @@ export function authenticate(deps: AuthDeps): MiddlewareHandler<AppEnv> {
 
     let user = null;
     if (repos) {
-      user = await repos.users.findByEntraSub(claims.sub);
+      // 优先用稳定的 oid（与管理员在「新增用户」填写的 objectId 一致）关联，
+      // 找不到再回退 sub，兼容历史按 sub 开户的记录（含现有管理员）。
+      if (claims.oid) user = await repos.users.findByEntraSub(claims.oid);
+      if (!user) user = await repos.users.findByEntraSub(claims.sub);
     }
 
     c.set('auth', { claims, user });

@@ -43,6 +43,15 @@ export interface Env extends Record<string, unknown> {
   BRIDGE_URL?: string;
   BRIDGE_API_KEY?: string;
   MAIL_FROM?: string;
+  // SMTP 直连（ck-11 §8.8）：MAIL_PROVIDER=smtp 时经 Cloudflare connect()（TCP socket）直连外部 SMTP。
+  // SMTP_SECURE=true 走 465 隐式 TLS（secureTransport=on）；否则 SMTP_STARTTLS=true 走 587 STARTTLS。
+  SMTP_HOST?: string;
+  SMTP_PORT?: string;
+  SMTP_USER?: string;
+  SMTP_PASS?: string;
+  SMTP_SECURE?: string;
+  SMTP_STARTTLS?: string;
+  SMTP_AUTH?: string;
   // S3 兼容对象存储（华为云 OBS，见 docs/cloud-config.md）
   S3_ENDPOINT?: string;
   S3_REGION?: string;
@@ -52,8 +61,10 @@ export interface Env extends Record<string, unknown> {
 }
 
 export interface TokenClaims {
-  /** Entra v2.0 的 sub（工作账号通常等于 oid）。 */
+  /** Entra v2.0 的 sub（pair-wise，每应用不同，工作账号通常等于 oid）。 */
   sub: string;
+  /** Entra v2.0 的 oid（租户级稳定对象 ID，用于关联 identity；可能与 sub 不同）。 */
+  oid?: string;
   email?: string;
   name?: string;
   preferredUsername?: string;
@@ -222,6 +233,8 @@ export interface UserRepository {
   list(): Promise<UserRecord[]>;
   create(input: CreateUserInput): Promise<UserRecord>;
   update(id: string, patch: UpdateUserInput): Promise<UserRecord | null>;
+  /** 硬删除用户；返回是否删除了记录（false = 用户不存在）。 */
+  delete(id: string): Promise<boolean>;
 }
 
 export interface UnitRepository {

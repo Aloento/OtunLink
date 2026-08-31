@@ -211,7 +211,7 @@ function mapShipment(row: Record<string, unknown>): ShipmentRecord {
     status: (row.status as ShipmentRecord['status']) ?? 'DRAFT',
     boxesCount: Number(row.boxes_count ?? 0),
     currency: String(row.currency ?? 'CNY'),
-    expectedArrivalDate: row.expected_arrival_date ? String(row.expected_arrival_date).slice(0, 10) : null,
+    expectedArrivalDate: toYMD(row.expected_arrival_date),
     remark: row.remark ? String(row.remark) : null,
     sentAt: row.sent_at ? new Date(String(row.sent_at)) : null,
     createdBy: row.created_by ? String(row.created_by) : null,
@@ -242,8 +242,8 @@ function mapShipmentItem(row: Record<string, unknown>): ShipmentItemRecord {
     expectedQty: row.expected_qty != null ? String(row.expected_qty) : '0',
     actualQty: row.actual_qty != null ? String(row.actual_qty) : null,
     unitPrice: row.unit_price != null ? String(row.unit_price) : null,
-    productionDate: row.production_date ? String(row.production_date).slice(0, 10) : null,
-    expiryDate: row.expiry_date ? String(row.expiry_date).slice(0, 10) : null,
+    productionDate: toYMD(row.production_date),
+    expiryDate: toYMD(row.expiry_date),
     lineNote: row.line_note ? String(row.line_note) : null,
     createdAt: new Date(String(row.created_at)),
     updatedAt: new Date(String(row.updated_at)),
@@ -326,8 +326,8 @@ function mapInboundItem(row: Record<string, unknown>): InboundOrderItemRecord {
     qty: row.qty != null ? String(row.qty) : '0',
     unitCost: row.unit_cost != null ? String(row.unit_cost) : '0',
     lineNote: row.line_note ? String(row.line_note) : null,
-    productionDate: row.production_date ? String(row.production_date).slice(0, 10) : null,
-    expiryDate: row.expiry_date ? String(row.expiry_date).slice(0, 10) : null,
+    productionDate: toYMD(row.production_date),
+    expiryDate: toYMD(row.expiry_date),
     batchNo: row.batch_no ? String(row.batch_no) : null,
     createdAt: new Date(String(row.created_at)),
     itemName: row.item_name ? String(row.item_name) : null,
@@ -419,8 +419,8 @@ function mapStockRow(row: Record<string, unknown>): StockRowRecord {
     spec: row.spec ? String(row.spec) : null,
     batchId: String(row.batch_id),
     batchNo: row.batch_no ? String(row.batch_no) : null,
-    productionDate: row.production_date ? String(row.production_date).slice(0, 10) : null,
-    expiryDate: row.expiry_date ? String(row.expiry_date).slice(0, 10) : null,
+    productionDate: toYMD(row.production_date),
+    expiryDate: toYMD(row.expiry_date),
     qty: row.qty != null ? String(row.qty) : '0',
     avgCost: row.avg_cost != null ? String(row.avg_cost) : '0',
     version: Number(row.version ?? 0),
@@ -594,7 +594,7 @@ function mapSalesAllocation(row: Record<string, unknown>): SalesBatchAllocationR
     itemName: row.item_name ? String(row.item_name) : null,
     batchId: String(row.batch_id),
     batchNo: row.batch_no ? String(row.batch_no) : null,
-    expiryDate: row.expiry_date ? String(row.expiry_date).slice(0, 10) : null,
+    expiryDate: toYMD(row.expiry_date),
     qty: row.qty != null ? String(row.qty) : '0',
   };
 }
@@ -729,6 +729,10 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         `UPDATE users SET ${sets.join(', ')} WHERE id = ${quote(id)} RETURNING *`,
       );
       return rows[0] ? mapUser(rows[0]) : null;
+    },
+    async delete(id: string): Promise<boolean> {
+      const { rows } = await exec.query(`DELETE FROM users WHERE id = ${quote(id)} RETURNING id`);
+      return (rows.length ?? 0) > 0;
     },
   };
 
@@ -2442,7 +2446,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       const where = (alias: string): string => {
         const parts: string[] = [
           `${alias}qty > 0`,
-          `${alias}expiry_date IS NOT NULL AND ${alias}expiry_date < CURRENT_DATE`,
+          `b.expiry_date IS NOT NULL AND b.expiry_date < CURRENT_DATE`,
         ];
         if (query.unitId) parts.push(`${alias}unit_id = ${quote(query.unitId)}`);
         if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
@@ -3166,6 +3170,15 @@ function nn(value: string | null | undefined): string | null {
   if (value === undefined || value === null) return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+// postgres.js 对 date 列返回 JS Date 对象；统一转为 YYYY-MM-DD（保持原日历日期）。
+// 兼容已传入的 ISO 字符串，避免 String(Date).slice(0,10) 产生 "Sun Jun 01" 这类非法日期串。
+function toYMD(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const d = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
 }
 
 function roundMoney(value: number): string {

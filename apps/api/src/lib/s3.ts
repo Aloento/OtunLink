@@ -34,9 +34,12 @@ export function objectUrl(env: Env, key: string): string {
 
 export async function presignedGetUrl(env: Env, key: string): Promise<string> {
   const client = createClient(env);
-  const request = await client.sign(new Request(objectUrl(env, key)), {
+  // X-Amz-Expires 是 query 参数，不能作为被签名的 header 传入（否则浏览器发起 GET 时
+  // 不会携带该 header，导致签名不匹配返回 403）。aws4fetch 只在 query 已有该参数时才会保留。
+  const url = new URL(objectUrl(env, key));
+  url.searchParams.set('X-Amz-Expires', String(PRESIGNED_URL_TTL_SECONDS));
+  const request = await client.sign(new Request(url), {
     aws: { signQuery: true },
-    headers: { 'X-Amz-Expires': String(PRESIGNED_URL_TTL_SECONDS) },
   });
   return request.url;
 }

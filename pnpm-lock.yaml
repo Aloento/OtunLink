@@ -28,6 +28,9 @@ importers:
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
+      worker-mailer:
+        specifier: ^1.2.1
+        version: 1.2.1
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^5.20260831.1
@@ -2704,6 +2707,9 @@ packages:
     engines: {node: '>=8'}
     hasBin: true
 
+  worker-mailer@1.2.1:
+    resolution: {integrity: sha512-gS2ei/mrpRqNs+AHmqxhT6vFPwCLw2qnz5ShmyGD0ULaU0Q9hxnFAcx9jhAip/MnD6+MjgnQu6hQQgA8mlOkVA==}
+
   workerd@1.20260828.1:
     resolution: {integrity: sha512-pB9yvt0kkwZDAGZHmpY59r0o3hM0DzdW6BJERqwZOhunZ3ssOyDSgQxOQer2cSZW4YCFeOTIQYN1qwhK5wv/Cw==}
     engines: {node: '>=16'}
@@ -5331,6 +5337,8 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  worker-mailer@1.2.1: {}
 
   workerd@1.20260828.1:
     optionalDependencies:

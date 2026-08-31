@@ -65,6 +65,16 @@ export const ROUTES = {
     navKey: 'adminUnits',
     permissions: [Permissions.UNITS_ADMIN],
   },
+  adminAuditLogs: {
+    path: '/admin/audit-logs',
+    navKey: 'adminAuditLogs',
+    permissions: [Permissions.AUDIT_ADMIN],
+  },
+  adminTestEmail: {
+    path: '/admin/test-email',
+    navKey: 'adminTestEmail',
+    permissions: [Permissions.USERS_ADMIN],
+  },
 } as const satisfies Record<string, AppRouteDef>;
 
 export type RouteKey = keyof typeof ROUTES;
@@ -82,7 +92,7 @@ export const NAV_MAIN: RouteKey[] = [
   'notifications',
 ];
 
-export const NAV_ADMIN: RouteKey[] = ['adminUsers', 'adminUnits'];
+export const NAV_ADMIN: RouteKey[] = ['adminUsers', 'adminUnits', 'adminAuditLogs', 'adminTestEmail'];
 
 /** 登录回调与登录页路径。 */
 export const LOGIN_PATH = '/login';

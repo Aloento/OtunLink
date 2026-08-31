@@ -159,8 +159,10 @@
 2. 前端 `@azure/msal-browser` 授权码 + PKCE；access token 1h（MSAL 自动续期）
 3. **首次登录自动开户**：`GET /api/v1/auth/me` 校验 JWT → 查 `users`
    - 有记录 → 返回岗位、数据范围、语言偏好
-   - 无记录 → 创建 `PENDING` 用户（sub/email/name），前端显示"等待管理员分配岗位"页
+   - 无记录 → 创建 `PENDING` 用户（oid/sub、email、name），前端显示"等待管理员分配岗位"页
+   - **身份关联键**：优先用 Entra `oid`（租户级稳定对象 ID，与管理员在「用户管理」填写的 objectId 一致），其次回退 `sub`（历史按 sub 开户的账号仍可命中）。`oid` 不再依赖不稳定的 `sub`，保证管理员可手动预创建/预关联真实用户。
 4. 管理员在「用户管理」分配**岗位**（集货/仓库/零售/管理员）与**可选数据范围**（具体业务单元），用户刷新即进入系统
+   - 手动「新增用户」只需填写 Entra **objectId**（即 `oid`）、邮箱、姓名；该用户首次登录即命中此记录，不再产生重复的 PENDING 记录
 
 ### 3.2 权限模型
 
@@ -534,12 +536,15 @@ zod 400 `VALIDATION_ERROR`；401 未登录；403 `FORBIDDEN`；409 业务冲突�
 - 交互：物品页"扫一扫" → 授权摄像头 → 检测到条码 → 调 `GET /items/by-barcode` → **立即跳转到该物品**（不存在则预填条码引导新建）
 - 录入框支持直接手输条码；相机流及时释放（功耗与隐私）
 
-### 8.8 邮件（自建域名邮箱）
-- Workers **无法直连 SMTP**（无 TCP），采用两种适配之一：
-  1. **推荐**：在你们邮件服务器侧部署 `infra/mail-bridge`（轻量 Node 服务，约 300 行，仅内网监听 + API Key 鉴权，负责 HTTP→SMTP 转发），Worker 用 `fetch` 调用 `MAIL_BRIDGE_URL`
-  2. 若邮件服务商提供 HTTP API（如企业邮开放接口），直接实现适配器替换
-- 配置：`MAIL_PROVIDER=bridge|api`、`MAIL_FROM`（如 `noreply@otun.musi.land`）、模板（中文为主，`Accept-Language` 提供英文版）
-- 发送全部异步、失败重试 1 次、`email_logs` 记录
+### 8.8 邮件
+- Workers **支持出站 TCP**（Cloudflare `connect()` API / `cloudflare:sockets`，需 `compatibility_date >= 2024-11-01`），因此可直连外部 SMTP（仅端口 465 隐式 TLS / 587 STARTTLS，**25 端口被禁用**），也可复用 `infra/mail-bridge`。
+- 三种适配器（`lib/email.ts` 的 `createMailer`，由 `MAIL_PROVIDER` 选择）：
+  1. **`smtp`**（直连，推荐）：`WorkerMailer`（`worker-mailer`，包封装 `cloudflare:sockets` 的 TLS/STARTTLS SMTP 客户端）静态 `WorkerMailer.send(...)` 一键发送。支持 plain/login/cram-md5 认证，配置 `SMTP_HOST/SMTP_PORT(=465)/SMTP_USER/SMTP_PASS/SMTP_SECURE/SMTP_STARTTLS/SMTP_AUTH` 与 `MAIL_FROM`。
+  2. **`bridge`**：`fetch` 调用 `MAIL_BRIDGE_URL`（`infra/mail-bridge`，内网 + API Key 鉴权）。
+  3. **`api`**：预留（邮件服务商 HTTP API），未实现。
+- 模板：`lib/email-template.ts` 的 `renderEmailHtml()` 输出自适应、品牌化 HTML（table 布局 + 内联样式 + 媒体查询），`notify()`/定时效期预警/`test-email` 均已接入。
+- 配置：`MAIL_PROVIDER=smtp|bridge|api`、`MAIL_FROM`（如 `Otun@musi.land`）、模板（中文为主）。
+- 发送全部异步、失败重试 1 次、`email_logs` 记录；降级为仅站内通知（fail-safe）。
 
 ### 8.9 前端缓存与后端瘦身（成本原则）
 - **前端**：TanStack Query `persistQueryClient` + IndexedDB —— 物品目录、单位字典、已读通知、列表第一页等缓存；新增/变更后失效重取；网络差时读缓存（只读数据可离线查看）

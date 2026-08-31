@@ -105,8 +105,10 @@ function toClaims(payload: Record<string, unknown>): TokenClaims {
   const name = payload.name ?? email ?? sub;
   const preferredUsername =
     typeof payload.preferred_username === 'string' ? payload.preferred_username : undefined;
+  const oid = typeof payload.oid === 'string' ? payload.oid : undefined;
   return {
     sub,
+    oid,
     email: typeof email === 'string' ? email : undefined,
     name: typeof name === 'string' ? name : sub,
     preferredUsername,

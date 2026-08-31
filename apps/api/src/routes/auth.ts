@@ -19,8 +19,10 @@ export function authRouter(): Hono<AppEnv> {
     if (!user) {
       const claims = auth.claims;
       user = await repos.users.create({
-        entraSub: claims.sub,
-        email: claims.email ?? claims.preferredUsername ?? `${claims.sub}@placeholder.invalid`,
+        // 优先存稳定的 oid（objectId），保证与该用户在管理端「新增用户」填写的标识一致，
+        // 之后管理员可直接为此记录分配岗位；无 oid 时回退 sub。
+        entraSub: claims.oid ?? claims.sub,
+        email: claims.email ?? claims.preferredUsername ?? `${claims.oid ?? claims.sub}@placeholder.invalid`,
         name: claims.name ?? claims.sub,
         status: 'PENDING',
       });

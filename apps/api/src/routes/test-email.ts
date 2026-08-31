@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import { requireRole } from '../auth/middleware';
 import { createMailer, mailerStatus } from '../lib/email';
+import { emailParagraph, renderEmailHtml } from '../lib/email-template';
 import { dbUnavailable, ok } from '../lib/http';
 import type { AppEnv } from '../types';
 
@@ -30,8 +31,17 @@ export function testEmailRouter(): Hono<AppEnv> {
     try {
       await mailer.send({
         to: from,
-        subject: '[OtunLink] 邮件桥连通性测试',
-        text: `这是一封来自 OtunLink 的连通性测试邮件，发送成功即代表邮件桥配置有效。\n时间：${new Date().toISOString()}`,
+        subject: '[OtunLink] 邮件连通性测试',
+        text: `这是一封来自 OtunLink 的连通性测试邮件，发送成功即代表邮件配置有效。\n时间：${new Date().toISOString()}`,
+        html: renderEmailHtml({
+          title: '[OtunLink] 邮件连通性测试',
+          headline: '邮件连通性测试',
+          body: emailParagraph(
+            '这是一封来自 OtunLink 的连通性测试邮件，发送成功即代表邮件配置有效。',
+          ),
+          cta: { label: '前往工作台', url: 'https://musi.land' },
+          timestamp: new Date(),
+        }),
       });
       return ok(c, { ok: true, provider: mailer.name, reason: null });
     } catch (cause) {

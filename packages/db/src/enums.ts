@@ -77,6 +77,20 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'EXPIRY_ALERT',
   'PAYMENT',
   'SYSTEM',
+  'SHIPMENT_SENT',
+  'INBOUND_CONFIRMED',
+  'SHIPMENT_RETURN_PENDING',
+  'REVIEW_PENDING',
+  'REVIEW_APPROVED',
+  'REVIEW_REJECTED',
+  'SALES_SENT',
+  'SALES_CANCELLED',
+  'SALES_PAYMENT_UPLOADED',
+  'SALES_CONFIRMED',
+  'AFTER_SALE_REQUESTED',
+  'RETURN_ACCEPTED',
+  'AFTER_SALE_APPROVED',
+  'AFTER_SALE_RETURNED',
 ]);
 
 export const emailLogStatusEnum = pgEnum('email_log_status', ['PENDING', 'SENT', 'FAILED']);

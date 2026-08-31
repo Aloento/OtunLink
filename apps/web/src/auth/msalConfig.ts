@@ -33,11 +33,10 @@ export function buildMsalConfig(input: WebAuthConfigInput): BuiltAuthConfig {
       cacheLocation: 'sessionStorage',
     },
     system: {
-      // 关键：默认 navigateToLoginRequestUrl 为 true，MSAL 在 /auth/callback 拿到 code 后会
-      // 整页跳回起始页（request.origin / redirectStartPage），并期望起始页再次 handleRedirectPromise。
-      // 一旦 code 无法在起始页被成功兑换/清理（残留 interaction 状态），就会在页面间反复整页刷新形成死循环。
-      // 改为 false：MSAL 在回调页当场完成兑换并清理状态，不再做整页跳转；成功后由 SPA 路由自行跳转。
-      navigateToLoginRequestUrl: false,
+      // 注意：@azure/msal-browser v5 起，navigateToLoginRequestUrl 已不再支持放在 system 配置里，
+      // 而是作为 handleRedirectPromise(options) 的选项传入（见 AuthProvider.tsx）。
+      // 该选项控制 MSAL 在 /auth/callback 拿到 code 后是否整页跳回起始页（默认 true）。
+      // 这里置为 false：MSAL 在回调页当场完成兑换并清理状态，不再整页跳转；成功后由 SPA 路由自行跳转。
       loggerOptions: {
         loggerCallback: (level: LogLevel, message: string, containsPii: boolean) => {
           if (level === LogLevel.Error && !containsPii) {

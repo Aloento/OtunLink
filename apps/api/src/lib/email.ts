@@ -63,6 +63,43 @@ function createApiProvider(_env: Env): EmailProvider {
 }
 
 /**
+ * SMTP 直连适配器（ck-11 §8.8）：经 Cloudflare Workers `connect()`（TCP socket）直连外部 SMTP。
+ * 依赖 worker-mailer（内部用 cloudflare:sockets），支持：
+ * - 端口 465（隐式 TLS）：`secure: true`（SMTP_SECURE=true），connect secureTransport=on。
+ * - 端口 587（STARTTLS）：`secure: false, startTls: true`（默认）。
+ * 注意：Workers 无法出站端口 25，只能走 465/587。
+ */
+function createSmtpProvider(env: Env): EmailProvider {
+  const host = env.SMTP_HOST?.trim() ?? '';
+  const port = Number(env.SMTP_PORT ?? 465);
+  const user = env.SMTP_USER?.trim() ?? '';
+  const pass = env.SMTP_PASS ?? '';
+  const from = env.MAIL_FROM?.trim() || user;
+  const secure = env.SMTP_SECURE?.trim() === 'true' || port === 465;
+  const startTls = env.SMTP_STARTTLS?.trim() !== 'false' && !secure;
+  const authType = (env.SMTP_AUTH?.trim() as 'plain' | 'login' | undefined) ?? 'plain';
+
+  return {
+    name: 'smtp',
+    async send(msg) {
+      // 动态 import：worker-mailer 依赖 cloudflare:sockets，仅在真正发信时加载，
+      // 避免在 Node（vitest）环境下静态引入导致测试崩溃。
+      const { WorkerMailer } = await import('worker-mailer');
+      await WorkerMailer.send(
+        { host, port, secure, startTls, credentials: { username: user, password: pass }, authType },
+        {
+          from,
+          to: msg.to,
+          subject: msg.subject,
+          text: msg.text ?? undefined,
+          html: msg.html ?? undefined,
+        },
+      );
+    },
+  };
+}
+
+/**
  * 按环境变量组装邮件提供者；无有效配置返回 null（降级为仅站内通知）。
  * MAIL_PROVIDER=bridge（默认值）: 需 BRIDGE_URL + BRIDGE_API_KEY。
  * MAIL_PROVIDER=api: 预留，未实现。
@@ -71,6 +108,10 @@ export function createMailer(env: Env | undefined): EmailProvider | null {
   const cfg = env ?? ({} as Env);
   const provider = (cfg.MAIL_PROVIDER ?? 'bridge').trim().toLowerCase();
   if (provider === 'api') return createApiProvider(cfg);
+  if (provider === 'smtp') {
+    if (!cfg.SMTP_HOST?.trim() || !cfg.SMTP_USER?.trim()) return null;
+    return createSmtpProvider(cfg);
+  }
   return createBridgeProvider(cfg);
 }
 
@@ -80,6 +121,18 @@ export function mailerStatus(env: Env | undefined): { enabled: boolean; provider
   const provider = (cfg.MAIL_PROVIDER ?? 'bridge').trim().toLowerCase();
   if (provider === 'api') {
     return { enabled: false, provider: 'api', reason: 'MAIL_PROVIDER=api 为预留适配器，尚未实现' };
+  }
+  if (provider === 'smtp') {
+    if (!cfg.SMTP_HOST?.trim()) {
+      return { enabled: false, provider: 'smtp', reason: '未配置 SMTP_HOST' };
+    }
+    if (!cfg.SMTP_USER?.trim()) {
+      return { enabled: false, provider: 'smtp', reason: '未配置 SMTP_USER' };
+    }
+    if (!cfg.SMTP_PASS) {
+      return { enabled: false, provider: 'smtp', reason: '未配置 SMTP_PASS' };
+    }
+    return { enabled: true, provider: 'smtp', reason: null };
   }
   if (!cfg.BRIDGE_URL?.trim()) {
     return { enabled: false, provider: 'bridge', reason: '未配置 BRIDGE_URL' };

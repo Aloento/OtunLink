@@ -164,6 +164,48 @@ describe('auth / RBAC（ck-02 抽样）', () => {
     expect(units.status).toBe(200);
   });
 
+  it('管理员可删除用户', async () => {
+    const { app } = makeApp({
+      users: [user({ entraSub: 'admin', role: 'ADMIN' }), user({ id: 'id-u2', entraSub: 'u2' })],
+    });
+    const del = await app.request('/api/v1/admin/users/id-u2', {
+      method: 'DELETE',
+      headers: auth('admin'),
+    });
+    expect(del.status).toBe(200);
+    const list = await app.request('/api/v1/admin/users', { headers: auth('admin') });
+    const body = (await list.json()) as { data: unknown[] };
+    expect(body.data).toHaveLength(1);
+  });
+
+  it('管理员不能删除当前登录账号', async () => {
+    const { app } = makeApp({ users: [user({ id: 'id-admin', entraSub: 'admin', role: 'ADMIN' })] });
+    const del = await app.request('/api/v1/admin/users/id-admin', {
+      method: 'DELETE',
+      headers: auth('admin'),
+    });
+    expect(del.status).toBe(400);
+  });
+
+  it('按 oid 关联：用户 entraSub=oid 时，sub 鉴权也能命中该记录', async () => {
+    const repos = createMemoryRepos({
+      users: [user({ id: 'id-w', entraSub: 'oid-123', role: 'COLLECTOR', status: 'ACTIVE' })],
+    });
+    const app = createApp({
+      verifyToken: async () => ({
+        sub: 'sub-xyz',
+        oid: 'oid-123',
+        email: 'w@test.local',
+        name: 'w',
+      }),
+      getRepos: async () => repos,
+    });
+    const res = await app.request('/api/v1/auth/me', { headers: auth('sub-xyz') });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { id: string } };
+    expect(body.data.id).toBe('id-w');
+  });
+
   it('管理员可创建/更新业务单元', async () => {
     const { app } = makeApp({ users: [user({ entraSub: 'admin', role: 'ADMIN' })] });
     const create = await app.request('/api/v1/admin/units', {

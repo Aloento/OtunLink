@@ -22,5 +22,9 @@ export const migrations: Migration[] = [
   {
     "name": "0006_shallow_peter_quill",
     "sql": "ALTER TABLE \"email_logs\" ADD COLUMN \"body\" text;--> statement-breakpoint\nALTER TABLE \"email_logs\" ADD COLUMN \"attempts\" integer DEFAULT 0 NOT NULL;"
+  },
+  {
+    "name": "0007_notification_types",
+    "sql": "ALTER TYPE \"public\".\"notification_type\" ADD VALUE 'SHIPMENT_SENT';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'INBOUND_CONFIRMED';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'SHIPMENT_RETURN_PENDING';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'REVIEW_PENDING';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'REVIEW_APPROVED';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'REVIEW_REJECTED';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'SALES_SENT';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'SALES_CANCELLED';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'SALES_PAYMENT_UPLOADED';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'SALES_CONFIRMED';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'AFTER_SALE_REQUESTED';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'RETURN_ACCEPTED';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'AFTER_SALE_APPROVED';--> statement-breakpoint\r\nALTER TYPE \"public\".\"notification_type\" ADD VALUE 'AFTER_SALE_RETURNED';"
   }
 ];

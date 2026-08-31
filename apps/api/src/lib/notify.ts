@@ -1,5 +1,6 @@
 import type { Repos } from '../types';
 import { deliverEmail, type EmailMessage, type EmailProvider } from './email';
+import { emailParagraph, renderEmailHtml } from './email-template';
 
 // 关键业务事件接入（ck-10 §8.5）：站内通知为必达（fail-safe），
 // 邮件为可选增强（provider 为 null 或未提供收件人时跳过，失败仅记日志不阻断业务）。
@@ -40,6 +41,17 @@ export async function notify(repos: Repos, mailer: EmailProvider | null, event: 
     to: event.emailTo,
     subject: event.emailSubject ?? event.title,
     text: event.emailText ?? event.content ?? event.title,
+    html: renderEmailHtml({
+      title: event.emailSubject ?? event.title,
+      headline: event.title,
+      body:
+        emailParagraph(event.emailText ?? event.content) +
+        (event.link
+          ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">点击下方按钮查看详情：</p>`
+          : ''),
+      cta: event.link ? { label: '查看详情', url: event.link } : undefined,
+      timestamp: new Date(),
+    }),
   };
   try {
     const result = await deliverEmail(repos, mailer, msg);

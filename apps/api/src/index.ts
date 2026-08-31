@@ -6,6 +6,7 @@ import { authenticate, type AuthDeps } from './auth/middleware';
 import { verifyEntraToken } from './auth/verifier';
 import { createExecutor } from './db';
 import { createMailer, deliverEmail } from './lib/email';
+import { emailParagraph, renderEmailHtml } from './lib/email-template';
 import { runExpiryScan } from './lib/expiry-scan';
 import { createSqlRepos, defaultGetRepos } from './repos';
 import { adminRouter } from './routes/admin';
@@ -190,6 +191,15 @@ export async function scheduled(
             to: user.email,
             subject: `[OtunLink] ${alert.title}`,
             text: `${alert.content}\n所属单元：${alert.unitName ?? '-'}`,
+            html: renderEmailHtml({
+              title: `[OtunLink] ${alert.title}`,
+              headline: alert.title,
+              body:
+                emailParagraph(alert.content) +
+                emailParagraph(`所属单元：${alert.unitName ?? '-'}`),
+              cta: { label: '前往处理', url: 'https://musi.land' },
+              timestamp: new Date(),
+            }),
           });
           if (outcome.ok) sent += 1;
           else console.error('[scheduled] expiry alert email failed:', outcome.error);

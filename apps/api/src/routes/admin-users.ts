@@ -64,5 +64,22 @@ export function adminUsersRouter(): Hono<AppEnv> {
     return ok(c, adminUserDto(updated));
   });
 
+  // 硬删除用户。设计上用户与真实 Entra 身份绑定并被审计/单据以 set null/cascade 引用，
+  // 故提供删除；但禁止删除当前登录账号，避免管理员自锁。
+  router.delete('/:id', async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+    const id = c.req.param('id');
+
+    const actor = c.get('auth').user;
+    if (actor && actor.id === id) {
+      return validationError(c, '不能删除当前登录账号');
+    }
+
+    const deleted = await repos.users.delete(id);
+    if (!deleted) return notFound(c, '用户不存在');
+    return ok(c, { id });
+  });
+
   return router;
 }

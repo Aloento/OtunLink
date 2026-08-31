@@ -6,6 +6,7 @@ import { Navigate } from 'react-router-dom';
 
 import type { Permission } from '@otunlink/shared';
 
+import { setReturnTo } from '../auth/returnTo';
 import { useSession } from '../auth/SessionProvider';
 import { FullPageSpinner } from '../components/FullPageSpinner';
 import { ForbiddenPage } from '../components/ForbiddenPage';
@@ -21,6 +22,8 @@ import { LOGIN_PATH } from './routes';
 export function RequireAuth({ children }: { children: ReactNode }) {
   const authenticated = useIsAuthenticated();
   if (!authenticated) {
+    // 记录原目标路径，登录会话就绪后由 LoginPage / CallbackPage 恢复（defect #9）。
+    setReturnTo(window.location.pathname + window.location.search + window.location.hash);
     return <Navigate to={LOGIN_PATH} replace />;
   }
   return <>{children}</>;

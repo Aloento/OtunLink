@@ -11,8 +11,8 @@ import { FullPageSpinner } from '../components/FullPageSpinner';
 // 就会在 / 与 /login 之间反复整页刷新，形成死循环。
 //
 // 修复：
-// 1. msalConfig 设 system.navigateToLoginRequestUrl = false，MSAL 在回调页当场完成兑换并清理状态，
-//    不再做整页跳转；登录成功后由 SPA 路由自行跳转到业务页。
+// 1. 把 navigateToLoginRequestUrl=false 作为 handleRedirectPromise(options) 选项传入（v5 起不再是
+//    system 配置项），MSAL 在回调页当场完成兑换并清理状态，不再整页跳转；登录成功后由 SPA 路由自行跳转。
 // 2. 此处启动时显式 initialize() + handleRedirectPromise() 一次（吞掉兑换失败），确保初始化完成、
 //    残留交互状态被清理后再挂载 MsalProvider，避免与 MsalProvider 内部处理竞争。
 export function AuthProvider({
@@ -30,7 +30,7 @@ export function AuthProvider({
     async function boot() {
       await instance.initialize();
       try {
-        await instance.handleRedirectPromise();
+        await instance.handleRedirectPromise({ navigateToLoginRequestUrl: false });
       } catch {
         // 兑换失败：由登录流程处理；此处仅保证交互状态被清理，不阻断启动。
       }

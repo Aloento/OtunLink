@@ -152,6 +152,10 @@ class MemoryUserRepository implements UserRepository {
     this.rows.set(id, cloneUser(next));
     return cloneUser(next);
   }
+
+  async delete(id: string): Promise<boolean> {
+    return this.rows.delete(id);
+  }
 }
 
 class MemoryUnitRepository implements UnitRepository {
