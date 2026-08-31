@@ -1,5 +1,6 @@
 import type {
   ItemStatus,
+  ReviewStatus,
   ShipmentStatus,
   SpecUnit,
   UnitType,
@@ -242,6 +243,8 @@ export interface ShipmentRecord {
   expectedArrivalDate: string | null;
   remark: string | null;
   sentAt: Date | null;
+  /** 点货草稿版本号（乐观并发，ck-06）。 */
+  countVersion: number;
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -328,6 +331,55 @@ export interface ShipmentListResult {
   size: number;
 }
 
+// ── 差异修订（ck-06）───────────────────────────────────────────────────────
+// 对应 packages/db schema.ts discrepancy_reviews / discrepancy_review_items。
+
+export interface DiscrepancyReviewItemRecord {
+  id: string;
+  reviewId: string;
+  shipmentItemId: string;
+  expectedQtyBefore: string;
+  actualQty: string;
+  reason: string | null;
+}
+
+export interface DiscrepancyReviewRecord {
+  id: string;
+  shipmentId: string;
+  status: ReviewStatus;
+  reason: string | null;
+  photoFileIds: string[];
+  submittedBy: string | null;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  /** 联表带出的明细（findReview / listReviews 填充）。 */
+  items?: DiscrepancyReviewItemRecord[];
+}
+
+export interface CreateReviewLineInput {
+  shipmentItemId: string;
+  actualQty: string;
+  expectedQtyBefore: string;
+  reason: string | null;
+}
+
+export interface CreateReviewInput {
+  shipmentId: string;
+  reason: string | null;
+  photoFileIds: string[];
+  submittedBy: string | null;
+  lines: CreateReviewLineInput[];
+}
+
+/** 点货保存结果：返回最新行与版本号（前端以新版本继续编辑）。 */
+export interface SaveCountResult {
+  shipment: ShipmentRecord;
+  /** 递增后的 count_version。 */
+  countVersion: number;
+}
+
 export interface ShipmentRepository {
   findById(id: string): Promise<ShipmentRecord | null>;
   findByNo(no: string): Promise<ShipmentRecord | null>;
@@ -339,6 +391,41 @@ export interface ShipmentRepository {
   listTrackings(shipmentId: string): Promise<ShipmentTrackingRecord[]>;
   listTrackingsForShipments(ids: string[]): Promise<Map<string, ShipmentTrackingRecord[]>>;
   listItems(shipmentId: string): Promise<ShipmentItemRecord[]>;
+  // ── 收货点货与差异协商（ck-06）─────────────────────────────────────────────
+  /** SENT → COUNTING；非 SENT 抛 COUNTING_STATE_CONFLICT 信号。 */
+  startCounting(id: string): Promise<ShipmentRecord | null>;
+  /**
+   * 保存点货草稿（COUNTING/DISCREPANCY）：CAS 版本号防并发；保存后按
+   * 实收=应收重算状态（无差异 → READY / 有差异 → DISCREPANCY）。
+   * 版本不匹配抛 COUNTING_STATE_CONFLICT；行不属于该单抛 COUNT_LINE_INVALID 信号。
+   */
+  saveCount(id: string, input: ShipmentCountRepoInput): Promise<SaveCountResult | null>;
+  /**
+   * 提交差异修订（DISCREPANCY 且存在差异行）：状态 → REVIEW_PENDING；
+   * 已有 PENDING 抛 REVIEW_ALREADY_PROCESSED；无差异抛 REVIEW_NO_DIFFERENCE 信号。
+   */
+  createReview(input: CreateReviewInput): Promise<DiscrepancyReviewRecord>;
+  /** 按创建时间倒序（含 items）。 */
+  listReviews(shipmentId: string): Promise<DiscrepancyReviewRecord[]>;
+  findReview(id: string): Promise<DiscrepancyReviewRecord | null>;
+  /**
+   * 审批通过（PENDING → APPROVED）：各行 expected_qty := actual_qty（保留
+   * expected_qty_before 快照），发货单 → READY；写 audit_logs。
+   * 非 PENDING 抛 REVIEW_ALREADY_PROCESSED 信号。
+   */
+  approveReview(id: string, reviewedBy: string | null): Promise<DiscrepancyReviewRecord | null>;
+  /** 审批拒绝（PENDING → REJECTED）：记录理由与审批人；发货单 → DISCREPANCY（可修改重提）。 */
+  rejectReview(
+    id: string,
+    reviewedBy: string | null,
+    reason: string,
+  ): Promise<DiscrepancyReviewRecord | null>;
+}
+
+/** saveCount 的仓库入参（路由层从 shared zod 校验后转换）。 */
+export interface ShipmentCountRepoInput {
+  version: number;
+  lines: { shipmentItemId: string; actualQty: string }[];
 }
 
 export interface Repos {

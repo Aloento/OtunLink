@@ -1,4 +1,6 @@
 import type {
+  DiscrepancyReviewItemRecord,
+  DiscrepancyReviewRecord,
   FileRecord,
   ItemImageRecord,
   ItemRecord,
@@ -143,6 +145,7 @@ export function shipmentDto(
     shipperName: options.shipperName,
     receiverName: options.receiverName,
     status: shipment.status,
+    countVersion: shipment.countVersion,
     boxesCount: shipment.boxesCount,
     currency: shipment.currency,
     expectedArrivalDate: shipment.expectedArrivalDate,
@@ -152,5 +155,34 @@ export function shipmentDto(
     createdAt: shipment.createdAt.toISOString(),
     updatedAt: shipment.updatedAt.toISOString(),
     trackings: options.trackings.map(shipmentTrackingDto),
+  };
+}
+
+// ── 差异修订 DTO（ck-06）───────────────────────────────────────────────────────
+
+export function discrepancyReviewItemDto(item: DiscrepancyReviewItemRecord) {
+  return {
+    id: item.id,
+    reviewId: item.reviewId,
+    shipmentItemId: item.shipmentItemId,
+    expectedQtyBefore: item.expectedQtyBefore,
+    actualQty: item.actualQty,
+    reason: item.reason,
+  };
+}
+
+export function discrepancyReviewDto(review: DiscrepancyReviewRecord) {
+  return {
+    id: review.id,
+    shipmentId: review.shipmentId,
+    status: review.status,
+    reason: review.reason,
+    photoFileIds: review.photoFileIds,
+    submittedBy: review.submittedBy,
+    reviewedBy: review.reviewedBy,
+    reviewedAt: review.reviewedAt ? review.reviewedAt.toISOString() : null,
+    createdAt: review.createdAt.toISOString(),
+    updatedAt: review.updatedAt.toISOString(),
+    items: (review.items ?? []).map(discrepancyReviewItemDto),
   };
 }

@@ -3,15 +3,20 @@ import type { SqlExecutor } from '@otunlink/db';
 import type {
   CreateFileInput,
   CreateItemInput,
+  CreateReviewInput,
   CreateShipmentInput,
   CreateUnitInput,
   CreateUserInput,
+  DiscrepancyReviewItemRecord,
+  DiscrepancyReviewRecord,
   FileRecord,
   ItemImageRecord,
   ItemListQuery,
   ItemListResult,
   ItemRecord,
   Repos,
+  SaveCountResult,
+  ShipmentCountRepoInput,
   ShipmentItemRecord,
   ShipmentListQuery,
   ShipmentListResult,
@@ -43,9 +48,20 @@ const quote = (value: unknown): string => {
 
 const col = (name: string, value: unknown): string => `${name} = ${quote(value)}`;
 
+/** uuid[] 列参数（PostgreSQL 数组字面量）。 */
+const photoArray = (ids: string[]): string =>
+  ids.length > 0 ? `ARRAY[${ids.map((id) => quote(id)).join(', ')}]::uuid[]` : `ARRAY[]::uuid[]`;
+
 // 路由层据此把仓库层异常映射为 409 与对应错误码。
 const SHIPMENT_STATE_CONFLICT = 'SHIPMENT_STATE_CONFLICT: only DRAFT shipments can be edited or sent';
 const SHIPMENT_TRACKING_CONFLICT = 'TRACKING_CONFLICT: carrier+tracking_no already exists';
+// ck-06：点货/差异协商业务信号（路由层映射为对应错误码）。
+const COUNTING_STATE_CONFLICT =
+  'COUNTING_STATE_CONFLICT: shipment is not in a countable state or version mismatch';
+const COUNT_LINE_INVALID = 'COUNT_LINE_INVALID: count line does not belong to the shipment';
+const REVIEW_ALREADY_PROCESSED =
+  'REVIEW_ALREADY_PROCESSED: review already processed or pending review exists';
+const REVIEW_NO_DIFFERENCE = 'REVIEW_NO_DIFFERENCE: no discrepancy to review';
 
 function mapUser(row: Record<string, unknown>): UserRecord {
   return {
@@ -123,6 +139,7 @@ function mapShipment(row: Record<string, unknown>): ShipmentRecord {
     remark: row.remark ? String(row.remark) : null,
     sentAt: row.sent_at ? new Date(String(row.sent_at)) : null,
     createdBy: row.created_by ? String(row.created_by) : null,
+    countVersion: Number(row.count_version ?? 0),
     createdAt: new Date(String(row.created_at)),
     updatedAt: new Date(String(row.updated_at)),
   };
@@ -152,6 +169,54 @@ function mapShipmentItem(row: Record<string, unknown>): ShipmentItemRecord {
     productionDate: row.production_date ? String(row.production_date).slice(0, 10) : null,
     expiryDate: row.expiry_date ? String(row.expiry_date).slice(0, 10) : null,
     lineNote: row.line_note ? String(row.line_note) : null,
+    createdAt: new Date(String(row.created_at)),
+    updatedAt: new Date(String(row.updated_at)),
+  };
+}
+
+function mapDiscrepancyReviewItem(row: Record<string, unknown>): DiscrepancyReviewItemRecord {
+  return {
+    id: String(row.id),
+    reviewId: String(row.review_id),
+    shipmentItemId: String(row.shipment_item_id),
+    expectedQtyBefore: String(row.expected_qty_before),
+    actualQty: String(row.actual_qty),
+    reason: row.reason ? String(row.reason) : null,
+  };
+}
+
+function parsePhotoIds(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value !== 'string') return [];
+  const text = value.trim();
+  if (text.startsWith('{') && text.endsWith('}')) {
+    return text
+      .slice(1, -1)
+      .split(',')
+      .map((s) => s.trim().replace(/"/g, ''))
+      .filter(Boolean);
+  }
+  if (text.startsWith('[') && text.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(text);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function mapDiscrepancyReview(row: Record<string, unknown>): DiscrepancyReviewRecord {
+  return {
+    id: String(row.id),
+    shipmentId: String(row.shipment_id),
+    status: (row.status as DiscrepancyReviewRecord['status']) ?? 'PENDING',
+    reason: row.reason ? String(row.reason) : null,
+    photoFileIds: parsePhotoIds(row.photo_file_ids),
+    submittedBy: row.submitted_by ? String(row.submitted_by) : null,
+    reviewedBy: row.reviewed_by ? String(row.reviewed_by) : null,
+    reviewedAt: row.reviewed_at ? new Date(String(row.reviewed_at)) : null,
     createdAt: new Date(String(row.created_at)),
     updatedAt: new Date(String(row.updated_at)),
   };
@@ -545,6 +610,270 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         `SELECT * FROM shipment_items WHERE shipment_id = ${quote(shipmentId)} ORDER BY created_at ASC, id ASC`,
       );
       return rows.map(mapShipmentItem);
+    },
+    // ── 收货点货与差异协商（ck-06）─────────────────────────────────────────────
+    async startCounting(id: string): Promise<ShipmentRecord | null> {
+      const { rows } = await exec.query(
+        `UPDATE shipments SET status = 'COUNTING', updated_at = now()
+         WHERE id = ${quote(id)} AND status = 'SENT' RETURNING *`,
+      );
+      if (rows[0]) return mapShipment(rows[0]);
+      const existing = await this.findById(id);
+      if (!existing) return null;
+      throw new Error(COUNTING_STATE_CONFLICT);
+    },
+    async saveCount(id: string, input: ShipmentCountRepoInput): Promise<SaveCountResult | null> {
+      const existing = await this.findById(id);
+      if (!existing) return null;
+
+      const { rows: lineRows } = await exec.query(
+        `SELECT id FROM shipment_items WHERE shipment_id = ${quote(id)}`,
+      );
+      const validIds = new Set(lineRows.map((r) => String(r.id)));
+      for (const line of input.lines) {
+        if (!validIds.has(line.shipmentItemId)) throw new Error(COUNT_LINE_INVALID);
+      }
+
+      await exec.query('BEGIN');
+      try {
+        // CAS：状态可点货且版本一致才递增版本号，防止并发保存互相覆盖。
+        const { rows: locked } = await exec.query(
+          `UPDATE shipments SET count_version = count_version + 1, updated_at = now()
+           WHERE id = ${quote(id)} AND status IN ('COUNTING', 'DISCREPANCY')
+             AND count_version = ${quote(input.version)}
+           RETURNING *`,
+        );
+        if (!locked[0]) {
+          await exec.query('ROLLBACK');
+          throw new Error(COUNTING_STATE_CONFLICT);
+        }
+        for (const line of input.lines) {
+          await exec.query(
+            `UPDATE shipment_items
+             SET actual_qty = ${quote(line.actualQty === '' ? null : line.actualQty)}, updated_at = now()
+             WHERE id = ${quote(line.shipmentItemId)}`,
+          );
+        }
+        // 重算：存在差异 → DISCREPANCY；全部一致 → READY；仍有未点 → COUNTING。
+        const { rows: allRows } = await exec.query(
+          `SELECT expected_qty, actual_qty FROM shipment_items
+           WHERE shipment_id = ${quote(id)} ORDER BY created_at ASC, id ASC`,
+        );
+        let hasDifference = false;
+        let allCounted = true;
+        for (const row of allRows) {
+          const actual = row.actual_qty;
+          if (actual === null || actual === undefined || String(actual).trim() === '') {
+            allCounted = false;
+          } else if (Number(String(actual)) !== Number(String(row.expected_qty))) {
+            hasDifference = true;
+          }
+        }
+        const status = hasDifference ? 'DISCREPANCY' : allCounted ? 'READY' : 'COUNTING';
+        const { rows: updated } = await exec.query(
+          `UPDATE shipments SET status = ${quote(status)} WHERE id = ${quote(id)} RETURNING *`,
+        );
+        await exec.query('COMMIT');
+        const shipment = mapShipment(updated[0]);
+        return { shipment, countVersion: shipment.countVersion };
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async listReviews(shipmentId: string): Promise<DiscrepancyReviewRecord[]> {
+      const { rows } = await exec.query(
+        `SELECT * FROM discrepancy_reviews WHERE shipment_id = ${quote(shipmentId)}
+         ORDER BY created_at DESC, id DESC`,
+      );
+      const reviews = rows.map(mapDiscrepancyReview);
+      for (const review of reviews) {
+        const { rows: itemRows } = await exec.query(
+          `SELECT * FROM discrepancy_review_items WHERE review_id = ${quote(review.id)} ORDER BY id ASC`,
+        );
+        review.items = itemRows.map(mapDiscrepancyReviewItem);
+      }
+      return reviews;
+    },
+    async findReview(id: string): Promise<DiscrepancyReviewRecord | null> {
+      const { rows } = await exec.query(
+        `SELECT * FROM discrepancy_reviews WHERE id = ${quote(id)} LIMIT 1`,
+      );
+      if (!rows[0]) return null;
+      const review = mapDiscrepancyReview(rows[0]);
+      const { rows: itemRows } = await exec.query(
+        `SELECT * FROM discrepancy_review_items WHERE review_id = ${quote(id)} ORDER BY id ASC`,
+      );
+      review.items = itemRows.map(mapDiscrepancyReviewItem);
+      return review;
+    },
+    async createReview(input: CreateReviewInput): Promise<DiscrepancyReviewRecord> {
+      const shipment = await this.findById(input.shipmentId);
+      if (!shipment) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
+
+      if (shipment.status !== 'DISCREPANCY') {
+        const { rows } = await exec.query(
+          `SELECT count(*)::int AS n FROM discrepancy_reviews
+           WHERE shipment_id = ${quote(input.shipmentId)} AND status = 'PENDING'`,
+        );
+        if (Number(rows[0]?.n ?? 0) > 0) throw new Error(REVIEW_ALREADY_PROCESSED);
+        throw new Error(REVIEW_NO_DIFFERENCE);
+      }
+
+      const shipmentItems = await this.listItems(input.shipmentId);
+      const byId = new Map(shipmentItems.map((it) => [it.id, it]));
+      let hasDifference = false;
+      for (const line of input.lines) {
+        const item = byId.get(line.shipmentItemId);
+        if (!item) throw new Error(COUNT_LINE_INVALID);
+        if (
+          item.actualQty === null ||
+          item.actualQty === '' ||
+          Number(item.actualQty) === Number(item.expectedQty)
+        ) {
+          throw new Error(REVIEW_NO_DIFFERENCE);
+        }
+        hasDifference = true;
+      }
+      if (!hasDifference) throw new Error(REVIEW_NO_DIFFERENCE);
+
+      await exec.query('BEGIN');
+      try {
+        let reviewId = '';
+        try {
+          const { rows } = await exec.query(
+            `INSERT INTO discrepancy_reviews
+               (shipment_id, status, reason, photo_file_ids, submitted_by)
+             VALUES (${quote(input.shipmentId)}, 'PENDING', ${quote(nn(input.reason))},
+                     ${photoArray(input.photoFileIds)}, ${quote(input.submittedBy)})
+             RETURNING id`,
+          );
+          reviewId = String(rows[0].id);
+        } catch (err) {
+          const text = err instanceof Error ? err.message : String(err);
+          if (/duplicate|unique|23505/i.test(text)) throw new Error(REVIEW_ALREADY_PROCESSED);
+          throw err;
+        }
+        for (const line of input.lines) {
+          const item = byId.get(line.shipmentItemId)!;
+          await exec.query(
+            `INSERT INTO discrepancy_review_items
+               (review_id, shipment_item_id, expected_qty_before, actual_qty, reason)
+             VALUES (${quote(reviewId)}, ${quote(line.shipmentItemId)}, ${quote(item.expectedQty)},
+                     ${quote(line.actualQty)}, ${quote(nn(line.reason))})`,
+          );
+        }
+        await exec.query(
+          `UPDATE shipments SET status = 'REVIEW_PENDING', updated_at = now()
+           WHERE id = ${quote(input.shipmentId)}`,
+        );
+        await exec.query('COMMIT');
+        const review = await this.findReview(reviewId);
+        if (!review) throw new Error('SHIPMENT_NOT_FOUND: review disappeared');
+        return review;
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async approveReview(
+      id: string,
+      reviewedBy: string | null,
+    ): Promise<DiscrepancyReviewRecord | null> {
+      await exec.query('BEGIN');
+      try {
+        const { rows: reviewRows } = await exec.query(
+          `SELECT * FROM discrepancy_reviews WHERE id = ${quote(id)} FOR UPDATE`,
+        );
+        if (!reviewRows[0]) {
+          await exec.query('ROLLBACK');
+          return null;
+        }
+        const review = mapDiscrepancyReview(reviewRows[0]);
+        if (review.status !== 'PENDING') throw new Error(REVIEW_ALREADY_PROCESSED);
+
+        const { rows: itemRows } = await exec.query(
+          `SELECT * FROM discrepancy_review_items WHERE review_id = ${quote(id)} ORDER BY id ASC`,
+        );
+        const items = itemRows.map(mapDiscrepancyReviewItem);
+        const before: Record<string, string> = {};
+        for (const item of items) {
+          const current = await exec.query(
+            `SELECT expected_qty FROM shipment_items WHERE id = ${quote(item.shipmentItemId)}`,
+          );
+          before[item.shipmentItemId] = String(current.rows[0]?.expected_qty ?? item.expectedQtyBefore);
+          await exec.query(
+            `UPDATE shipment_items SET expected_qty = ${quote(item.actualQty)}, updated_at = now()
+             WHERE id = ${quote(item.shipmentItemId)}`,
+          );
+        }
+        const { rows: updated } = await exec.query(
+          `UPDATE discrepancy_reviews
+           SET status = 'APPROVED', reviewed_by = ${quote(reviewedBy)}, reviewed_at = now(), updated_at = now()
+           WHERE id = ${quote(id)} AND status = 'PENDING' RETURNING *`,
+        );
+        if (!updated[0]) throw new Error(REVIEW_ALREADY_PROCESSED);
+        await exec.query(
+          `UPDATE shipments SET status = 'READY', updated_at = now()
+           WHERE id = ${quote(review.shipmentId)}`,
+        );
+        if (reviewedBy) {
+          await exec.query(
+            `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, before, after)
+             VALUES (${quote(reviewedBy)}, 'REVIEW_APPROVED', 'discrepancy_review', ${quote(id)},
+                     ${quote(JSON.stringify(before))},
+                     ${quote(
+                       JSON.stringify({
+                         items: items.map((i) => ({
+                           shipmentItemId: i.shipmentItemId,
+                           expectedQtyBefore: i.expectedQtyBefore,
+                           actualQty: i.actualQty,
+                         })),
+                       }),
+                     )})`,
+          );
+        }
+        await exec.query('COMMIT');
+        return this.findReview(id);
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async rejectReview(
+      id: string,
+      reviewedBy: string | null,
+      reason: string,
+    ): Promise<DiscrepancyReviewRecord | null> {
+      await exec.query('BEGIN');
+      try {
+        const { rows: reviewRows } = await exec.query(
+          `SELECT * FROM discrepancy_reviews WHERE id = ${quote(id)} FOR UPDATE`,
+        );
+        if (!reviewRows[0]) {
+          await exec.query('ROLLBACK');
+          return null;
+        }
+        const review = mapDiscrepancyReview(reviewRows[0]);
+        if (review.status !== 'PENDING') throw new Error(REVIEW_ALREADY_PROCESSED);
+
+        const { rows: updated } = await exec.query(
+          `UPDATE discrepancy_reviews
+           SET status = 'REJECTED', reason = ${quote(reason)}, reviewed_by = ${quote(reviewedBy)},
+               reviewed_at = now(), updated_at = now()
+           WHERE id = ${quote(id)} AND status = 'PENDING' RETURNING *`,
+        );
+        if (!updated[0]) throw new Error(REVIEW_ALREADY_PROCESSED);
+        await exec.query(
+          `UPDATE shipments SET status = 'DISCREPANCY', updated_at = now()
+           WHERE id = ${quote(review.shipmentId)}`,
+        );
+        await exec.query('COMMIT');
+        return this.findReview(id);
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
     },
   };
 

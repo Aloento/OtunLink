@@ -12,6 +12,7 @@ import { adminUsersRouter } from './routes/admin-users';
 import { authRouter } from './routes/auth';
 import { filesRouter } from './routes/files';
 import { itemsRouter } from './routes/items';
+import { reviewsRouter } from './routes/reviews';
 import { shipmentsRouter } from './routes/shipments';
 import { unitsRouter } from './routes/units';
 import { usersRouter } from './routes/users';
@@ -61,6 +62,10 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // 发货单（登录用户，RBAC 见各路由）
   app.use('/api/v1/shipments/*', requireToken);
   app.route('/api/v1/shipments', shipmentsRouter());
+
+  // 差异修订审批（登录用户，RBAC 见各路由）
+  app.use('/api/v1/reviews/*', requireToken);
+  app.route('/api/v1/reviews', reviewsRouter());
 
   // 图片上传 / 预签名 URL（登录用户，RBAC 见各路由）
   app.use('/api/v1/files/*', requireToken);

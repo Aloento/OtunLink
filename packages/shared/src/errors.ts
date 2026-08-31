@@ -19,6 +19,10 @@ export const ErrorCodes = {
   // 发货单（ck-05）
   TRACKING_CONFLICT: 'TRACKING_CONFLICT',
   SHIPMENT_STATE_CONFLICT: 'SHIPMENT_STATE_CONFLICT',
+  // 收货点货与差异协商（ck-06）
+  COUNTING_STATE_CONFLICT: 'COUNTING_STATE_CONFLICT',
+  REVIEW_ALREADY_PROCESSED: 'REVIEW_ALREADY_PROCESSED',
+  REVIEW_NO_DIFFERENCE: 'REVIEW_NO_DIFFERENCE',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

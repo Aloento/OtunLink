@@ -9,6 +9,7 @@ const now = new Date('2025-01-01T00:00:00.000Z');
 const COLLECTOR_UNIT = '00000000-0000-4000-8000-000000000001';
 const WAREHOUSE_UNIT = '00000000-0000-4000-8000-000000000002';
 const OTHER_COLLECTOR = '00000000-0000-4000-8000-000000000003';
+const OTHER_WAREHOUSE = '00000000-0000-4000-8000-000000000004';
 const ITEM_A = '00000000-0000-4000-8000-000000000011';
 const ITEM_B = '00000000-0000-4000-8000-000000000012';
 
@@ -115,6 +116,7 @@ const units = [
   unit({ id: COLLECTOR_UNIT, type: 'COLLECTOR', name: '上海集货部' }),
   unit({ id: WAREHOUSE_UNIT, type: 'WAREHOUSE', name: '匈牙利仓库' }),
   unit({ id: OTHER_COLLECTOR, type: 'COLLECTOR', name: '广州集货部' }),
+  unit({ id: OTHER_WAREHOUSE, type: 'WAREHOUSE', name: '奥地利仓库' }),
 ];
 
 const items = [
@@ -388,5 +390,338 @@ describe('shipments 发货单 API', () => {
     const listBody = (await list.json()) as { data: { total: number; items: Array<{ shipperUnitId: string }> } };
     expect(listBody.data.total).toBe(1);
     expect(listBody.data.items[0].shipperUnitId).toBe(COLLECTOR_UNIT);
+  });
+});
+
+// ── ck-06: 收货点货与差异协商 ────────────────────────────────────────────────
+
+const warehouseScoped = user({
+  entraSub: 'warehouse-scoped',
+  role: 'WAREHOUSE',
+  scopeUnitId: WAREHOUSE_UNIT,
+});
+const warehouseOtherScoped = user({
+  entraSub: 'warehouse-other',
+  role: 'WAREHOUSE',
+  scopeUnitId: OTHER_WAREHOUSE,
+});
+
+describe('shipments 收货点货与差异协商 (ck-06)', () => {
+  let seq = 0;
+  async function createdShipment(
+    app: Awaited<ReturnType<typeof makeApp>>['app'],
+    token = 'collector',
+    overrides: Record<string, unknown> = {},
+  ): Promise<string> {
+    seq += 1;
+    const res = await app.request('/api/v1/shipments', {
+      method: 'POST',
+      headers: json(token),
+      body: JSON.stringify(
+        body({
+          trackings: [{ carrier: 'SF', trackingNo: `CKT${seq}`, note: null }],
+          ...overrides,
+        }),
+      ),
+    });
+    expect(res.status).toBe(201);
+    const payload = (await res.json()) as { data: { id: string } };
+    return payload.data.id;
+  }
+
+  async function sentShipment(
+    app: Awaited<ReturnType<typeof makeApp>>['app'],
+    overrides: Record<string, unknown> = {},
+  ): Promise<string> {
+    const id = await createdShipment(app, 'collector', overrides);
+    const res = await app.request(`/api/v1/shipments/${id}/send`, {
+      method: 'POST',
+      headers: json('collector'),
+    });
+    expect(res.status).toBe(200);
+    return id;
+  }
+
+  async function itemIds(app: Awaited<ReturnType<typeof makeApp>>['app'], id: string) {
+    const res = await app.request(`/api/v1/shipments/${id}`, { headers: auth('collector') });
+    const payload = (await res.json()) as { data: { items: Array<{ id: string }> } };
+    return payload.data.items.map((i) => i.id);
+  }
+
+  async function startCounting(app: Awaited<ReturnType<typeof makeApp>>['app'], id: string) {
+    const res = await app.request(`/api/v1/shipments/${id}/start-counting`, {
+      method: 'POST',
+      headers: json('warehouse'),
+    });
+    expect(res.status).toBe(200);
+    return (await res.json()) as { data: { status: string } };
+  }
+
+  function countBody(version: number, lines: Array<{ shipmentItemId: string; actualQty: string }>) {
+    return { version, items: lines };
+  }
+
+  it('开始点货：SENT → COUNTING，重复开始 409', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const id = await sentShipment(app);
+    const started = await startCounting(app, id);
+    expect(started.data.status).toBe('COUNTING');
+
+    const again = await app.request(`/api/v1/shipments/${id}/start-counting`, {
+      method: 'POST',
+      headers: json('warehouse'),
+    });
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({ error: { code: 'COUNTING_STATE_CONFLICT' } });
+  });
+
+  it('SENT 状态直接保存点货 → 409', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const id = await sentShipment(app);
+    const [itemId] = await itemIds(app, id);
+    const res = await app.request(`/api/v1/shipments/${id}/count`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify(countBody(0, [{ shipmentItemId: itemId, actualQty: '5' }])),
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: { code: 'COUNTING_STATE_CONFLICT' } });
+  });
+
+  it('点货一致 → READY，版本号递增', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const id = await sentShipment(app);
+    await startCounting(app, id);
+    const [itemId] = await itemIds(app, id);
+
+    const saved = await app.request(`/api/v1/shipments/${id}/count`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify(countBody(0, [{ shipmentItemId: itemId, actualQty: '5' }])),
+    });
+    expect(saved.status).toBe(200);
+    const savedPayload = (await saved.json()) as {
+      data: { countVersion: number; shipment: { status: string } };
+    };
+    expect(savedPayload.data.countVersion).toBe(1);
+    expect(savedPayload.data.shipment.status).toBe('READY');
+
+    const detail = await app.request(`/api/v1/shipments/${id}`, { headers: auth('collector') });
+    const detailBody = (await detail.json()) as {
+      data: { items: Array<{ actualQty: string; expectedQty: string }> };
+    };
+    expect(detailBody.data.items[0].actualQty).toBe('5');
+    expect(detailBody.data.items[0].expectedQty).toBe('5');
+  });
+
+  it('点货有差异 → DISCREPANCY 且清单行保留实收', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const id = await sentShipment(app);
+    await startCounting(app, id);
+    const [itemId] = await itemIds(app, id);
+
+    const saved = await app.request(`/api/v1/shipments/${id}/count`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify(countBody(0, [{ shipmentItemId: itemId, actualQty: '3' }])),
+    });
+    const savedPayload = (await saved.json()) as { data: { shipment: { status: string } } };
+    expect(savedPayload.data.shipment.status).toBe('DISCREPANCY');
+
+    const detail = await app.request(`/api/v1/shipments/${id}`, { headers: auth('collector') });
+    const detailBody = (await detail.json()) as {
+      data: { items: Array<{ actualQty: string; expectedQty: string }> };
+    };
+    expect(detailBody.data.items[0]).toMatchObject({ expectedQty: '5', actualQty: '3' });
+  });
+
+  it('版本冲突：重复使用旧版本保存 → 409 COUNTING_STATE_CONFLICT', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const id = await sentShipment(app);
+    await startCounting(app, id);
+    const [itemId] = await itemIds(app, id);
+
+    const first = await app.request(`/api/v1/shipments/${id}/count`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify(countBody(0, [{ shipmentItemId: itemId, actualQty: '3' }])),
+    });
+    expect(first.status).toBe(200);
+
+    const second = await app.request(`/api/v1/shipments/${id}/count`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify(countBody(0, [{ shipmentItemId: itemId, actualQty: '4' }])),
+    });
+    expect(second.status).toBe(409);
+    expect(await second.json()).toMatchObject({ error: { code: 'COUNTING_STATE_CONFLICT' } });
+  });
+
+  it('权限：COLECTOR 点货 403；RETAILER 点货 403', async () => {
+    const { app } = makeApp({ users: [collector, warehouse, retailer], units, items });
+    const id = await sentShipment(app);
+    const [itemId] = await itemIds(app, id);
+
+    const byCollector = await app.request(`/api/v1/shipments/${id}/count`, {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify(countBody(0, [{ shipmentItemId: itemId, actualQty: '5' }])),
+    });
+    expect(byCollector.status).toBe(403);
+
+    const byRetailer = await app.request(`/api/v1/shipments/${id}/count`, {
+      method: 'POST',
+      headers: json('retailer'),
+      body: JSON.stringify(countBody(0, [{ shipmentItemId: itemId, actualQty: '5' }])),
+    });
+    expect(byRetailer.status).toBe(403);
+  });
+
+  it('数据范围：其他仓库 scoped 开始点货 403，本仓库 scoped 200', async () => {
+    const { app } = makeApp(
+      { users: [collector, warehouse, warehouseScoped, warehouseOtherScoped], units, items },
+    );
+    const id = await sentShipment(app);
+
+    const cross = await app.request(`/api/v1/shipments/${id}/start-counting`, {
+      method: 'POST',
+      headers: json('warehouse-other'),
+    });
+    expect(cross.status).toBe(403);
+
+    const own = await app.request(`/api/v1/shipments/${id}/start-counting`, {
+      method: 'POST',
+      headers: json('warehouse-scoped'),
+    });
+    expect(own.status).toBe(200);
+  });
+
+  it('提交差异修订：DISCREPANCY → PENDING，详情含 reviews，重复提交 409', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const id = await sentShipment(app);
+    await startCounting(app, id);
+    const [itemId] = await itemIds(app, id);
+    await app.request(`/api/v1/shipments/${id}/count`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify(countBody(0, [{ shipmentItemId: itemId, actualQty: '3' }])),
+    });
+
+    const submitted = await app.request(`/api/v1/shipments/${id}/reviews`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        items: [{ shipmentItemId: itemId, reason: '运输破损 2 个' }],
+        reason: '到货破损',
+      }),
+    });
+    expect(submitted.status).toBe(201);
+    const submittedPayload = (await submitted.json()) as {
+      data: {
+        status: string;
+        shipmentId: string;
+        items: Array<{ shipmentItemId: string; actualQty: string; expectedQtyBefore: string; reason: string }>;
+      };
+    };
+    expect(submittedPayload.data.status).toBe('PENDING');
+    expect(submittedPayload.data.shipmentId).toBe(id);
+    expect(submittedPayload.data.items[0]).toMatchObject({
+      shipmentItemId: itemId,
+      actualQty: '3',
+      expectedQtyBefore: '5',
+      reason: '运输破损 2 个',
+    });
+
+    const detail = await app.request(`/api/v1/shipments/${id}`, { headers: auth('collector') });
+    const detailBody = (await detail.json()) as {
+      data: { status: string; reviews: Array<{ status: string }> };
+    };
+    expect(detailBody.data.status).toBe('REVIEW_PENDING');
+    expect(detailBody.data.reviews).toHaveLength(1);
+    expect(detailBody.data.reviews[0].status).toBe('PENDING');
+
+    const again = await app.request(`/api/v1/shipments/${id}/reviews`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({ items: [{ shipmentItemId: itemId, reason: '再次提交' }] }),
+    });
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({ error: { code: 'REVIEW_ALREADY_PROCESSED' } });
+  });
+
+  it('无差异提交修订 → 400 REVIEW_NO_DIFFERENCE', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const id = await sentShipment(app);
+    await startCounting(app, id);
+    const [itemId] = await itemIds(app, id);
+    await app.request(`/api/v1/shipments/${id}/count`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify(countBody(0, [{ shipmentItemId: itemId, actualQty: '5' }])),
+    });
+
+    const res = await app.request(`/api/v1/shipments/${id}/reviews`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({ items: [{ shipmentItemId: itemId, reason: '无误' }] }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'REVIEW_NO_DIFFERENCE' } });
+  });
+
+  it('提交修订前未点货 → 400 VALIDATION_ERROR', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const id = await sentShipment(app);
+    await startCounting(app, id);
+    const [itemId] = await itemIds(app, id);
+
+    const res = await app.request(`/api/v1/shipments/${id}/reviews`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({ items: [{ shipmentItemId: itemId, reason: '未点货' }] }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+  });
+
+  it('清单行不属于该发货单 → 400 VALIDATION_ERROR', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const id = await sentShipment(app);
+    await startCounting(app, id);
+    const [itemId] = await itemIds(app, id);
+    await app.request(`/api/v1/shipments/${id}/count`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify(countBody(0, [{ shipmentItemId: itemId, actualQty: '3' }])),
+    });
+
+    const res = await app.request(`/api/v1/shipments/${id}/reviews`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        items: [{ shipmentItemId: '00000000-0000-4000-8000-0000000000aa', reason: 'x' }],
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+  });
+
+  it('提交修订权限：收集方 403', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const id = await sentShipment(app);
+    await startCounting(app, id);
+    const [itemId] = await itemIds(app, id);
+    await app.request(`/api/v1/shipments/${id}/count`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify(countBody(0, [{ shipmentItemId: itemId, actualQty: '3' }])),
+    });
+
+    const res = await app.request(`/api/v1/shipments/${id}/reviews`, {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify({ items: [{ shipmentItemId: itemId, reason: 'x' }] }),
+    });
+    expect(res.status).toBe(403);
   });
 });

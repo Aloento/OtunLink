@@ -1,8 +1,10 @@
 import {
   ErrorCodes,
   Permissions,
+  shipmentCountSchema,
   shipmentCreateSchema,
   shipmentPatchSchema,
+  shipmentReviewCreateSchema,
   type ShipmentItemCreateInput,
   type ShipmentStatus,
 } from '@otunlink/shared';
@@ -10,13 +12,15 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 
 import { requirePermission, unitScopeFilter } from '../auth/middleware';
-import { shipmentDto, shipmentItemDto } from '../lib/dto';
+import { discrepancyReviewDto, shipmentDto, shipmentItemDto } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
 import type {
   AppEnv,
+  CreateReviewLineInput,
   CreateShipmentInput,
   CreateShipmentItemInput,
   Repos,
+  ShipmentCountRepoInput,
   ShipmentRecord,
   UpdateShipmentInput,
 } from '../types';
@@ -206,6 +210,139 @@ export function shipmentsRouter(): Hono<AppEnv> {
     }
   });
 
+  // ── 收货点货与差异协商（ck-06）───────────────────────────────────────────────
+  // 点货/提交差异：仅收货方仓库（COUNTING_WRITE / REVIEWS_SUBMIT），
+  // scope_unit_id 非空时必须等于 receiver_unit_id。
+
+  const counting = requirePermission(Permissions.COUNTING_WRITE);
+  const reviewSubmit = requirePermission(Permissions.REVIEWS_SUBMIT);
+
+  router.post('/:id/start-counting', counting, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const existing = await repos.shipments.findById(c.req.param('id'));
+    if (!existing) return notFound(c, '发货单不存在');
+
+    const user = c.get('auth').user!;
+    if (!scopeAllowsReceiver(user.scopeUnitId, existing)) {
+      return forbidden(c, '数据范围越界（只能对本仓库收货的发货单点货）');
+    }
+
+    try {
+      const started = await repos.shipments.startCounting(existing.id);
+      if (!started) return notFound(c, '发货单不存在');
+      return ok(c, await detailOf(repos, started));
+    } catch (cause) {
+      if (isCountingStateConflict(cause)) {
+        return error(c, 409, ErrorCodes.COUNTING_STATE_CONFLICT, '仅已送达（SENT）状态可开始点货');
+      }
+      throw cause;
+    }
+  });
+
+  router.post('/:id/count', counting, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const existing = await repos.shipments.findById(c.req.param('id'));
+    if (!existing) return notFound(c, '发货单不存在');
+
+    const user = c.get('auth').user!;
+    if (!scopeAllowsReceiver(user.scopeUnitId, existing)) {
+      return forbidden(c, '数据范围越界（只能对本仓库收货的发货单点货）');
+    }
+
+    const body = await readJson(c);
+    if (body === undefined) return validationError(c, '请求体不是合法 JSON');
+
+    const parsed = shipmentCountSchema.safeParse(body);
+    if (!parsed.success) return validationError(c, '参数不合法', parsed.error.flatten());
+
+    const input: ShipmentCountRepoInput = {
+      version: parsed.data.version,
+      lines: parsed.data.items.map((l) => ({
+        shipmentItemId: l.shipmentItemId,
+        actualQty: l.actualQty,
+      })),
+    };
+
+    try {
+      const result = await repos.shipments.saveCount(existing.id, input);
+      if (!result) return notFound(c, '发货单不存在');
+      return ok(c, {
+        countVersion: result.countVersion,
+        shipment: await detailOf(repos, result.shipment),
+      });
+    } catch (cause) {
+      if (isCountingStateConflict(cause)) {
+        return error(c, 409, ErrorCodes.COUNTING_STATE_CONFLICT, '点货状态冲突（请刷新后重试）');
+      }
+      if (isCountLineInvalid(cause)) {
+        return error(c, 400, ErrorCodes.VALIDATION_ERROR, '清单行不属于该发货单');
+      }
+      throw cause;
+    }
+  });
+
+  router.post('/:id/reviews', reviewSubmit, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const existing = await repos.shipments.findById(c.req.param('id'));
+    if (!existing) return notFound(c, '发货单不存在');
+
+    const user = c.get('auth').user!;
+    if (!scopeAllowsReceiver(user.scopeUnitId, existing)) {
+      return forbidden(c, '数据范围越界（只能由本仓库提交差异修订）');
+    }
+
+    const body = await readJson(c);
+    if (body === undefined) return validationError(c, '请求体不是合法 JSON');
+
+    const parsed = shipmentReviewCreateSchema.safeParse(body);
+    if (!parsed.success) return validationError(c, '参数不合法', parsed.error.flatten());
+
+    const shipmentItems = await repos.shipments.listItems(existing.id);
+    const byId = new Map(shipmentItems.map((i) => [i.id, i]));
+    const lines: CreateReviewLineInput[] = [];
+    for (const line of parsed.data.items) {
+      const item = byId.get(line.shipmentItemId);
+      if (!item) return validationError(c, `清单行不存在: ${line.shipmentItemId}`);
+      if (item.actualQty === null || item.actualQty === '') {
+        return validationError(c, '请先完成点货再提交差异修订');
+      }
+      lines.push({
+        shipmentItemId: item.id,
+        actualQty: item.actualQty,
+        expectedQtyBefore: item.expectedQty,
+        reason: line.reason ?? null,
+      });
+    }
+
+    try {
+      const review = await repos.shipments.createReview({
+        shipmentId: existing.id,
+        reason: parsed.data.reason ?? null,
+        photoFileIds: parsed.data.photoFileIds ?? [],
+        submittedBy: user.id,
+        lines,
+      });
+      return ok(c, discrepancyReviewDto(review), 201);
+    } catch (cause) {
+      if (isReviewAlreadyProcessed(cause)) {
+        return error(c, 409, ErrorCodes.REVIEW_ALREADY_PROCESSED, '该发货单已存在待审批或已处理的修订');
+      }
+      if (isReviewNoDifference(cause)) {
+        return error(c, 400, ErrorCodes.REVIEW_NO_DIFFERENCE, '当前没有可提交的数量差异');
+      }
+      if (isCountLineInvalid(cause)) {
+        return error(c, 400, ErrorCodes.VALIDATION_ERROR, '清单行不属于该发货单');
+      }
+      throw cause;
+    }
+  });
+
   return router;
 }
 
@@ -241,6 +378,11 @@ async function readJson(c: Context<AppEnv>): Promise<unknown | undefined> {
 // 写路径数据范围：scope 非空时发货方必须等于本单元。
 function scopeAllowsWrite(scopeUnitId: string | null, shipperUnitId: string): boolean {
   return !scopeUnitId || shipperUnitId === scopeUnitId;
+}
+
+// 点货/差异提交写路径数据范围：scope 非空时收货方必须等于本单元。
+function scopeAllowsReceiver(scopeUnitId: string | null, shipment: ShipmentRecord): boolean {
+  return !scopeUnitId || shipment.receiverUnitId === scopeUnitId;
 }
 
 // 读路径数据范围：scope 非空时，发货方或收货方命中即放行。
@@ -311,13 +453,14 @@ async function hydrateList(repos: Repos, rows: ShipmentRecord[]) {
   );
 }
 
-// 详情：物流单号 + 清单 + 名称。
+// 详情：物流单号 + 清单 + 差异修订记录 + 名称。
 async function detailOf(repos: Repos, shipment: ShipmentRecord) {
-  const [shipper, receiver, trackings, items] = await Promise.all([
+  const [shipper, receiver, trackings, items, reviews] = await Promise.all([
     repos.units.findById(shipment.shipperUnitId),
     repos.units.findById(shipment.receiverUnitId),
     repos.shipments.listTrackings(shipment.id),
     repos.shipments.listItems(shipment.id),
+    repos.shipments.listReviews(shipment.id),
   ]);
   return {
     ...shipmentDto(shipment, {
@@ -326,6 +469,7 @@ async function detailOf(repos: Repos, shipment: ShipmentRecord) {
       trackings,
     }),
     items: items.map(shipmentItemDto),
+    reviews: reviews.map(discrepancyReviewDto),
   };
 }
 
@@ -335,4 +479,20 @@ function isTrackingConflict(cause: unknown): boolean {
 
 function isStateConflict(cause: unknown): boolean {
   return cause instanceof Error && cause.message.includes('SHIPMENT_STATE_CONFLICT');
+}
+
+function isCountingStateConflict(cause: unknown): boolean {
+  return cause instanceof Error && cause.message.includes('COUNTING_STATE_CONFLICT');
+}
+
+function isCountLineInvalid(cause: unknown): boolean {
+  return cause instanceof Error && cause.message.includes('COUNT_LINE_INVALID');
+}
+
+function isReviewAlreadyProcessed(cause: unknown): boolean {
+  return cause instanceof Error && cause.message.includes('REVIEW_ALREADY_PROCESSED');
+}
+
+function isReviewNoDifference(cause: unknown): boolean {
+  return cause instanceof Error && cause.message.includes('REVIEW_NO_DIFFERENCE');
 }

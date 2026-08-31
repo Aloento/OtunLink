@@ -122,6 +122,18 @@ const shipmentQty = z
   ])
   .transform((value) => String(value));
 
+/** 实收数量：>= 0（允许 0，如整箱/整件缺失）。用于点货。 */
+const shipmentActualQty = z
+  .union([
+    z.number().nonnegative(),
+    z
+      .string()
+      .trim()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .refine((value) => Number(value) >= 0, { message: '实收数量不能为负' }),
+  ])
+  .transform((value) => String(value));
+
 /** 金额：number 或数字字符串，>= 0，统一转为字符串。 */
 const shipmentMoney = z
   .union([
@@ -160,6 +172,38 @@ export const shipmentCreateSchema = z.object({
 /** 更新发货单（PATCH /shipments/:id）：仅 DRAFT；字段整体替换语义。 */
 export const shipmentPatchSchema = shipmentCreateSchema.partial();
 
+// ── 收货点货与差异协商（ck-06）─────────────────────────────────────────────────
+
+/** 点货单行：仅提交实收数量（应收/快照只读）。 */
+export const shipmentCountLineSchema = z.object({
+  shipmentItemId: z.uuid(),
+  actualQty: shipmentActualQty,
+});
+
+/** 保存点货草稿（POST /shipments/:id/count）：带版本号做乐观并发。 */
+export const shipmentCountSchema = z.object({
+  version: z.number().int().nonnegative(),
+  items: z.array(shipmentCountLineSchema).min(1).max(500),
+});
+
+/** 差异修订单行（discrepancy_review_items）：逐行原因。 */
+export const shipmentReviewItemSchema = z.object({
+  shipmentItemId: z.uuid(),
+  reason: z.string().trim().max(2000).optional().nullable(),
+});
+
+/** 提交差异修订（POST /shipments/:id/reviews）。 */
+export const shipmentReviewCreateSchema = z.object({
+  items: z.array(shipmentReviewItemSchema).min(1).max(500),
+  reason: z.string().trim().max(4096).optional().nullable(),
+  photoFileIds: z.array(z.uuid()).max(9).optional(),
+});
+
+/** 集货方拒绝差异修订（POST /reviews/:id/reject）：拒绝理由必填。 */
+export const reviewRejectSchema = z.object({
+  reason: z.string().trim().min(1).max(4096),
+});
+
 export type UserSelfPatchInput = z.infer<typeof userSelfPatchSchema>;
 export type AdminUserCreateInput = z.infer<typeof adminUserCreateSchema>;
 export type AdminUserPatchInput = z.infer<typeof adminUserPatchSchema>;
@@ -172,3 +216,8 @@ export type ShipmentCreateInput = z.infer<typeof shipmentCreateSchema>;
 export type ShipmentPatchInput = z.infer<typeof shipmentPatchSchema>;
 export type ShipmentTrackingInput = z.infer<typeof shipmentTrackingSchema>;
 export type ShipmentItemCreateInput = z.infer<typeof shipmentItemCreateSchema>;
+export type ShipmentCountLineInput = z.infer<typeof shipmentCountLineSchema>;
+export type ShipmentCountInput = z.infer<typeof shipmentCountSchema>;
+export type ShipmentReviewItemInput = z.infer<typeof shipmentReviewItemSchema>;
+export type ShipmentReviewCreateInput = z.infer<typeof shipmentReviewCreateSchema>;
+export type ReviewRejectInput = z.infer<typeof reviewRejectSchema>;

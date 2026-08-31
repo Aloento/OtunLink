@@ -171,6 +171,8 @@ export const shipments = pgTable(
     remark: text('remark'),
     sentAt: timestamp('sent_at', { withTimezone: true, mode: 'date' }),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    // 点货草稿并发控制：前端保存携带版本号，服务端 CAS 更新（design.md §8.2 / ck-06）。
+    countVersion: integer('count_version').notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

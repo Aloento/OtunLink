@@ -27,3 +27,18 @@
 
 ## 参考
 design.md：§5.1、附录 A、§4.2 discrepancy_reviews、§6.1/§6.2。
+
+## 完成情况（ck-06 ✅）
+
+- **后端**：`POST /shipments/:id/start-counting`（SENT→COUNTING）、`POST /shipments/:id/count`
+  （逐行实收 + `count_version` 乐观并发 CAS，重算：全一致→READY / 有差异→DISCREPANCY /
+  有未点→COUNTING）、`POST /shipments/:id/reviews`（差异修订提交，PENDING 唯一约束）、
+  `POST /reviews/:id/approve`（应收:=实收 + 快照审计）、`POST /reviews/:id/reject`（拒绝理由必填）。
+- **schema**：`discrepancy_reviews` / `discrepancy_review_items` / `shipment_items.actual_qty`
+  / `count_version`（迁移 0003）；`shipment_count` schema 实收允许 0（整箱缺失场景）。
+- **前端**：详情页点货面板（逐行实收输入 + 实时差额徽标 + 保存草稿 + 差异修订提交 Dialog：
+  逐行原因 + 照片）、物品清单实收列与红色差异高亮 + 顶部汇总警示、差异修订记录区
+  （集货方同意/拒绝 Dialog）、工作台「待处理差异」（COLLECTOR）+「待点货」（WAREHOUSE）。
+- **测试**：api 76 用例（+20）、web 40、shared 16、db 8，共 140 全绿；`typecheck`/`build` 通过。
+- **遗留**：确认收货（ck-07 接 READY 状态）；通知留 ck-10。
+

@@ -1,9 +1,12 @@
 import type {
   CreateFileInput,
   CreateItemInput,
+  CreateReviewInput,
   CreateShipmentInput,
   CreateUnitInput,
   CreateUserInput,
+  DiscrepancyReviewItemRecord,
+  DiscrepancyReviewRecord,
   FileRecord,
   FileRepository,
   ItemImageRecord,
@@ -12,6 +15,8 @@ import type {
   ItemRecord,
   ItemRepository,
   Repos,
+  SaveCountResult,
+  ShipmentCountRepoInput,
   ShipmentItemRecord,
   ShipmentListQuery,
   ShipmentListResult,
@@ -348,6 +353,13 @@ function cloneFile(row: FileRecord): FileRecord {
 // 物流单号 / 状态冲突信号：内存实现用消息前缀标记，路由层据此映射 409。
 const TRACKING_CONFLICT_MESSAGE = 'TRACKING_CONFLICT: carrier+tracking_no already exists';
 const SHIPMENT_STATE_MESSAGE = 'SHIPMENT_STATE_CONFLICT: only DRAFT shipments can be edited or sent';
+// ck-06：点货/差异协商业务信号（路由层映射为对应错误码）。
+const COUNTING_STATE_MESSAGE =
+  'COUNTING_STATE_CONFLICT: shipment is not in a countable state or version mismatch';
+const COUNT_LINE_INVALID_MESSAGE = 'COUNT_LINE_INVALID: count line does not belong to the shipment';
+const REVIEW_ALREADY_PROCESSED_MESSAGE =
+  'REVIEW_ALREADY_PROCESSED: review already processed or pending review exists';
+const REVIEW_NO_DIFFERENCE_MESSAGE = 'REVIEW_NO_DIFFERENCE: no discrepancy to review';
 
 /** 单据编号 §8.4：SH-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号）。 */
 function shipmentNoDate(now: Date): string {
@@ -358,9 +370,18 @@ class MemoryShipmentRepository implements ShipmentRepository {
   private rows = new Map<string, ShipmentRecord>();
   private trackings = new Map<string, ShipmentTrackingRecord[]>();
   private items = new Map<string, ShipmentItemRecord[]>();
+  private reviews = new Map<string, DiscrepancyReviewRecord>();
+  private reviewItems = new Map<string, DiscrepancyReviewItemRecord[]>();
   private dailyCounters = new Map<string, number>();
 
-  constructor(seed: { shipments?: ShipmentRecord[]; trackings?: ShipmentTrackingRecord[]; items?: ShipmentItemRecord[] } = {}) {
+  constructor(
+    seed: {
+      shipments?: ShipmentRecord[];
+      trackings?: ShipmentTrackingRecord[];
+      items?: ShipmentItemRecord[];
+      reviews?: DiscrepancyReviewRecord[];
+    } = {},
+  ) {
     for (const row of seed.shipments ?? []) this.rows.set(row.id, cloneShipment(row));
     for (const row of seed.trackings ?? []) {
       const list = this.trackings.get(row.shipmentId) ?? [];
@@ -371,6 +392,10 @@ class MemoryShipmentRepository implements ShipmentRepository {
       const list = this.items.get(row.shipmentId) ?? [];
       list.push(cloneShipmentItem(row));
       this.items.set(row.shipmentId, list);
+    }
+    for (const row of seed.reviews ?? []) {
+      this.reviews.set(row.id, cloneReview(row));
+      if (row.items) this.reviewItems.set(row.id, row.items.map(cloneReviewItem));
     }
   }
 
@@ -445,6 +470,7 @@ class MemoryShipmentRepository implements ShipmentRepository {
       remark: normalizeEmpty(input.remark),
       sentAt: null,
       createdBy: input.createdBy,
+      countVersion: 0,
       createdAt: now,
       updatedAt: now,
     };
@@ -570,6 +596,200 @@ class MemoryShipmentRepository implements ShipmentRepository {
   async listItems(shipmentId: string): Promise<ShipmentItemRecord[]> {
     return (this.items.get(shipmentId) ?? []).map(cloneShipmentItem);
   }
+
+  async startCounting(id: string): Promise<ShipmentRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'SENT') throw new Error(COUNTING_STATE_MESSAGE);
+    const next: ShipmentRecord = {
+      ...existing,
+      status: 'COUNTING',
+      updatedAt: new Date(),
+    };
+    this.rows.set(id, cloneShipment(next));
+    return cloneShipment(next);
+  }
+
+  async saveCount(id: string, input: ShipmentCountRepoInput): Promise<SaveCountResult | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'COUNTING' && existing.status !== 'DISCREPANCY') {
+      throw new Error(COUNTING_STATE_MESSAGE);
+    }
+    if (existing.countVersion !== input.version) throw new Error(COUNTING_STATE_MESSAGE);
+
+    const shipmentItems = this.items.get(id) ?? [];
+    const byId = new Map(shipmentItems.map((it) => [it.id, it]));
+    const nextItems = shipmentItems.map((it) => {
+      const line = input.lines.find((l) => l.shipmentItemId === it.id);
+      if (!line) return it;
+      return {
+        ...it,
+        actualQty: line.actualQty === '' ? null : line.actualQty,
+        updatedAt: new Date(),
+      };
+    });
+    const cloneById = new Map(nextItems.map((it) => [it.id, it]));
+    for (const line of input.lines) {
+      if (!cloneById.has(line.shipmentItemId)) throw new Error(COUNT_LINE_INVALID_MESSAGE);
+      if (!byId.has(line.shipmentItemId)) throw new Error(COUNT_LINE_INVALID_MESSAGE);
+    }
+
+    let hasDifference = false;
+    let allCounted = true;
+    for (const it of nextItems) {
+      const actualEmpty = it.actualQty === null || it.actualQty === '';
+      if (actualEmpty) {
+        allCounted = false;
+      } else if (compareQty(it.actualQty, it.expectedQty) !== 0) {
+        hasDifference = true;
+      }
+    }
+    const status = hasDifference ? 'DISCREPANCY' : allCounted ? 'READY' : 'COUNTING';
+
+    const next: ShipmentRecord = {
+      ...existing,
+      status,
+      countVersion: existing.countVersion + 1,
+      updatedAt: new Date(),
+    };
+    this.items.set(id, nextItems);
+    this.rows.set(id, cloneShipment(next));
+    return { shipment: cloneShipment(next), countVersion: next.countVersion };
+  }
+
+  async createReview(input: CreateReviewInput): Promise<DiscrepancyReviewRecord> {
+    const shipment = this.rows.get(input.shipmentId);
+    if (!shipment) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
+    const pending = [...this.reviews.values()].find(
+      (r) => r.shipmentId === input.shipmentId && r.status === 'PENDING',
+    );
+    if (shipment.status !== 'DISCREPANCY') {
+      if (pending) throw new Error(REVIEW_ALREADY_PROCESSED_MESSAGE);
+      throw new Error(REVIEW_NO_DIFFERENCE_MESSAGE);
+    }
+    if (pending) throw new Error(REVIEW_ALREADY_PROCESSED_MESSAGE);
+
+    const shipmentItems = this.items.get(input.shipmentId) ?? [];
+    const byId = new Map(shipmentItems.map((it) => [it.id, it]));
+    let hasDifference = false;
+    const now = new Date();
+    const itemRows: DiscrepancyReviewItemRecord[] = input.lines.map((line) => {
+      const item = byId.get(line.shipmentItemId);
+      if (!item) throw new Error(COUNT_LINE_INVALID_MESSAGE);
+      if (item.actualQty === null || item.actualQty === '' || compareQty(item.actualQty, item.expectedQty) === 0) {
+        throw new Error(REVIEW_NO_DIFFERENCE_MESSAGE);
+      }
+      hasDifference = true;
+      return {
+        id: uuid(),
+        reviewId: '', // review id 在下方创建后统一赋值
+        shipmentItemId: line.shipmentItemId,
+        expectedQtyBefore: item.expectedQty ?? '0',
+        actualQty: line.actualQty,
+        reason: normalizeEmpty(line.reason),
+      };
+    });
+    if (!hasDifference) throw new Error(REVIEW_NO_DIFFERENCE_MESSAGE);
+
+    const review: DiscrepancyReviewRecord = {
+      id: uuid(),
+      shipmentId: input.shipmentId,
+      status: 'PENDING',
+      reason: normalizeEmpty(input.reason),
+      photoFileIds: [...input.photoFileIds],
+      submittedBy: input.submittedBy,
+      reviewedBy: null,
+      reviewedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const finalItems = itemRows.map((r) => ({ ...r, reviewId: review.id }));
+    this.reviewItems.set(review.id, finalItems);
+    this.reviews.set(review.id, cloneReview(review));
+
+    this.rows.set(
+      input.shipmentId,
+      cloneShipment({ ...shipment, status: 'REVIEW_PENDING', updatedAt: now }),
+    );
+    return { ...cloneReview(review), items: finalItems };
+  }
+
+  async listReviews(shipmentId: string): Promise<DiscrepancyReviewRecord[]> {
+    const list = [...this.reviews.values()]
+      .filter((r) => r.shipmentId === shipmentId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return list.map((r) => ({ ...cloneReview(r), items: this.reviewItemsFor(r.id) }));
+  }
+
+  private reviewItemsFor(reviewId: string): DiscrepancyReviewItemRecord[] {
+    return (this.reviewItems.get(reviewId) ?? []).map(cloneReviewItem);
+  }
+
+  async findReview(id: string): Promise<DiscrepancyReviewRecord | null> {
+    const review = this.reviews.get(id);
+    if (!review) return null;
+    return { ...cloneReview(review), items: this.reviewItemsFor(id) };
+  }
+
+  async approveReview(id: string, reviewedBy: string | null): Promise<DiscrepancyReviewRecord | null> {
+    const review = this.reviews.get(id);
+    if (!review) return null;
+    if (review.status !== 'PENDING') throw new Error(REVIEW_ALREADY_PROCESSED_MESSAGE);
+    const now = new Date();
+    const nextReview: DiscrepancyReviewRecord = {
+      ...review,
+      status: 'APPROVED',
+      reviewedBy,
+      reviewedAt: now,
+      updatedAt: now,
+    };
+    this.reviews.set(id, cloneReview(nextReview));
+
+    const shipment = this.rows.get(review.shipmentId);
+    if (shipment) {
+      const rows = (this.items.get(shipment.id) ?? []).map((it) => {
+        const reviewItem = this.reviewItemsFor(id).find((ri) => ri.shipmentItemId === it.id);
+        if (!reviewItem) return it;
+        return { ...it, expectedQty: reviewItem.actualQty, updatedAt: now };
+      });
+      this.items.set(shipment.id, rows);
+      this.rows.set(
+        shipment.id,
+        cloneShipment({ ...shipment, status: 'READY', updatedAt: now }),
+      );
+    }
+    return { ...cloneReview(nextReview), items: this.reviewItemsFor(id) };
+  }
+
+  async rejectReview(
+    id: string,
+    reviewedBy: string | null,
+    reason: string,
+  ): Promise<DiscrepancyReviewRecord | null> {
+    const review = this.reviews.get(id);
+    if (!review) return null;
+    if (review.status !== 'PENDING') throw new Error(REVIEW_ALREADY_PROCESSED_MESSAGE);
+    const now = new Date();
+    const nextReview: DiscrepancyReviewRecord = {
+      ...review,
+      status: 'REJECTED',
+      reason,
+      reviewedBy,
+      reviewedAt: now,
+      updatedAt: now,
+    };
+    this.reviews.set(id, cloneReview(nextReview));
+
+    const shipment = this.rows.get(review.shipmentId);
+    if (shipment) {
+      this.rows.set(
+        shipment.id,
+        cloneShipment({ ...shipment, status: 'DISCREPANCY', updatedAt: now }),
+      );
+    }
+    return { ...cloneReview(nextReview), items: this.reviewItemsFor(id) };
+  }
 }
 
 function cloneShipment(row: ShipmentRecord): ShipmentRecord {
@@ -593,6 +813,27 @@ function cloneShipmentItem(row: ShipmentItemRecord): ShipmentItemRecord {
   };
 }
 
+function cloneReviewItem(row: DiscrepancyReviewItemRecord): DiscrepancyReviewItemRecord {
+  return { ...row };
+}
+
+function cloneReview(row: DiscrepancyReviewRecord): DiscrepancyReviewRecord {
+  return {
+    ...row,
+    photoFileIds: [...row.photoFileIds],
+    reviewedAt: row.reviewedAt ? new Date(row.reviewedAt) : null,
+    createdAt: new Date(row.createdAt),
+    updatedAt: new Date(row.updatedAt),
+  };
+}
+
+/** 数量比较：null/undefined 按 0 处理，返回 -1/0/1。 */
+function compareQty(a: string | null | undefined, b: string | null | undefined): number {
+  const na = Number(a ?? 0);
+  const nb = Number(b ?? 0);
+  return na === nb ? 0 : na > nb ? 1 : -1;
+}
+
 export function createMemoryRepos(seed?: {
   users?: UserRecord[];
   units?: UnitRecord[];
@@ -601,6 +842,7 @@ export function createMemoryRepos(seed?: {
   shipments?: ShipmentRecord[];
   shipmentTrackings?: ShipmentTrackingRecord[];
   shipmentItems?: ShipmentItemRecord[];
+  reviews?: DiscrepancyReviewRecord[];
 }): Repos {
   return {
     users: new MemoryUserRepository(seed?.users),
@@ -611,6 +853,7 @@ export function createMemoryRepos(seed?: {
       shipments: seed?.shipments,
       trackings: seed?.shipmentTrackings,
       items: seed?.shipmentItems,
+      reviews: seed?.reviews,
     }),
   };
 }
