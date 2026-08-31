@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { UNIT_TYPES, USER_ROLES, USER_STATUSES } from './auth';
 import { ITEM_STATUSES, SPEC_UNITS } from './items';
 import { OUTBOUND_TYPES } from './outbound';
+import { DELIVERY_METHODS, SALES_SOURCES } from './sales';
 
 // 认证/岗位/业务单元相关的请求校验（ck-02 范围）。
 // 放在 shared 供 api 使用；api 包不直接依赖 zod，通过 shared 复用。
@@ -325,6 +326,77 @@ export const returnRejectSchema = z.object({
   note: z.string().trim().min(1).max(4096),
 });
 
+// ── 销售单（ck-09a）──────────────────────────────────────────────────────────
+
+const discountPercent = z
+  .union([
+    z.number().min(0).max(100),
+    z
+      .string()
+      .trim()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .refine((value) => Number(value) <= 100, { message: '折扣必须介于 0-100 之间' }),
+  ])
+  .transform((value) => String(value));
+
+/** 销售单行：物品 + 数量 + 行级改价（可选，缺省取当前零售价快照）。 */
+export const salesOrderLineSchema = z.object({
+  itemId: z.uuid(),
+  qty: shipmentQty,
+  unitPriceOverride: shipmentMoney.optional().nullable(),
+});
+
+/**
+ * 新建销售单（POST /sales-orders）：卖方=仓库业务单元，买方=零售业务单元（本期固定 RETAILER_UNIT）。
+ * 金额由服务端计算：行价（override 缺省零售价快照）× 数量，整单折扣后 + 运费，存快照。
+ */
+export const salesOrderCreateSchema = z.object({
+  sellerUnitId: z.uuid(),
+  buyerUnitId: z.uuid(),
+  source: z.enum(SALES_SOURCES).default('RETAILER_REQUEST'),
+  deliveryMethod: z.enum(DELIVERY_METHODS).default('PICKUP'),
+  deliveryAddress: z.string().trim().max(1024).optional().nullable(),
+  freight: shipmentMoney.optional().default('0'),
+  discountPercent: discountPercent.optional().default('0'),
+  currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional(),
+  remark: z.string().trim().max(4096).optional().nullable(),
+  lines: z.array(salesOrderLineSchema).min(1).max(500),
+});
+
+/** 更新销售单（PATCH /sales-orders/:id）：仅 DRAFT；行整体替换，价格快照重算。 */
+export const salesOrderPatchSchema = z.object({
+  deliveryMethod: z.enum(DELIVERY_METHODS).optional(),
+  deliveryAddress: z.string().trim().max(1024).optional().nullable(),
+  freight: shipmentMoney.optional(),
+  discountPercent: discountPercent.optional(),
+  currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional(),
+  remark: z.string().trim().max(4096).optional().nullable(),
+  lines: z.array(salesOrderLineSchema).min(1).max(500).optional(),
+});
+
+/** 手工批次分配行（发送时覆盖 FEFO）：某物品整批发指定批次。 */
+export const salesSendAllocationSchema = z.object({
+  itemId: z.uuid(),
+  batchId: z.uuid(),
+  qty: shipmentQty,
+});
+
+/** 发送销售单（POST /sales-orders/:id/send）：allocations 缺省时按 FEFO 自动分配。 */
+export const salesOrderSendSchema = z.object({
+  allocations: z.array(salesSendAllocationSchema).max(500).optional(),
+});
+
+/** 上传支付凭证（POST /sales-orders/:id/payments）：凭证图片走 files 管线预上传。 */
+export const salesPaymentSchema = z.object({
+  amount: shipmentMoney,
+  currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional(),
+  methodNote: z.string().trim().max(256).optional().nullable(),
+  proofFileId: z.uuid().optional().nullable(),
+});
+
+/** 确认收货（POST /sales-orders/:id/confirm-receipt）：零售方确认后状态闭环。 */
+export const salesConfirmReceiptSchema = z.object({});
+
 export type UserSelfPatchInput = z.infer<typeof userSelfPatchSchema>;
 export type AdminUserCreateInput = z.infer<typeof adminUserCreateSchema>;
 export type AdminUserPatchInput = z.infer<typeof adminUserPatchSchema>;
@@ -353,3 +425,10 @@ export type InboundManualCreateInput = z.infer<typeof inboundManualCreateSchema>
 export type OutboundLineInput = z.infer<typeof outboundLineSchema>;
 export type OutboundCreateInput = z.infer<typeof outboundCreateSchema>;
 export type RetailPricePutInput = z.infer<typeof retailPricePutSchema>;
+export type SalesOrderLineInput = z.infer<typeof salesOrderLineSchema>;
+export type SalesOrderCreateInput = z.infer<typeof salesOrderCreateSchema>;
+export type SalesOrderPatchInput = z.infer<typeof salesOrderPatchSchema>;
+export type SalesSendAllocationInput = z.infer<typeof salesSendAllocationSchema>;
+export type SalesOrderSendInput = z.infer<typeof salesOrderSendSchema>;
+export type SalesPaymentInput = z.infer<typeof salesPaymentSchema>;
+export type SalesConfirmReceiptInput = z.infer<typeof salesConfirmReceiptSchema>;

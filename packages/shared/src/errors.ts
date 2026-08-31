@@ -34,6 +34,9 @@ export const ErrorCodes = {
   OUTBOUND_STATE_CONFLICT: 'OUTBOUND_STATE_CONFLICT',
   OUTBOUND_LINE_INVALID: 'OUTBOUND_LINE_INVALID',
   STOCK_BATCH_NOT_FOUND: 'STOCK_BATCH_NOT_FOUND',
+  // 销售单（ck-09a）
+  SALES_STATE_CONFLICT: 'SALES_STATE_CONFLICT',
+  SALES_LINE_INVALID: 'SALES_LINE_INVALID',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

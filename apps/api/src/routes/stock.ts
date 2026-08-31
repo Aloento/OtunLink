@@ -29,7 +29,11 @@ export function stockRouter(): Hono<AppEnv> {
       itemId: itemId || undefined,
       batchId: batchId || undefined,
     });
-    return ok(c, { ...result, items: result.items.map(stockRowDto) });
+    const hideCost = c.get('auth').user?.role === 'RETAILER';
+    return ok(c, {
+      ...result,
+      items: result.items.map((row) => stockRowDto(row, { hideCost })),
+    });
   });
 
   router.get('/movements', read, async (c) => {
@@ -50,7 +54,11 @@ export function stockRouter(): Hono<AppEnv> {
       itemId: itemId || undefined,
       batchId: batchId || undefined,
     });
-    return ok(c, { ...result, items: result.items.map(stockMovementDto) });
+    const hideCost = c.get('auth').user?.role === 'RETAILER';
+    return ok(c, {
+      ...result,
+      items: result.items.map((row) => stockMovementDto(row, { hideCost })),
+    });
   });
 
   // 效期视图（ck-08b）：全部有库存批次 + 剩余天数；已过期（remainingDays < 0）。
@@ -66,7 +74,8 @@ export function stockRouter(): Hono<AppEnv> {
       unitId: unitId || scope?.unitId,
       itemId: itemId || undefined,
     });
-    return ok(c, { items: items.map(stockBatchDto) });
+    const hideCost = c.get('auth').user?.role === 'RETAILER';
+    return ok(c, { items: items.map((row) => stockBatchDto(row, { hideCost })) });
   });
 
   // 已过期批次（ck-08b）：必须指定 unitId，或无 scope 时返回 400。
@@ -80,7 +89,8 @@ export function stockRouter(): Hono<AppEnv> {
     if (!unitId) return validationError(c, 'unitId is required');
 
     const items = await repos.stock.listExpired({ unitId });
-    return ok(c, { items: items.map(stockBatchDto) });
+    const hideCost = c.get('auth').user?.role === 'RETAILER';
+    return ok(c, { items: items.map((row) => stockBatchDto(row, { hideCost })) });
   });
 
   return router;

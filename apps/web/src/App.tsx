@@ -21,14 +21,17 @@ import { OutboundListPage } from './pages/outbound/OutboundListPage';
 import { RetailPricesPage } from './pages/retail-prices/RetailPricesPage';
 import { ReturnDetailPage } from './pages/returns/ReturnDetailPage';
 import { ReturnsListPage } from './pages/returns/ReturnsListPage';
+import { SalesDetailPage } from './pages/sales/SalesDetailPage';
+import { SalesFormPage } from './pages/sales/SalesFormPage';
+import { SalesListPage } from './pages/sales/SalesListPage';
 import { ShipmentDetailPage } from './pages/shipments/ShipmentDetailPage';
 import { ShipmentFormPage } from './pages/shipments/ShipmentFormPage';
 import { ShipmentsPage } from './pages/shipments/ShipmentsPage';
 import { RequireActive, RequireAuth, RequirePermission } from './routes/guards';
 import { CALLBACK_PATH, LOGIN_PATH, ROUTES, type RouteKey } from './routes/routes';
 
-// 业务页面（除工作台、物品目录、发货/入库/出库/库存/退货外）在 ck-03/ck-04 以「开发中」占位。
-const PLACEHOLDER_KEYS = ['sales', 'notifications', 'adminUsers', 'adminUnits'] as const satisfies readonly RouteKey[];
+// 业务页面（除工作台、物品目录、发货/入库/出库/库存/退货/销售外）在 ck-03/ck-04 以「开发中」占位。
+const PLACEHOLDER_KEYS = ['notifications', 'adminUsers', 'adminUnits'] as const satisfies readonly RouteKey[];
 
 export default function App() {
   const { t } = useTranslation();
@@ -196,6 +199,38 @@ export default function App() {
           element={
             <RequirePermission permissions={ROUTES.returns.permissions}>
               <ReturnDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={ROUTES.sales.path}
+          element={
+            <RequirePermission permissions={ROUTES.sales.permissions}>
+              <SalesListPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={`${ROUTES.sales.path}/new`}
+          element={
+            <RequirePermission permissions={[Permissions.SALES_CREATE]}>
+              <SalesFormPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={`${ROUTES.sales.path}/:id/edit`}
+          element={
+            <RequirePermission permissions={[Permissions.SALES_CREATE]}>
+              <SalesFormPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={`${ROUTES.sales.path}/:id`}
+          element={
+            <RequirePermission permissions={ROUTES.sales.permissions}>
+              <SalesDetailPage />
             </RequirePermission>
           }
         />

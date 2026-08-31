@@ -7,6 +7,7 @@ export * from './items';
 export * from './outbound';
 export * from './retail';
 export * from './returns';
+export * from './sales';
 export * from './schemas';
 export * from './shipments';
 export * from './stock';

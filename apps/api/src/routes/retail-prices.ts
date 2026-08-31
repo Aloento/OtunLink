@@ -28,7 +28,8 @@ export function retailPricesRouter(): Hono<AppEnv> {
       unitId: unitId || scope?.unitId,
       itemId: itemId || undefined,
     });
-    return ok(c, { items: items.map(retailPriceDto) });
+    const hideCost = c.get('auth').user?.role === 'RETAILER';
+    return ok(c, { items: items.map((row) => retailPriceDto(row, { hideCost })) });
   });
 
   router.put('/', write, async (c) => {

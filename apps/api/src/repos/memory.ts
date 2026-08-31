@@ -6,6 +6,7 @@ import type {
   CreateOutboundRepoInput,
   CreateReturnRepoInput,
   CreateReviewInput,
+  CreateSalesRepoInput,
   CreateShipmentInput,
   CreateUnitInput,
   CreateUserInput,
@@ -28,12 +29,21 @@ import type {
   OutboundOrderItemRecord,
   OutboundOrderRecord,
   OutboundRepository,
+  PatchSalesInput,
+  PaymentRecord,
   Repos,
   ReturnListQuery,
   ReturnListResult,
   ReturnOrderItemRecord,
   ReturnOrderRecord,
   ReturnRepository,
+  SalesAllocationInput,
+  SalesBatchAllocationRecord,
+  SalesListQuery,
+  SalesListResult,
+  SalesOrderItemRecord,
+  SalesOrderRecord,
+  SalesRepository,
   SaveCountResult,
   ShipmentCountRepoInput,
   ShipmentItemRecord,
@@ -407,6 +417,10 @@ const OUTBOUND_STATE_CONFLICT_MESSAGE =
 const INSUFFICIENT_STOCK_MESSAGE = 'INSUFFICIENT_STOCK: insufficient stock for outbound';
 const STOCK_BATCH_NOT_FOUND_MESSAGE =
   'STOCK_BATCH_NOT_FOUND: no stock of the specified batch in the warehouse';
+// ck-09a：销售单业务信号（路由层映射为对应错误码）。
+const SALES_STATE_CONFLICT_MESSAGE =
+  'SALES_STATE_CONFLICT: sales order is not in the expected state';
+const SALES_LINE_INVALID_MESSAGE = 'SALES_LINE_INVALID: sales order line is invalid';
 
 /** 单据编号 §8.4：SH-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号）。 */
 function shipmentNoDate(now: Date): string {
@@ -1937,6 +1951,446 @@ class MemoryNotificationRepository implements NotificationRepository {
   }
 }
 
+function cloneSalesOrder(row: SalesOrderRecord): SalesOrderRecord {
+  return {
+    ...row,
+    sentAt: row.sentAt ? new Date(row.sentAt) : null,
+    confirmedAt: row.confirmedAt ? new Date(row.confirmedAt) : null,
+    createdAt: new Date(row.createdAt),
+    updatedAt: new Date(row.updatedAt),
+  };
+}
+
+function cloneSalesItem(row: SalesOrderItemRecord): SalesOrderItemRecord {
+  return { ...row };
+}
+
+function clonePayment(row: PaymentRecord): PaymentRecord {
+  return { ...row, uploadedAt: new Date(row.uploadedAt) };
+}
+
+/**
+ * 内存销售单仓储（ck-09a）：价格快照来自零售价（retailRepo），
+ * 发送/取消复用共享台账（ledger.applyOutbound / 直接回补），与 SQL 实现行为对齐。
+ */
+class MemorySalesRepository implements SalesRepository {
+  private rows = new Map<string, SalesOrderRecord>();
+  private items = new Map<string, SalesOrderItemRecord[]>();
+  private allocRows: SalesBatchAllocationRecord[] = [];
+  private payments = new Map<string, PaymentRecord>();
+  private dailyCounters = new Map<string, number>();
+
+  constructor(
+    private readonly ledger: MemoryStockLedger,
+    private readonly retailRepo: MemoryRetailPriceRepository,
+    private readonly unitRepo: MemoryUnitRepository,
+    private readonly itemRepo: MemoryItemRepository,
+    seed: {
+      salesOrders?: SalesOrderRecord[];
+      salesItems?: SalesOrderItemRecord[];
+      salesAllocations?: SalesBatchAllocationRecord[];
+      payments?: PaymentRecord[];
+    } = {},
+  ) {
+    for (const row of seed.salesOrders ?? []) this.rows.set(row.id, cloneSalesOrder(row));
+    for (const row of seed.salesItems ?? []) {
+      const list = this.items.get(row.salesOrderId) ?? [];
+      list.push(cloneSalesItem(row));
+      this.items.set(row.salesOrderId, list);
+    }
+    for (const row of seed.salesAllocations ?? []) this.allocRows.push({ ...row });
+    for (const row of seed.payments ?? []) this.payments.set(row.salesOrderId, clonePayment(row));
+  }
+
+  private withPayment(row: SalesOrderRecord): SalesOrderRecord {
+    return { ...cloneSalesOrder(row), hasPayment: this.payments.has(row.id) || row.hasPayment };
+  }
+
+  private nextSalesNo(): string {
+    const key = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const next = (this.dailyCounters.get(key) ?? 0) + 1;
+    this.dailyCounters.set(key, next);
+    return `SO-${key}-${String(next).padStart(4, '0')}`;
+  }
+
+  /** 价格快照：override ?? 当前零售价；二者皆无抛 SALES_LINE_INVALID。 */
+  private async snapshotLines(
+    sellerUnitId: string,
+    lines: CreateSalesRepoInput['items'],
+  ): Promise<{ itemId: string; qty: string; listPrice: string; price: string; lineTotal: string }[]> {
+    const result: { itemId: string; qty: string; listPrice: string; price: string; lineTotal: string }[] = [];
+    for (const line of lines) {
+      const override = line.unitPriceOverride ? String(line.unitPriceOverride) : null;
+      let price = override;
+      if (price === null) {
+        const rows = await this.retailRepo.list({ unitId: sellerUnitId, itemId: line.itemId });
+        price = rows[0]?.price ?? null;
+      }
+      if (price === null || price === '') throw new Error(SALES_LINE_INVALID_MESSAGE);
+      result.push({
+        itemId: line.itemId,
+        qty: line.qty,
+        listPrice: price,
+        price,
+        lineTotal: round2(Number(line.qty) * Number(price)).toFixed(2),
+      });
+    }
+    return result;
+  }
+
+  private calcTotal(lines: { lineTotal: string }[], discountPercent: string, freight: string): string {
+    const subtotal = lines.reduce((sum, l) => sum + Number(l.lineTotal ?? 0), 0);
+    return round2(subtotal * (1 - Number(discountPercent) / 100) + Number(freight)).toFixed(2);
+  }
+
+  async list(query: SalesListQuery): Promise<SalesListResult> {
+    const all = [...this.rows.values()]
+      .filter((row) => (query.status ? row.status === query.status : true))
+      .filter((row) =>
+        query.unitId ? row.sellerUnitId === query.unitId || row.buyerUnitId === query.unitId : true,
+      )
+      .sort(
+        (a, b) =>
+          b.createdAt.getTime() - a.createdAt.getTime() || a.id.localeCompare(b.id),
+      );
+    const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+    const page = Math.max(query.page ?? 1, 1);
+    const start = (page - 1) * size;
+    return {
+      items: all.slice(start, start + size).map((row) => this.withPayment(row)),
+      total: all.length,
+      page,
+      size,
+    };
+  }
+
+  async findById(id: string): Promise<SalesOrderRecord | null> {
+    const row = this.rows.get(id);
+    return row ? this.withPayment(row) : null;
+  }
+
+  async listItems(salesOrderId: string): Promise<SalesOrderItemRecord[]> {
+    const rows = this.items.get(salesOrderId) ?? [];
+    const hydrated: SalesOrderItemRecord[] = [];
+    for (const row of rows) {
+      const item = await this.itemRepo.findById(row.itemId);
+      hydrated.push({
+        ...row,
+        itemName: row.itemName ?? item?.name ?? null,
+        spec: row.spec ?? item?.specUnit ?? null,
+      });
+    }
+    return hydrated;
+  }
+
+  async listAllocations(salesOrderId: string): Promise<SalesBatchAllocationRecord[]> {
+    const orderItemIds = new Set((this.items.get(salesOrderId) ?? []).map((i) => i.id));
+    return this.allocRows
+      .filter((a) => orderItemIds.has(a.orderItemId))
+      .map((a) => {
+        const batch = this.ledger.batches.get(a.batchId);
+        return {
+          ...a,
+          batchNo: a.batchNo ?? batch?.batchNo ?? null,
+          expiryDate: a.expiryDate ?? batch?.expiryDate ?? null,
+        };
+      });
+  }
+
+  async findPayment(salesOrderId: string): Promise<PaymentRecord | null> {
+    const row = this.payments.get(salesOrderId);
+    return row ? clonePayment(row) : null;
+  }
+
+  async create(input: CreateSalesRepoInput): Promise<SalesOrderRecord> {
+    const now = new Date();
+    const lines = await this.snapshotLines(input.sellerUnitId, input.items);
+    const order: SalesOrderRecord = {
+      id: uuid(),
+      salesNo: this.nextSalesNo(),
+      sellerUnitId: input.sellerUnitId,
+      buyerUnitId: input.buyerUnitId,
+      source: input.source,
+      deliveryMethod: input.deliveryMethod,
+      deliveryAddress: normalizeEmpty(input.deliveryAddress),
+      freight: input.freight,
+      discountPercent: input.discountPercent,
+      currency: input.currency,
+      totalAmount: this.calcTotal(lines, input.discountPercent, input.freight),
+      status: 'DRAFT',
+      remark: normalizeEmpty(input.remark),
+      sentAt: null,
+      confirmedAt: null,
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+      hasPayment: false,
+    };
+    this.rows.set(order.id, cloneSalesOrder(order));
+    this.items.set(
+      order.id,
+      lines.map((line) => ({
+        id: uuid(),
+        salesOrderId: order.id,
+        itemId: line.itemId,
+        itemName: null,
+        spec: null,
+        qty: line.qty,
+        listPrice: line.listPrice,
+        price: line.price,
+        lineTotal: line.lineTotal,
+      })),
+    );
+    return this.withPayment(order);
+  }
+
+  async update(id: string, input: PatchSalesInput): Promise<SalesOrderRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'DRAFT') throw new Error(SALES_STATE_CONFLICT_MESSAGE);
+
+    const now = new Date();
+    let lines: { lineTotal: string; itemId: string; qty: string; listPrice: string; price: string }[] | null = null;
+    if (input.items) {
+      lines = await this.snapshotLines(existing.sellerUnitId, input.items);
+      this.items.set(
+        id,
+        lines.map((line) => ({
+          id: uuid(),
+          salesOrderId: id,
+          itemId: line.itemId,
+          itemName: null,
+          spec: null,
+          qty: line.qty,
+          listPrice: line.listPrice,
+          price: line.price,
+          lineTotal: line.lineTotal,
+        })),
+      );
+    }
+    const currentLines =
+      lines ??
+      (this.items.get(id) ?? []).map((l) => ({ lineTotal: l.lineTotal ?? '0' }));
+    const freight = input.freight ?? existing.freight;
+    const discountPercent = input.discountPercent ?? existing.discountPercent;
+    const next: SalesOrderRecord = {
+      ...existing,
+      deliveryMethod: input.deliveryMethod ?? existing.deliveryMethod,
+      deliveryAddress:
+        input.deliveryAddress !== undefined ? normalizeEmpty(input.deliveryAddress) : existing.deliveryAddress,
+      freight,
+      discountPercent,
+      currency: input.currency ?? existing.currency,
+      remark: input.remark !== undefined ? normalizeEmpty(input.remark) : existing.remark,
+      totalAmount: this.calcTotal(currentLines, discountPercent, freight),
+      updatedAt: now,
+    };
+    this.rows.set(id, cloneSalesOrder(next));
+    return this.withPayment(next);
+  }
+
+  async send(
+    id: string,
+    allocations: SalesAllocationInput[],
+    sentBy: string,
+  ): Promise<SalesOrderRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'DRAFT') throw new Error(SALES_STATE_CONFLICT_MESSAGE);
+
+    const lines = this.items.get(id) ?? [];
+    const lineByItem = new Map<string, { orderItemId: string; qty: number }>();
+    for (const line of lines) {
+      lineByItem.set(line.itemId, { orderItemId: line.id, qty: Number(line.qty) });
+    }
+    const manualByItem = new Map<string, { batchId: string; qty: number }[]>();
+    for (const allocLine of allocations) {
+      if (!lineByItem.has(allocLine.itemId)) throw new Error(SALES_LINE_INVALID_MESSAGE);
+      const list = manualByItem.get(allocLine.itemId) ?? [];
+      list.push({ batchId: allocLine.batchId, qty: Number(allocLine.qty) });
+      manualByItem.set(allocLine.itemId, list);
+    }
+    for (const [itemId, list] of manualByItem) {
+      const line = lineByItem.get(itemId)!;
+      const total = list.reduce((sum, a) => sum + a.qty, 0);
+      if (Math.abs(total - line.qty) > 0.001) throw new Error(SALES_LINE_INVALID_MESSAGE);
+    }
+
+    const now = new Date();
+    for (const [itemId, line] of lineByItem) {
+      const manual = manualByItem.get(itemId);
+      if (manual) {
+        for (const allocLine of manual) {
+          const allocationsOf = this.ledger.applyOutbound({
+            unitId: existing.sellerUnitId,
+            itemId,
+            qty: allocLine.qty,
+            batchId: allocLine.batchId,
+            type: 'OUTBOUND_SALE',
+            orderType: 'sales',
+            orderId: existing.id,
+            refNo: existing.salesNo,
+            operatorId: sentBy,
+          });
+          for (const alloc of allocationsOf) {
+            this.allocRows.push(this.allocRow(line.orderItemId, itemId, alloc, now));
+          }
+        }
+      } else {
+        const allocationsOf = this.ledger.applyOutbound({
+          unitId: existing.sellerUnitId,
+          itemId,
+          qty: line.qty,
+          batchId: null,
+          type: 'OUTBOUND_SALE',
+          orderType: 'sales',
+          orderId: existing.id,
+          refNo: existing.salesNo,
+          operatorId: sentBy,
+        });
+        for (const alloc of allocationsOf) {
+          this.allocRows.push(this.allocRow(line.orderItemId, itemId, alloc, now));
+        }
+      }
+    }
+
+    const next: SalesOrderRecord = {
+      ...existing,
+      status: 'SENT',
+      sentAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(id, cloneSalesOrder(next));
+    return this.withPayment(next);
+  }
+
+  private allocRow(
+    orderItemId: string,
+    itemId: string,
+    alloc: { batchId: string; qty: number; unitCost: number },
+    now: Date,
+  ): SalesBatchAllocationRecord {
+    const batch = this.ledger.batches.get(alloc.batchId);
+    return {
+      id: uuid(),
+      orderItemId,
+      itemId,
+      itemName: null,
+      batchId: alloc.batchId,
+      batchNo: batch?.batchNo ?? null,
+      expiryDate: batch?.expiryDate ?? null,
+      qty: alloc.qty.toFixed(2),
+    };
+  }
+
+  async cancel(id: string, cancelledBy: string): Promise<SalesOrderRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status === 'CONFIRMED' || existing.status === 'CANCELLED') {
+      throw new Error(SALES_STATE_CONFLICT_MESSAGE);
+    }
+
+    const now = new Date();
+    if (existing.status !== 'DRAFT') {
+      const orderItemIds = new Set((this.items.get(id) ?? []).map((i) => i.id));
+      for (const a of this.allocRows.filter((row) => orderItemIds.has(row.orderItemId))) {
+        const allocQty = Number(a.qty);
+        const original = this.ledger.movements
+          .filter(
+            (m) =>
+              m.orderType === 'sales' &&
+              m.orderId === id &&
+              m.batchId === a.batchId &&
+              m.type === 'OUTBOUND_SALE',
+          )
+          .slice(-1)[0];
+        const unitCost = original?.unitCost ?? 0;
+        const key = this.ledger.stockKey(existing.sellerUnitId, a.itemId, a.batchId);
+        const before = this.ledger.stock.get(key);
+        const qtyBefore = before ? before.qty : 0;
+        const qtyAfter = round2(qtyBefore + allocQty);
+        this.ledger.stock.set(key, {
+          unitId: existing.sellerUnitId,
+          itemId: a.itemId,
+          batchId: a.batchId,
+          qty: qtyAfter,
+          avgCost: before ? before.avgCost : unitCost,
+          version: (before ? before.version : 0) + 1,
+          updatedAt: now,
+        });
+        this.ledger.movements.push({
+          unitId: existing.sellerUnitId,
+          itemId: a.itemId,
+          batchId: a.batchId,
+          type: 'OUTBOUND_SALE_REVERSAL',
+          qtyDelta: round2(allocQty),
+          qtyBefore: round2(qtyBefore),
+          qtyAfter,
+          unitCost,
+          orderType: 'sales',
+          orderId: existing.id,
+          refNo: existing.salesNo,
+          operatorId: cancelledBy,
+          createdAt: now,
+        });
+      }
+      const payment = this.payments.get(id);
+      if (payment) {
+        this.payments.set(id, {
+          ...payment,
+          refundNote: payment.refundNote ?? '销售单已取消，退款线下处理',
+        });
+      }
+    }
+    const next: SalesOrderRecord = { ...existing, status: 'CANCELLED', updatedAt: now };
+    this.rows.set(id, cloneSalesOrder(next));
+    return this.withPayment(next);
+  }
+
+  async uploadPayment(
+    id: string,
+    input: { amount: string; currency: string; methodNote: string | null; proofFileId: string | null; uploadedBy: string },
+  ): Promise<PaymentRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'SENT' && existing.status !== 'PAYMENT_UPLOADED') {
+      throw new Error(SALES_STATE_CONFLICT_MESSAGE);
+    }
+    const now = new Date();
+    const previous = this.payments.get(id);
+    const payment: PaymentRecord = {
+      id: previous?.id ?? uuid(),
+      salesOrderId: id,
+      amount: input.amount,
+      currency: input.currency,
+      methodNote: normalizeEmpty(input.methodNote),
+      proofFileId: normalizeEmpty(input.proofFileId),
+      refundNote: previous?.refundNote ?? null,
+      uploadedBy: input.uploadedBy,
+      uploadedAt: now,
+    };
+    this.payments.set(id, clonePayment(payment));
+    const next: SalesOrderRecord = { ...existing, status: 'PAYMENT_UPLOADED', updatedAt: now };
+    this.rows.set(id, cloneSalesOrder(next));
+    return clonePayment(payment);
+  }
+
+  async confirmReceipt(id: string, confirmedBy: string): Promise<SalesOrderRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'PAYMENT_UPLOADED') throw new Error(SALES_STATE_CONFLICT_MESSAGE);
+    const now = new Date();
+    const next: SalesOrderRecord = {
+      ...existing,
+      status: 'CONFIRMED',
+      confirmedAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(id, cloneSalesOrder(next));
+    return this.withPayment(next);
+  }
+}
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -1963,6 +2417,10 @@ export function createMemoryRepos(seed?: {
   returnItems?: ReturnOrderItemRecord[];
   outbounds?: OutboundOrderRecord[];
   outboundItems?: OutboundOrderItemRecord[];
+  salesOrders?: SalesOrderRecord[];
+  salesItems?: SalesOrderItemRecord[];
+  salesAllocations?: SalesBatchAllocationRecord[];
+  payments?: PaymentRecord[];
 }): Repos {
   const stockLedger = new MemoryStockLedger();
   const shipmentRepo = new MemoryShipmentRepository({
@@ -1982,6 +2440,7 @@ export function createMemoryRepos(seed?: {
   const unitRepo = new MemoryUnitRepository(seed?.units);
   const itemRepo = new MemoryItemRepository(seed?.items);
   const userRepo = new MemoryUserRepository(seed?.users);
+  const retailPriceRepo = new MemoryRetailPriceRepository(stockLedger, unitRepo, itemRepo, userRepo);
   return {
     users: userRepo,
     units: unitRepo,
@@ -1995,7 +2454,13 @@ export function createMemoryRepos(seed?: {
       outboundItems: seed?.outboundItems,
     }),
     stock: new MemoryStockRepository(stockLedger, unitRepo, itemRepo),
-    retailPrices: new MemoryRetailPriceRepository(stockLedger, unitRepo, itemRepo, userRepo),
+    retailPrices: retailPriceRepo,
+    sales: new MemorySalesRepository(stockLedger, retailPriceRepo, unitRepo, itemRepo, {
+      salesOrders: seed?.salesOrders,
+      salesItems: seed?.salesItems,
+      salesAllocations: seed?.salesAllocations,
+      payments: seed?.payments,
+    }),
     notifications: new MemoryNotificationRepository(),
   };
 }

@@ -15,6 +15,10 @@ import type {
   ShipmentItemRecord,
   ShipmentRecord,
   ShipmentTrackingRecord,
+  SalesBatchAllocationRecord,
+  SalesOrderItemRecord,
+  SalesOrderRecord,
+  PaymentRecord,
   StockBatchRecord,
   StockMovementRecord,
   StockRowRecord,
@@ -338,7 +342,7 @@ export function outboundDto(
   };
 }
 
-export function stockRowDto(row: StockRowRecord) {
+export function stockRowDto(row: StockRowRecord, options: { hideCost?: boolean } = {}) {
   return {
     unitId: row.unitId,
     unitName: row.unitName,
@@ -350,14 +354,14 @@ export function stockRowDto(row: StockRowRecord) {
     productionDate: row.productionDate,
     expiryDate: row.expiryDate,
     qty: row.qty,
-    avgCost: row.avgCost,
+    ...(options.hideCost ? {} : { avgCost: row.avgCost }),
     availableQty: row.qty,
     version: row.version,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
 
-export function stockMovementDto(movement: StockMovementRecord) {
+export function stockMovementDto(movement: StockMovementRecord, options: { hideCost?: boolean } = {}) {
   return {
     id: movement.id,
     unitId: movement.unitId,
@@ -371,7 +375,7 @@ export function stockMovementDto(movement: StockMovementRecord) {
     qtyDelta: movement.qtyDelta,
     qtyBefore: movement.qtyBefore,
     qtyAfter: movement.qtyAfter,
-    unitCost: movement.unitCost,
+    ...(options.hideCost ? {} : { unitCost: movement.unitCost }),
     orderType: movement.orderType,
     orderId: movement.orderId,
     refNo: movement.refNo,
@@ -383,15 +387,15 @@ export function stockMovementDto(movement: StockMovementRecord) {
 
 // ── 效期视图与零售价 DTO（ck-08b）────────────────────────────────────────────
 
-export function stockBatchDto(row: StockBatchRecord) {
+export function stockBatchDto(row: StockBatchRecord, options: { hideCost?: boolean } = {}) {
   return {
-    ...stockRowDto(row),
+    ...stockRowDto(row, options),
     remainingDays: row.remainingDays,
     isExpired: row.isExpired,
   };
 }
 
-export function retailPriceDto(row: RetailPriceRecord) {
+export function retailPriceDto(row: RetailPriceRecord, options: { hideCost?: boolean } = {}) {
   return {
     id: row.id,
     unitId: row.unitId,
@@ -401,7 +405,7 @@ export function retailPriceDto(row: RetailPriceRecord) {
     spec: row.spec,
     price: row.price,
     currency: row.currency,
-    unitCost: row.unitCost,
+    ...(options.hideCost ? {} : { unitCost: row.unitCost }),
     updatedBy: row.updatedBy,
     updatedByName: row.updatedByName,
     updatedAt: row.updatedAt.toISOString(),
@@ -420,5 +424,76 @@ export function retailPriceHistoryDto(row: RetailPriceHistoryRecord) {
     updatedBy: row.updatedBy,
     updatedByName: row.updatedByName,
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+// ── 销售单 DTO（ck-09a）────────────────────────────────────────────────────────
+
+export function salesOrderItemDto(item: SalesOrderItemRecord) {
+  return {
+    id: item.id,
+    itemId: item.itemId,
+    itemName: item.itemName ?? null,
+    spec: item.spec ?? null,
+    qty: item.qty,
+    listPrice: item.listPrice,
+    price: item.price,
+    lineTotal: item.lineTotal,
+  };
+}
+
+export function salesAllocationDto(allocation: SalesBatchAllocationRecord) {
+  return {
+    id: allocation.id,
+    orderItemId: allocation.orderItemId,
+    itemId: allocation.itemId,
+    itemName: allocation.itemName ?? null,
+    batchId: allocation.batchId,
+    batchNo: allocation.batchNo ?? null,
+    expiryDate: allocation.expiryDate ?? null,
+    qty: allocation.qty,
+  };
+}
+
+export function salesPaymentDto(payment: PaymentRecord) {
+  return {
+    id: payment.id,
+    salesOrderId: payment.salesOrderId,
+    amount: payment.amount,
+    currency: payment.currency,
+    methodNote: payment.methodNote,
+    proofFileId: payment.proofFileId,
+    refundNote: payment.refundNote,
+    uploadedBy: payment.uploadedBy,
+    uploadedAt: payment.uploadedAt.toISOString(),
+  };
+}
+
+export function salesOrderDto(
+  order: SalesOrderRecord,
+  options: { sellerUnitName: string | null; buyerUnitName: string | null },
+) {
+  return {
+    id: order.id,
+    salesNo: order.salesNo,
+    sellerUnitId: order.sellerUnitId,
+    sellerUnitName: options.sellerUnitName,
+    buyerUnitId: order.buyerUnitId,
+    buyerUnitName: options.buyerUnitName,
+    source: order.source,
+    deliveryMethod: order.deliveryMethod,
+    deliveryAddress: order.deliveryAddress,
+    freight: order.freight,
+    discountPercent: order.discountPercent,
+    currency: order.currency,
+    totalAmount: order.totalAmount,
+    status: order.status,
+    remark: order.remark,
+    sentAt: order.sentAt ? order.sentAt.toISOString() : null,
+    confirmedAt: order.confirmedAt ? order.confirmedAt.toISOString() : null,
+    createdBy: order.createdBy,
+    createdAt: order.createdAt.toISOString(),
+    updatedAt: order.updatedAt.toISOString(),
+    hasPayment: order.hasPayment,
   };
 }

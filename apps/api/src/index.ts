@@ -18,6 +18,7 @@ import { outboundOrdersRouter } from './routes/outbound-orders';
 import { retailPricesRouter } from './routes/retail-prices';
 import { returnOrdersRouter } from './routes/return-orders';
 import { reviewsRouter } from './routes/reviews';
+import { salesOrdersRouter } from './routes/sales-orders';
 import { shipmentsRouter } from './routes/shipments';
 import { stockRouter } from './routes/stock';
 import { unitsRouter } from './routes/units';
@@ -92,6 +93,10 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // 零售价管理（登录用户，RBAC 见各路由）
   app.use('/api/v1/retail-prices/*', requireToken);
   app.route('/api/v1/retail-prices', retailPricesRouter());
+
+  // 销售单（请货/主动送货，RBAC 见各路由）
+  app.use('/api/v1/sales-orders/*', requireToken);
+  app.route('/api/v1/sales-orders', salesOrdersRouter());
 
   // 图片上传 / 预签名 URL（登录用户，RBAC 见各路由）
   app.use('/api/v1/files/*', requireToken);

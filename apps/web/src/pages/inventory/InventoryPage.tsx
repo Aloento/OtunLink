@@ -15,6 +15,7 @@ import {
 
 import { listItems } from '../../api/items';
 import { listExpiredBatches, listStock, listStockMovements } from '../../api/stock';
+import { listRetailPrices } from '../../api/retail-prices';
 import { listUnits } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
@@ -90,6 +91,22 @@ export function InventoryPage() {
     placeholderData: keepPreviousData,
   });
 
+  // 零售角色只读视图：库存 + 零售价（无成本字段）。
+  const isRetailer = me?.role === 'RETAILER';
+  const retailPriceQuery = useQuery({
+    queryKey: ['retail-prices', 'list', unitId || undefined],
+    queryFn: () => listRetailPrices({ unitId: unitId || undefined }),
+    enabled: isRetailer && view === 'stock',
+    staleTime: 30_000,
+  });
+  const retailPriceOf = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const price of retailPriceQuery.data?.items ?? []) {
+      map.set(`${price.unitId}:${price.itemId}`, `${price.price} ${price.currency}`);
+    }
+    return (unitIdValue: string, itemIdValue: string) => map.get(`${unitIdValue}:${itemIdValue}`) ?? '—';
+  }, [retailPriceQuery.data]);
+
   const activeQuery = view === 'stock' ? stockQuery : view === 'movements' ? movementsQuery : expiredQuery;
 
   const stockColumns: ResponsiveTableColumn<StockRowDto>[] = [
@@ -99,7 +116,9 @@ export function InventoryPage() {
     { key: 'batchNo', header: t('inventory.batchNo'), render: (row) => row.batchNo ?? '—' },
     { key: 'expiry', header: t('inventory.expiry'), render: (row) => expiryCell(row.expiryDate) },
     { key: 'qty', header: t('inventory.qty'), render: (row) => row.qty },
-    { key: 'avgCost', header: t('inventory.avgCost'), render: (row) => row.avgCost },
+    ...(isRetailer
+      ? ([{ key: 'retailPrice', header: t('inventory.retailPrice'), render: (row: StockRowDto) => retailPriceOf(row.unitId, row.itemId) }] as ResponsiveTableColumn<StockRowDto>[])
+      : ([{ key: 'avgCost', header: t('inventory.avgCost'), render: (row: StockRowDto) => row.avgCost }] as ResponsiveTableColumn<StockRowDto>[])),
     { key: 'available', header: t('inventory.available'), render: (row) => row.availableQty },
   ];
 

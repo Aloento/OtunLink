@@ -1,4 +1,5 @@
 import type {
+  DeliveryMethod,
   InboundSourceType,
   InboundStatus,
   ItemStatus,
@@ -7,6 +8,8 @@ import type {
   ReturnSourceType,
   ReturnStatus,
   ReviewStatus,
+  SalesSource,
+  SalesStatus,
   ShipmentStatus,
   SpecUnit,
   StockMovementType,
@@ -839,6 +842,158 @@ export interface RetailPriceRepository {
   listHistory(unitId: string, itemId: string): Promise<RetailPriceHistoryRecord[]>;
 }
 
+/** 销售单行（sales_order_items JOIN items 展示字段）。 */
+export interface SalesOrderItemRecord {
+  id: string;
+  salesOrderId: string;
+  itemId: string;
+  itemName: string | null;
+  spec: string | null;
+  qty: string;
+  listPrice: string | null;
+  price: string | null;
+  lineTotal: string | null;
+}
+
+/** 销售批次分配行（sales_batch_allocations JOIN batches/items）。 */
+export interface SalesBatchAllocationRecord {
+  id: string;
+  orderItemId: string;
+  itemId: string;
+  itemName: string | null;
+  batchId: string;
+  batchNo: string | null;
+  expiryDate: string | null;
+  qty: string;
+}
+
+/** 支付凭证行（payments）。 */
+export interface PaymentRecord {
+  id: string;
+  salesOrderId: string;
+  amount: string;
+  currency: string;
+  methodNote: string | null;
+  proofFileId: string | null;
+  refundNote: string | null;
+  uploadedBy: string | null;
+  uploadedAt: Date;
+}
+
+export interface SalesOrderRecord {
+  id: string;
+  salesNo: string;
+  sellerUnitId: string;
+  buyerUnitId: string;
+  source: SalesSource;
+  deliveryMethod: DeliveryMethod;
+  deliveryAddress: string | null;
+  freight: string;
+  discountPercent: string;
+  currency: string;
+  totalAmount: string | null;
+  status: SalesStatus;
+  remark: string | null;
+  sentAt: Date | null;
+  confirmedAt: Date | null;
+  createdBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  hasPayment: boolean;
+}
+
+export interface SalesListQuery {
+  page?: number;
+  size?: number;
+  status?: SalesStatus;
+  /** 数据范围：买方或卖方单元（任一方匹配）。 */
+  unitId?: string;
+}
+
+export interface SalesListResult {
+  items: SalesOrderRecord[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface CreateSalesItemInput {
+  itemId: string;
+  qty: string;
+  unitPriceOverride: string | null;
+}
+
+export interface CreateSalesRepoInput {
+  sellerUnitId: string;
+  buyerUnitId: string;
+  source: SalesSource;
+  deliveryMethod: DeliveryMethod;
+  deliveryAddress: string | null;
+  freight: string;
+  discountPercent: string;
+  currency: string;
+  remark: string | null;
+  items: CreateSalesItemInput[];
+  createdBy: string;
+}
+
+export interface PatchSalesInput {
+  deliveryMethod?: DeliveryMethod;
+  deliveryAddress?: string | null;
+  freight?: string;
+  discountPercent?: string;
+  currency?: string;
+  remark?: string | null;
+  items?: CreateSalesItemInput[];
+}
+
+/** 发送时手工批次分配（覆盖 FEFO）：按 item 汇总 qty 必须等于行数量。 */
+export interface SalesAllocationInput {
+  itemId: string;
+  batchId: string;
+  qty: string;
+}
+
+export interface SalesOrderWithItemsRecord {
+  order: SalesOrderRecord;
+  items: SalesOrderItemRecord[];
+}
+
+/**
+ * 销售单仓储（design.md §4.2 / §5.5）。
+ * 金额快照由服务端计算；send/cancel 与库存扣减/回补同一事务；支付 upsert。
+ */
+export interface SalesRepository {
+  list(query: SalesListQuery): Promise<SalesListResult>;
+  findById(id: string): Promise<SalesOrderRecord | null>;
+  listItems(salesOrderId: string): Promise<SalesOrderItemRecord[]>;
+  listAllocations(salesOrderId: string): Promise<SalesBatchAllocationRecord[]>;
+  findPayment(salesOrderId: string): Promise<PaymentRecord | null>;
+  /** 新建 DRAFT 销售单：以当前零售价取 listPrice 快照，计算行价/合计。 */
+  create(input: CreateSalesRepoInput): Promise<SalesOrderRecord>;
+  /** 更新 DRAFT 销售单：行整体替换并重算快照；非 DRAFT 抛 SALES_STATE_CONFLICT。 */
+  update(id: string, input: PatchSalesInput): Promise<SalesOrderRecord | null>;
+  /**
+   * 发送 DRAFT → SENT：FEFO（expiry_date ASC）或手工批次分配写
+   * sales_batch_allocations，同一事务按批扣减 stock 并写 stock_movements（OUTBOUND_SALE）。
+   * 非 DRAFT 抛 SALES_STATE_CONFLICT；库存不足抛 INSUFFICIENT_STOCK；
+   * 手工批次不存在抛 STOCK_BATCH_NOT_FOUND。
+   */
+  send(id: string, allocations: SalesAllocationInput[], sentBy: string): Promise<SalesOrderRecord | null>;
+  /**
+   * 取消：DRAFT → CANCELLED（无库存动作）；SENT/PAYMENT_UPLOADED（未确认收货）→ CANCELLED，
+   * 按原分配写 stock_movements（OUTBOUND_SALE_REVERSAL）回补批次。CONFIRMED 抛 SALES_STATE_CONFLICT。
+   */
+  cancel(id: string, cancelledBy: string): Promise<SalesOrderRecord | null>;
+  /** 上传/更新支付凭证：SENT/PAYMENT_UPLOADED → PAYMENT_UPLOADED；其他状态抛 SALES_STATE_CONFLICT。 */
+  uploadPayment(
+    id: string,
+    input: { amount: string; currency: string; methodNote: string | null; proofFileId: string | null; uploadedBy: string },
+  ): Promise<PaymentRecord | null>;
+  /** 确认收货：PAYMENT_UPLOADED → CONFIRMED；其他状态抛 SALES_STATE_CONFLICT。 */
+  confirmReceipt(id: string, confirmedBy: string): Promise<SalesOrderRecord | null>;
+}
+
 /** 站内通知行（notifications，ck-08b 先写表，发送端 ck-10 联接）。 */
 export interface NotificationRecord {
   id: string;
@@ -877,6 +1032,7 @@ export interface Repos {
   outbounds: OutboundRepository;
   stock: StockRepository;
   retailPrices: RetailPriceRepository;
+  sales: SalesRepository;
   notifications: NotificationRepository;
 }
 
