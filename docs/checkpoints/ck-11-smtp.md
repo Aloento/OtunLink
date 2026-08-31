@@ -26,9 +26,9 @@
 - `apps/web/src/i18n/resources/{zh-CN,en}.ts`：邮件文案由「邮件桥」改为「SMTP / 邮件提供方」。
 - `.env.example` / `.dev.vars.example`：邮件段改为 SMTP 变量（`SMTP_HOST/PORT/USER/PASS/SECURE/STARTTLS/AUTH` + `MAIL_FROM`）。
 - `apps/api/wrangler.toml` / `wrangler.local.toml`：`[vars]` 加非敏感 SMTP 配置
-  （`MAIL_PROVIDER`/`MAIL_FROM`/`SMTP_PORT`/`SMTP_SECURE`/`SMTP_STARTTLS`/`SMTP_AUTH`）；
-  `SMTP_HOST/SMTP_USER/SMTP_PASS` 走 secrets。
-- `.github/workflows/deploy.yml`：deploy-api job 增加 `wrangler secret put SMTP_HOST/SMTP_USER/SMTP_PASS`
+  （`MAIL_PROVIDER`/`MAIL_FROM`/`SMTP_HOST`/`SMTP_PORT`/`SMTP_SECURE`/`SMTP_STARTTLS`/`SMTP_AUTH`）；
+  `SMTP_USER/SMTP_PASS` 走 secrets。
+- `.github/workflows/deploy.yml`：deploy-api job 增加 `wrangler secret put SMTP_USER/SMTP_PASS`
   （读取 GitHub secrets，未配置则跳过）。
 - 删除 `infra/mail-bridge/`（index.js、smtp-client.js、package.json、README.md）。
 - 文档：`README.md`、`plan.md`、`docs/design.md` §8.8、`docs/deploy.md`、
@@ -39,13 +39,13 @@
 | 变量 | 类型 | 说明 |
 | --- | --- | --- |
 | `MAIL_PROVIDER` | vars | `smtp`（默认）/ `api`（预留） |
-| `MAIL_FROM` | vars | 发件地址，如 `noreply@otun.musi.land` |
+| `MAIL_FROM` | vars | 发件地址，如 `otun@musi.land` |
+| `SMTP_HOST` | vars | SMTP 服务器地址，如 `smtp.larksuite.com` |
 | `SMTP_PORT` | vars | 465（隐式 TLS）/ 587（STARTTLS） |
 | `SMTP_SECURE` | vars | 465 时 `true` |
 | `SMTP_STARTTLS` | vars | 587 时 `true` |
 | `SMTP_AUTH` | vars | `plain` / `login` / `cram-md5` |
-| `SMTP_HOST` | secret | SMTP 服务器地址 |
-| `SMTP_USER` | secret | SMTP 用户名 |
+| `SMTP_USER` | secret | SMTP 用户名（账号，如 `otun@musi.land`） |
 | `SMTP_PASS` | secret | SMTP 密码 / 授权码 |
 
 ## 验证
@@ -55,4 +55,4 @@
 
 ## 待用户配置
 
-- GitHub 仓库 Secrets 新增 `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS`（CI 自动写入 Worker）。
+- GitHub 仓库 Secrets 新增 `SMTP_USER` / `SMTP_PASS`（CI 自动写入 Worker；`SMTP_HOST` 等非敏感项已在 `wrangler.toml [vars]`）。

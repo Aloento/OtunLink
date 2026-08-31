@@ -36,13 +36,14 @@
 ### 1.3 邮件（SMTP 直连，可选）
 
 API 通过 Cloudflare Workers 出站 TCP 直连外部 SMTP（仅 465 隐式 TLS / 587 STARTTLS，
-25 端口被禁用），无需独立服务。配置：
+25 端口被禁用），无需独立服务。配置（以飞书 Lark `otun@musi.land` 为例）：
 
-- 非敏感项（`apps/api/wrangler.toml [vars]`）：`MAIL_PROVIDER=smtp`、`MAIL_FROM`、
-  `SMTP_PORT`（默认 465）、`SMTP_SECURE`（`true`=465）/`SMTP_STARTTLS`（`true`=587）、`SMTP_AUTH`（`plain`/`login`/`cram-md5`）。
-- secrets（生产 `wrangler secret put`，本地 `apps/api/.dev.vars`）：
-  `SMTP_HOST`、`SMTP_USER`、`SMTP_PASS`。
+- 非敏感项（`apps/api/wrangler.toml [vars]`）：`MAIL_PROVIDER=smtp`、`MAIL_FROM=otun@musi.land`、
+  `SMTP_HOST=smtp.larksuite.com`、`SMTP_PORT`（默认 465）、`SMTP_SECURE`（`true`=465）/
+  `SMTP_STARTTLS`（`true`=587）、`SMTP_AUTH`（`plain`/`login`/`cram-md5`）。
+- secrets（生产 `wrangler secret put`，本地 `apps/api/.dev.vars`）：`SMTP_USER`、`SMTP_PASS`。
 
+发信频率限制：200 封/100 秒；单发件人单日上限 450 封（`email_logs` 记录失败原因）。
 未配置时 API 自动降级为仅站内通知（fail-safe），`POST /admin/test-email` 可测试连通性。
 
 ## 2. Hyperdrive
@@ -94,10 +95,10 @@ pnpm --filter @otunlink/db exec drizzle-kit migrate
 | `KV_JWKS_CACHE` | KV binding 名称 | `JWKS_CACHE` |
 | `R2_BUCKET` / `S3_ENDPOINT` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` | 图片存储 | 见 cloud-config.md |
 | `MIGRATE_ON_START` | 启动时执行迁移 | `true`（生产关） |
-| `SMTP_HOST` | SMTP 服务器地址（**secret**，不配 = 降级仅站内通知） | `smtp.example.com` |
-| `SMTP_USER` | SMTP 用户名（**secret**） | `noreply@example.com` |
+| `SMTP_HOST` | SMTP 服务器地址（[vars]，不配 = 降级仅站内通知） | `smtp.larksuite.com` |
+| `SMTP_USER` | SMTP 用户名（**secret**）；飞书 Lark 为发信账号 | `otun@musi.land` |
 | `SMTP_PASS` | SMTP 密码/授权码（**secret**） | — |
-| `MAIL_FROM` | 发件地址（非敏感，[vars]） | `noreply@example.com` |
+| `MAIL_FROM` | 发件地址（[vars]） | `otun@musi.land` |
 | `SMTP_PORT` | SMTP 端口（465=隐式 TLS / 587=STARTTLS，[vars]） | `465` |
 | `SMTP_SECURE` | 465 隐式 TLS 时 `true`（[vars]） | `true` |
 | `SMTP_STARTTLS` | 587 STARTTLS 时 `true`（[vars]） | `false` |
@@ -114,10 +115,11 @@ pnpm --filter @otunlink/db exec drizzle-kit migrate
 ### 邮件 SMTP（GitHub secrets / `wrangler secret put`）
 
 CI（`.github/workflows/deploy.yml` 的 deploy-api job）会执行
-`npx wrangler secret put SMTP_HOST / SMTP_USER / SMTP_PASS`，读取 GitHub 仓库 Secrets。
+`npx wrangler secret put SMTP_USER / SMTP_PASS`，读取 GitHub 仓库 Secrets
+（`SMTP_HOST` 等非敏感项已在 `wrangler.toml [vars]`，无需作为 secret）。
 需在 GitHub 仓库 **Settings → Secrets and variables → Actions** 新增：
 
-- `SMTP_HOST`、`SMTP_USER`、`SMTP_PASS`（邮件凭据，必填才会发信）。
+- `SMTP_USER`（邮件账号，如 `otun@musi.land`）、`SMTP_PASS`（邮箱授权码/密码，必填才会发信）。
 - （可选复用现有）`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。
 
 未配置时 CI 跳过对应 secret 写入，API 降级为仅站内通知。

@@ -20,9 +20,11 @@ S3_ENDPOINT = "https://obs.eu-de.otc.t-systems.com"
 S3_REGION = "eu-de"
 S3_BUCKET = "ims-test-images"
 
-# ── 邮件（SMTP 直连，非敏感配置；SMTP_HOST/SMTP_USER/SMTP_PASS 走 .dev.vars）
+# ── 邮件（SMTP 直连，非敏感配置；SMTP_USER/SMTP_PASS 走 .dev.vars）──────────
+# 发信人 otun@musi.land（飞书 Lark 邮箱）；仅端口 465（SSL）/587（STARTTLS）。
 MAIL_PROVIDER = "smtp"
-MAIL_FROM = "noreply@otun.musi.land"
+MAIL_FROM = "otun@musi.land"
+SMTP_HOST = "smtp.larksuite.com"
 SMTP_PORT = "465"
 SMTP_SECURE = "true"
 SMTP_STARTTLS = "false"

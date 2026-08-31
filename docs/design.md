@@ -539,10 +539,11 @@ zod 400 `VALIDATION_ERROR`；401 未登录；403 `FORBIDDEN`；409 业务冲突�
 ### 8.8 邮件
 - Workers **支持出站 TCP**（Cloudflare `connect()` API / `cloudflare:sockets`，需 `compatibility_date >= 2024-11-01`），因此可**直连外部 SMTP**（仅端口 465 隐式 TLS / 587 STARTTLS，**25 端口被禁用**）。
 - 两种适配器（`lib/email.ts` 的 `createMailer`，由 `MAIL_PROVIDER` 选择）：
-  1. **`smtp`**（直连，默认/推荐）：`WorkerMailer`（`worker-mailer`，包封装 `cloudflare:sockets` 的 TLS/STARTTLS SMTP 客户端）静态 `WorkerMailer.send(...)` 一键发送。支持 plain/login/cram-md5 认证，配置 `SMTP_HOST/SMTP_PORT(=465)/SMTP_USER/SMTP_PASS/SMTP_SECURE/SMTP_STARTTLS/SMTP_AUTH` 与 `MAIL_FROM`。`SMTP_HOST/SMTP_USER/SMTP_PASS` 走 secrets（生产 `wrangler secret put`，本地 `.dev.vars`），`MAIL_FROM/SMTP_PORT/SMTP_SECURE/SMTP_STARTTLS/SMTP_AUTH` 为 `wrangler.toml [vars]` 非敏感项。
+  1. **`smtp`**（直连，默认/推荐）：`WorkerMailer`（`worker-mailer`，包封装 `cloudflare:sockets` 的 TLS/STARTTLS SMTP 客户端）静态 `WorkerMailer.send(...)` 一键发送。支持 plain/login/cram-md5 认证，配置 `SMTP_HOST/SMTP_PORT(=465)/SMTP_USER/SMTP_PASS/SMTP_SECURE/SMTP_STARTTLS/SMTP_AUTH` 与 `MAIL_FROM`。`SMTP_USER/SMTP_PASS` 走 secrets（生产 `wrangler secret put`，本地 `.dev.vars`），`SMTP_HOST/MAIL_FROM/SMTP_PORT/SMTP_SECURE/SMTP_STARTTLS/SMTP_AUTH` 为 `wrangler.toml [vars]` 非敏感项。
   2. **`api`**：预留（邮件服务商 HTTP API），未实现。
 - 模板：`lib/email-template.ts` 的 `renderEmailHtml()` 输出自适应、品牌化 HTML（table 布局 + 内联样式 + 媒体查询），`notify()`/定时效期预警/`test-email` 均已接入。
-- 配置：`MAIL_PROVIDER=smtp|api`（默认 `smtp`）、`MAIL_FROM`（如 `Otun@musi.land`）、模板（中文为主）。
+- 配置：`MAIL_PROVIDER=smtp|api`（默认 `smtp`）、`MAIL_FROM`（如 `otun@musi.land`）、模板（中文为主）。
+- 发信频率：SMTP 服务商有配额（如飞书 Lark：200 封/100 秒、单发件人单日 450 封），`deliverEmail` 记录失败原因到 `email_logs` 便于监控；超限时按 fail-safe 降级为站内通知。
 - 发送全部异步、失败重试 1 次、`email_logs` 记录；降级为仅站内通知（fail-safe）。
 
 ### 8.9 前端缓存与后端瘦身（成本原则）

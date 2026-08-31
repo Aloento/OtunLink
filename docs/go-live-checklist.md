@@ -40,7 +40,7 @@
 
 ## 阶段 4：邮件（SMTP 直连，可选）
 
-- [ ] 在 GitHub 仓库 Secrets 配置 `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS`（部署 CI 自动 `wrangler secret put`）
+- [ ] 在 GitHub 仓库 Secrets 配置 `SMTP_USER` / `SMTP_PASS`（部署 CI 自动 `wrangler secret put`；`SMTP_HOST`/`MAIL_FROM` 等在 `wrangler.toml [vars]`）
 - [ ] 确认邮箱服务器允许 Cloudflare Workers 经 465（隐式 TLS）/ 587（STARTTLS）出站
 - [ ] `POST /admin/test-email` 联通：返回 `{"ok":true}` 且收到测试邮件
 - [ ] 未配置时确认 API 返回降级原因、仅站内通知（fail-safe）
