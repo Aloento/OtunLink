@@ -9,7 +9,7 @@
 | --- | --- |
 | 账户 Account ID | `6597a89c745d8a5c698ffe521e15580e` |
 | 域名 | `otun.musi.land`（CNAME → `otun.pages.dev`） |
-| Pages 项目 | `otun`（绑定 `otunlink-api` Worker 作函数入口） |
+| Pages 项目 | `otun` 已创建（2026-08-31）并部署首版（`fa528f40.otun.pages.dev`）；自定义域 `otun.musi.land` status=active；部署方式：`wrangler pages deploy apps/web/dist --project-name otun`（GitHub Actions `deploy.yml` 自动执行；未用 CF Git 集成，monorepo 无法解析工作区包） |
 | API Token | 存于 `C:\Codes\OtunLink\.cf\api-token.txt`（gitignored；权限：Worker/Pages/KV/Hyperdrive 编辑） |
 | API Worker | `otunlink-api` 已部署（2026-08-31）；自定义域 `api.otun.musi.land`（自动创建 CNAME+证书）与 workers.dev 子域 `otunlink-api.soarcraft.workers.dev` 均已启用 |
 
@@ -80,8 +80,8 @@ npx wrangler deploy
 
 1. **Hyperdrive 确认**：控制台确认 `d3f06050a92846ca950561f5d37f1232` 指向 `otunlink` 库；
    并在私有 PG（164.30.21.203）防火墙放行 CF 出口 IP（Hyperdrive 会给出 IP 范围）
-2. **域名**：`api.otun.musi.land`（API Worker 自定义域）需 CNAME 到 Worker 域名；
-   `app.otun.musi.land` 已配 CNAME → `otun.pages.dev`（待 Pages 项目绑定自定义域）
+2. **域名**：`api.otun.musi.land`（API Worker 自定义域，已 active）；`otun.musi.land`（Pages 自定义域，已 active）；
+   `app.otun.musi.land` 已配 CNAME → `otun.pages.dev`（如需作为 SPA 主域，在 Pages 项目追加该自定义域并改 Entra Redirect URI）
 3. **Entra App Registration**：按 `docs/auth-setup.md` 完成注册并配置 Redirect URI（见第 4 节）
 4. **OBS 策略**：确认 bucket 允许 Programmatic 访问（AK/SK 已给；如跨域/策略需放行）
 
