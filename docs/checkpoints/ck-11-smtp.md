@@ -53,6 +53,10 @@
 - `pnpm -r typecheck` / `pnpm -r test` / `pnpm -r build` 全绿。
 - `infra/mail-bridge` 已删除，全仓库无 `BRIDGE_URL` / `BRIDGE_API_KEY` 引用。
 
-## 待用户配置
+## 待用户配置（GitHub Actions Secrets）
 
-- GitHub 仓库 Secrets 新增 `SMTP_USER` / `SMTP_PASS`（CI 自动写入 Worker；`SMTP_HOST` 等非敏感项已在 `wrangler.toml [vars]`）。
+CI 自动 `wrangler secret put` 的 secrets（`SMTP_HOST`/`MAIL_FROM` 等非敏感项已在 `wrangler.toml [vars]`）：
+
+- `SMTP_USER` / `SMTP_PASS`（邮件）。
+- `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`（华为云 OBS 图片存储）。
+- `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`（部署 / secret 写入）。

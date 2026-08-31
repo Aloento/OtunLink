@@ -112,17 +112,24 @@ pnpm --filter @otunlink/db exec drizzle-kit migrate
 | `VITE_API_BASE` | API 基址 |
 | `VITE_AUTH_CLIENT_ID` / `VITE_AUTH_TENANT` / `VITE_AUTH_REDIRECT_URI` | MSAL 配置 |
 
-### 邮件 SMTP（GitHub secrets / `wrangler secret put`）
+### Worker secrets（GitHub Actions Secrets / `wrangler secret put`）
 
 CI（`.github/workflows/deploy.yml` 的 deploy-api job）会执行
-`npx wrangler secret put SMTP_USER / SMTP_PASS`，读取 GitHub 仓库 Secrets
-（`SMTP_HOST` 等非敏感项已在 `wrangler.toml [vars]`，无需作为 secret）。
-需在 GitHub 仓库 **Settings → Secrets and variables → Actions** 新增：
+`npx wrangler secret put SMTP_USER / SMTP_PASS / S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY`，
+读取 GitHub 仓库 Secrets（`SMTP_HOST`/`MAIL_FROM`/`SMTP_PORT`/S3 endpoint/region/bucket 等
+非敏感项已在 `wrangler.toml [vars]`，无需作为 secret）。需在 GitHub 仓库
+**Settings → Secrets and variables → Actions** 配置：
 
-- `SMTP_USER`（邮件账号，如 `otun@musi.land`）、`SMTP_PASS`（邮箱授权码/密码，必填才会发信）。
-- （可选复用现有）`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。
+| Secret | 说明 | 示例 |
+| --- | --- | --- |
+| `SMTP_USER` | 邮件账号（必填才会发信） | `otun@musi.land` |
+| `SMTP_PASS` | 邮箱授权码/密码 | — |
+| `S3_ACCESS_KEY_ID` | 华为云 OBS AccessKey（图片上传） | `HPUA...` |
+| `S3_SECRET_ACCESS_KEY` | 华为云 OBS SecretKey | — |
+| `CLOUDFLARE_API_TOKEN` | CF API Token（部署） | — |
+| `CLOUDFLARE_ACCOUNT_ID` | CF 账号 ID（`wrangler secret put` 需要） | `xxxxxxxx` |
 
-未配置时 CI 跳过对应 secret 写入，API 降级为仅站内通知。
+未配置的项 CI 会跳过对应 secret 写入；SMTP 未配置时 API 降级为仅站内通知。
 
 ## 6. 上线前自检
 
