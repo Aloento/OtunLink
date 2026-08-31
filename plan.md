@@ -14,16 +14,16 @@
 
 | 阶段 | Checkpoint | 状态 |
 | ---- | ---------- | ---- |
-| P0-P7 | ck-00 ~ ck-07 | ✅ 全部完成（ck-07 提交 76737cd，已推送 origin/main） |
-| P8a | ck-08a 库存台账 + 手动出入库 | ⏳ 下一步 |
-| P8b | ck-08b 报损 + 效期预警 + 零售价 | 待启动 |
+| P0-P8a | ck-00 ~ ck-08a | ✅ 全部完成（ck-08a 提交 1629d67，已推送 origin/main） |
+| P8b | ck-08b 报损 + 效期预警 + 零售价 | ⏳ 下一步 |
 | P9a | ck-09a 销售单 + 请货 + FEFO | 待启动 |
 | P9b | ck-09b 零售售后退货闭环 | 待启动 |
 | P10 | ck-10 通知/审计/邮件桥/上线 | 待启动 |
 
-## 下一步（ck-08a）
+## 下一步（ck-08b）
 
-- 依据 [docs/checkpoints/ck-08a-stock.md](docs/checkpoints/ck-08a-stock.md) 与 design.md §4.3/§8.2 实现：
-  - 库存台账（批次维度：数量/成本/效期），所有数量变动走出入库业务逻辑
-  - 手动创建入库单（MANUAL source_type）与出库单（对手方/项目/备注）
+- 依据 [docs/checkpoints/ck-08b-loss.md](docs/checkpoints/ck-08b-loss.md) 与 design.md §5.4/附录 B 实现：
+  - 报损单（OUTBOUND_LOSS 类型出库单：损失原因 + 附图）
+  - 效期预警（快过期/已过期批次提示）
+  - 零售价（仓库自由修改独立零售价，入库原价始终记录不可改）
 - 由子 agent 实现（模型 `deepseek/deepseek-v4-flash-vision-exp`），完成后主对话审查验收并提交。
