@@ -18,3 +18,10 @@ ENTRA_CLIENT_SECRET=
 # endpoint/region/bucket 已在 wrangler.toml [vars]，此处只需凭据
 S3_ACCESS_KEY_ID=
 S3_SECRET_ACCESS_KEY=
+
+# ── 邮件（SMTP 直连，见 design.md §8.8）───────────────────────────────────
+# 非敏感配置已在 wrangler.toml [vars]；SMTP_HOST/SMTP_USER/SMTP_PASS 为 secret，
+# 本地写 .dev.vars、生产经 wrangler secret put。不配则降级为仅站内通知。
+SMTP_HOST=
+SMTP_USER=
+SMTP_PASS=

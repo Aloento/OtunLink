@@ -33,17 +33,17 @@
 - [ ] 通知中心 `/notifications`：列表 / 未读筛选 / 批量已读 / 导航徽标
 - [ ] 管理员：`GET /admin/audit-logs` 分页筛选可用（仅 ADMIN）
 - [ ] 管理员：`POST /admin/test-email`：
-  - 配置了邮件桥 → 返回 `{"ok":true}` 且收到测试邮件
-  - 未配置 → 返回 `{"ok":false,"reason":"...降级..."}`（符合预期）
+  - 配置了 SMTP → 返回 `{"ok":true}` 且收到测试邮件
+  - 未配置 → 返回 `{"ok":false,"reason":"未配置 SMTP_HOST..."}`（符合预期）
 - [ ] 效期预警：手动触发 `scheduled`（或等待定时）后站内通知生成；
-      配了邮件桥则额外收到邮件，未配则仅站内通知
+      配了 SMTP 则额外收到邮件，未配则仅站内通知
 
-## 阶段 4：邮件桥（可选）
+## 阶段 4：邮件（SMTP 直连，可选）
 
-- [ ] `infra/mail-bridge` 部署（Node 18+，`BRIDGE_API_KEY` 鉴权）
-- [ ] `GET /health` 返回 `{"ok":true,"smtp":"configured"}`
-- [ ] `POST /send` 用 API 侧 `BRIDGE_URL` 联通；失败时 API 侧报错并降级
-- [ ] 出口限制：只允许 API Worker IP 访问（或依赖密钥鉴权）
+- [ ] 在 GitHub 仓库 Secrets 配置 `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS`（部署 CI 自动 `wrangler secret put`）
+- [ ] 确认邮箱服务器允许 Cloudflare Workers 经 465（隐式 TLS）/ 587（STARTTLS）出站
+- [ ] `POST /admin/test-email` 联通：返回 `{"ok":true}` 且收到测试邮件
+- [ ] 未配置时确认 API 返回降级原因、仅站内通知（fail-safe）
 
 ## 阶段 5：灰度与回滚
 

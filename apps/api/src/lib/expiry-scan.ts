@@ -22,7 +22,7 @@ export interface ExpiryScanResult {
   expiringCount: number;
   /** 已过期的批次行数。 */
   expiredCount: number;
-  /** 本次扫描的预警摘要（供 ck-10 邮件桥叠加发送）。 */
+  /** 本次扫描的预警摘要（供 §8.8 邮件叠加发送）。 */
   alerts: ExpiryAlert[];
 }
 

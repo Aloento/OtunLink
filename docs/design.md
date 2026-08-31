@@ -537,13 +537,12 @@ zod 400 `VALIDATION_ERROR`；401 未登录；403 `FORBIDDEN`；409 业务冲突�
 - 录入框支持直接手输条码；相机流及时释放（功耗与隐私）
 
 ### 8.8 邮件
-- Workers **支持出站 TCP**（Cloudflare `connect()` API / `cloudflare:sockets`，需 `compatibility_date >= 2024-11-01`），因此可直连外部 SMTP（仅端口 465 隐式 TLS / 587 STARTTLS，**25 端口被禁用**），也可复用 `infra/mail-bridge`。
-- 三种适配器（`lib/email.ts` 的 `createMailer`，由 `MAIL_PROVIDER` 选择）：
-  1. **`smtp`**（直连，推荐）：`WorkerMailer`（`worker-mailer`，包封装 `cloudflare:sockets` 的 TLS/STARTTLS SMTP 客户端）静态 `WorkerMailer.send(...)` 一键发送。支持 plain/login/cram-md5 认证，配置 `SMTP_HOST/SMTP_PORT(=465)/SMTP_USER/SMTP_PASS/SMTP_SECURE/SMTP_STARTTLS/SMTP_AUTH` 与 `MAIL_FROM`。
-  2. **`bridge`**：`fetch` 调用 `MAIL_BRIDGE_URL`（`infra/mail-bridge`，内网 + API Key 鉴权）。
-  3. **`api`**：预留（邮件服务商 HTTP API），未实现。
+- Workers **支持出站 TCP**（Cloudflare `connect()` API / `cloudflare:sockets`，需 `compatibility_date >= 2024-11-01`），因此可**直连外部 SMTP**（仅端口 465 隐式 TLS / 587 STARTTLS，**25 端口被禁用**）。
+- 两种适配器（`lib/email.ts` 的 `createMailer`，由 `MAIL_PROVIDER` 选择）：
+  1. **`smtp`**（直连，默认/推荐）：`WorkerMailer`（`worker-mailer`，包封装 `cloudflare:sockets` 的 TLS/STARTTLS SMTP 客户端）静态 `WorkerMailer.send(...)` 一键发送。支持 plain/login/cram-md5 认证，配置 `SMTP_HOST/SMTP_PORT(=465)/SMTP_USER/SMTP_PASS/SMTP_SECURE/SMTP_STARTTLS/SMTP_AUTH` 与 `MAIL_FROM`。`SMTP_HOST/SMTP_USER/SMTP_PASS` 走 secrets（生产 `wrangler secret put`，本地 `.dev.vars`），`MAIL_FROM/SMTP_PORT/SMTP_SECURE/SMTP_STARTTLS/SMTP_AUTH` 为 `wrangler.toml [vars]` 非敏感项。
+  2. **`api`**：预留（邮件服务商 HTTP API），未实现。
 - 模板：`lib/email-template.ts` 的 `renderEmailHtml()` 输出自适应、品牌化 HTML（table 布局 + 内联样式 + 媒体查询），`notify()`/定时效期预警/`test-email` 均已接入。
-- 配置：`MAIL_PROVIDER=smtp|bridge|api`、`MAIL_FROM`（如 `Otun@musi.land`）、模板（中文为主）。
+- 配置：`MAIL_PROVIDER=smtp|api`（默认 `smtp`）、`MAIL_FROM`（如 `Otun@musi.land`）、模板（中文为主）。
 - 发送全部异步、失败重试 1 次、`email_logs` 记录；降级为仅站内通知（fail-safe）。
 
 ### 8.9 前端缓存与后端瘦身（成本原则）
@@ -563,7 +562,7 @@ zod 400 `VALIDATION_ERROR`；401 未登录；403 `FORBIDDEN`；409 业务冲突�
 |---|---|
 | 响应式 | 移动优先：320px 起；表格手机转卡片；Fluent 触控友好；底部导航（手机）；PWA 基础（manifest + 图标，离线仅缓存静态壳） |
 | 性能 | 列表 P95 < 500ms；分页 ≤50；图片走 S3 签名 URL；前端缓存命中优先 |
-| 安全/隐私 | 全程 HTTPS + HSTS + CSP（无第三方脚本）；JWT + RBAC + 数据范围；S3 私有桶签名访问；文件魔数白名单；摄像头权限最小化、用后释放；邮件桥内网+API Key；Entra 开启安全默认值（MFA）；审计关键操作；数据最小化收集（仅 email/姓名/单元） |
+| 安全/隐私 | 全程 HTTPS + HSTS + CSP（无第三方脚本）；JWT + RBAC + 数据范围；S3 私有桶签名访问；文件魔数白名单；摄像头权限最小化、用后释放；SMTP 走 TLS/STARTTLS + 凭据存 secrets；Entra 开启安全默认值（MFA）；审计关键操作；数据最小化收集（仅 email/姓名/单元） |
 | 可用性 | CF 全球边缘；私有 PG 由公司侧保障备份/监控 |
 | 备份 | PG 每日备份（公司侧）；台账只追加降低误操作 |
 | 成本 | 免费档为主：后端轻计算（验证优先）、缓存层、查询频率监控；Worker 免费 10 万请求/天、Hyperdrive 10 万查询/天需监控 |
@@ -588,7 +587,7 @@ zod 400 `VALIDATION_ERROR`；401 未登录；403 `FORBIDDEN`；409 业务冲突�
 | **P7** | 确认入库 + 发货退货 | 确认收货自动生成入库单（**批次建档**/备注/照片/POST）；拒收退货单 + 集货方处理闭环 |
 | **P8** | 库存平台 | 手动入库/出库/报损（指定批次）；按批次台账与库存页（**效期着色**）；**过期批次扫描与一键报损**；零售价管理 + 历史；并发锁 |
 | **P9** | 销售单 + 请货 + 售后 | 请货/主动送货；行级改价 + 整单折扣；**FEFO 批次分配**；发送扣库存；支付凭证；确认收货；取消回补；**零售售后退货闭环** |
-| **P10** | 通知/审计/打磨上线 | 站内通知 + **自建邮箱桥**；审计日志；工作台待办与效期预警；数据导入（物品/期初库存 csv，可选）；上线检查清单 |
+| **P10** | 通知/审计/打磨上线 | 站内通知 + **SMTP 直连邮件**；审计日志；工作台待办与效期预警；数据导入（物品/期初库存 csv，可选）；上线检查清单 |
 
 > 每阶段 `typecheck && test`；涉及 UI 的补 Playwright 冒烟；先小批量真实数据 pilot 再全量。
 
@@ -597,7 +596,7 @@ zod 400 `VALIDATION_ERROR`；401 未登录；403 `FORBIDDEN`；409 业务冲突�
 ## 11. 风险与开放问题
 
 1. **私有 PG 可达性**：Hyperdrive 需公司 DB 授权 CF 出站（防火墙/白名单/SSL）—— P1 必须先验证
-2. **邮件接入方式**：需确认自建邮箱服务器是否可部署 `mail-bridge`（或提供 HTTP API）；无 SMTP 桥则站内通知兜底
+2. **邮件接入方式**：需确认自建邮箱服务器是否允许 Worker 经 465/587 出站（防火墙/TLS）；无 SMTP 凭据则站内通知兜底
 3. **BarcodeDetector 兼容性**：Safari/部分移动浏览器不支持 → zxing 兜底；需在真机（iOS/Android）验证扫码体验
 4. **多批次来源**：集货一行多效期须拆行（用 UI 提示引导）；点货/入库也要允许按效期分批（P7 细化交互）
 5. **FEFO 并发**：销售发送与手动出库对同批次并发 → 行锁 + 余额校验已覆盖；Cron 与人工报损竞态靠状态机防御

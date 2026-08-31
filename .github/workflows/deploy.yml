@@ -53,8 +53,40 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # ── 邮件 SMTP 直连（design.md §8.8）：写入 Worker secrets（GitHub 仓库需
+      #    配置以下 secrets：SMTP_HOST / SMTP_USER / SMTP_PASS；MAIL_FROM、
+      #    SMTP_PORT、SMTP_SECURE、SMTP_STARTTLS、SMTP_AUTH 已在 wrangler.toml [vars]）。
+      #    未配置时跳过，API 降级为仅站内通知。
+      - name: Set SMTP_HOST secret
+        if: ${{ secrets.SMTP_HOST != '' }}
+        run: echo "$SMTP_HOST" | npx wrangler secret put SMTP_HOST
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+
+      - name: Set SMTP_USER secret
+        if: ${{ secrets.SMTP_USER != '' }}
+        run: echo "$SMTP_USER" | npx wrangler secret put SMTP_USER
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+
+      - name: Set SMTP_PASS secret
+        if: ${{ secrets.SMTP_PASS != '' }}
+        run: echo "$SMTP_PASS" | npx wrangler secret put SMTP_PASS
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+
       - name: Deploy Worker
         run: npx wrangler deploy
         working-directory: apps/api
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

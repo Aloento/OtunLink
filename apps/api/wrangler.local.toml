@@ -19,3 +19,11 @@ id = "24881a3ca1404761a800540a6e809d8d"
 S3_ENDPOINT = "https://obs.eu-de.otc.t-systems.com"
 S3_REGION = "eu-de"
 S3_BUCKET = "ims-test-images"
+
+# ── 邮件（SMTP 直连，非敏感配置；SMTP_HOST/SMTP_USER/SMTP_PASS 走 .dev.vars）
+MAIL_PROVIDER = "smtp"
+MAIL_FROM = "noreply@otun.musi.land"
+SMTP_PORT = "465"
+SMTP_SECURE = "true"
+SMTP_STARTTLS = "false"
+SMTP_AUTH = "plain"

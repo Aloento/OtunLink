@@ -2,7 +2,7 @@
 
 > 目标形态：Cloudflare Pages（前端）+ Cloudflare Workers（API）+ Hyperdrive
 >（私有 PostgreSQL 连接池）+ R2/S3 OBS（图片，见 `docs/cloud-config.md`）+ KV
->（JWKS 缓存）+ 可选 `infra/mail-bridge`（邮件桥，§8.8）。
+>（JWKS 缓存）+ SMTP 直连邮件（§8.8）。
 
 ## 1. 组件与域名
 
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 前端（`apps/web`） | Cloudflare Pages | `app.example.com` |
 | API（`apps/api`） | Cloudflare Workers | `api.example.com` |
-| 邮件桥（`infra/mail-bridge`，可选） | 任意可跑 Node 18+ 的容器 / VPS / 内网中继 | `bridge.example.com` |
+| 邮件（SMTP 直连） | Workers 出站连接外部 SMTP（465/587） | 无独立域名 |
 | 图片存储 | R2（或 S3 兼容 OBS） | 走 Worker 内绑定 |
 
 ### 1.1 Pages
@@ -25,22 +25,25 @@
 
 1. `apps/api/wrangler.toml` 配置 `name`、`compatibility_date`、`main`。
 2. 绑定 Hyperdrive（见 §2）、R2 bucket、KV namespace。
-3. 部署：`cd apps/api && pnpm deploy`（或 `wrangler deploy`），
+3. 邮件 SMTP 直连：非敏感配置已在 `wrangler.toml [vars]`
+   （`MAIL_PROVIDER`/`MAIL_FROM`/`SMTP_PORT`/`SMTP_SECURE`/`SMTP_STARTTLS`/`SMTP_AUTH`），
+   凭据 `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` 需写入 secrets：
+   `npx wrangler secret put SMTP_HOST`（以及 `SMTP_USER`/`SMTP_PASS`，见 §5）。
+4. 部署：`cd apps/api && pnpm deploy`（或 `wrangler deploy`），
    `routes` 配置指向 `api.example.com/*`。
-4. 迁移在 CI / 发布前执行（见 §4）。
+5. 迁移在 CI / 发布前执行（见 §4）。
 
-### 1.3 邮件桥（可选）
+### 1.3 邮件（SMTP 直连，可选）
 
-```bash
-cd infra/mail-bridge
-BRIDGE_API_KEY=<与 API 一致> SMTP_HOST=... SMTP_PORT=465 SMTP_SECURE=true \
-SMTP_USER=... SMTP_PASS=... MAIL_FROM=noreply@example.com MAIL_FROM_NAME=OtunLink \
-node index.js
-```
+API 通过 Cloudflare Workers 出站 TCP 直连外部 SMTP（仅 465 隐式 TLS / 587 STARTTLS，
+25 端口被禁用），无需独立服务。配置：
 
-用 Nginx / Cloudflare Tunnel / 防火墙把 `bridge.example.com` 指向该进程；
-务必限制只允许 API Worker 出口 IP 访问（或依赖 `BRIDGE_API_KEY` 鉴权）。
-见 `infra/mail-bridge/README.md`。
+- 非敏感项（`apps/api/wrangler.toml [vars]`）：`MAIL_PROVIDER=smtp`、`MAIL_FROM`、
+  `SMTP_PORT`（默认 465）、`SMTP_SECURE`（`true`=465）/`SMTP_STARTTLS`（`true`=587）、`SMTP_AUTH`（`plain`/`login`/`cram-md5`）。
+- secrets（生产 `wrangler secret put`，本地 `apps/api/.dev.vars`）：
+  `SMTP_HOST`、`SMTP_USER`、`SMTP_PASS`。
+
+未配置时 API 自动降级为仅站内通知（fail-safe），`POST /admin/test-email` 可测试连通性。
 
 ## 2. Hyperdrive
 
@@ -56,7 +59,6 @@ node index.js
 | --- | --- | --- |
 | `app.example.com` | CNAME | `<pages-project>.pages.dev` |
 | `api.example.com` | CNAME | `<worker>.workers.dev` |
-| `bridge.example.com`（可选） | CNAME / A | 邮件桥 IP 或隧道 |
 
 若用自定义域直接托管 API，Workers 设置中绑定 `api.example.com` 即可，无需 CNAME。
 
@@ -92,11 +94,15 @@ pnpm --filter @otunlink/db exec drizzle-kit migrate
 | `KV_JWKS_CACHE` | KV binding 名称 | `JWKS_CACHE` |
 | `R2_BUCKET` / `S3_ENDPOINT` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` | 图片存储 | 见 cloud-config.md |
 | `MIGRATE_ON_START` | 启动时执行迁移 | `true`（生产关） |
-| `BRIDGE_URL` | 邮件桥地址（不配 = 降级仅站内通知） | `https://bridge.example.com` |
-| `BRIDGE_API_KEY` | 邮件桥 API 密钥（与桥一致） | `change-me` |
-| `MAIL_FROM` | 发件地址（必填才启用邮件） | `noreply@example.com` |
-| `MAIL_FROM_NAME` | 发件人显示名（可选） | `OtunLink` |
-| `MAIL_PROVIDER` | `bridge`（默认）/ `api`（预留，未实现时置 bridge） | `bridge` |
+| `SMTP_HOST` | SMTP 服务器地址（**secret**，不配 = 降级仅站内通知） | `smtp.example.com` |
+| `SMTP_USER` | SMTP 用户名（**secret**） | `noreply@example.com` |
+| `SMTP_PASS` | SMTP 密码/授权码（**secret**） | — |
+| `MAIL_FROM` | 发件地址（非敏感，[vars]） | `noreply@example.com` |
+| `SMTP_PORT` | SMTP 端口（465=隐式 TLS / 587=STARTTLS，[vars]） | `465` |
+| `SMTP_SECURE` | 465 隐式 TLS 时 `true`（[vars]） | `true` |
+| `SMTP_STARTTLS` | 587 STARTTLS 时 `true`（[vars]） | `false` |
+| `SMTP_AUTH` | 认证方式 `plain`/`login`/`cram-md5`（[vars]） | `plain` |
+| `MAIL_PROVIDER` | `smtp`（默认）/ `api`（预留，[vars]） | `smtp` |
 
 ### 前端（Pages 环境变量）
 
@@ -105,10 +111,16 @@ pnpm --filter @otunlink/db exec drizzle-kit migrate
 | `VITE_API_BASE` | API 基址 |
 | `VITE_AUTH_CLIENT_ID` / `VITE_AUTH_TENANT` / `VITE_AUTH_REDIRECT_URI` | MSAL 配置 |
 
-### 邮件桥
+### 邮件 SMTP（GitHub secrets / `wrangler secret put`）
 
-`PORT`、`BRIDGE_API_KEY`、`SMTP_HOST`、`SMTP_PORT`（默认 465）、
-`SMTP_SECURE`（默认 true）、`SMTP_USER`、`SMTP_PASS`、`MAIL_FROM`、`MAIL_FROM_NAME`。
+CI（`.github/workflows/deploy.yml` 的 deploy-api job）会执行
+`npx wrangler secret put SMTP_HOST / SMTP_USER / SMTP_PASS`，读取 GitHub 仓库 Secrets。
+需在 GitHub 仓库 **Settings → Secrets and variables → Actions** 新增：
+
+- `SMTP_HOST`、`SMTP_USER`、`SMTP_PASS`（邮件凭据，必填才会发信）。
+- （可选复用现有）`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。
+
+未配置时 CI 跳过对应 secret 写入，API 降级为仅站内通知。
 
 ## 6. 上线前自检
 

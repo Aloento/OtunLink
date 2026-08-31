@@ -17,6 +17,7 @@
 | [ck-09a](ck-09a-sales.md)   | P9a  | 销售单+请货+FEFO 分配（✅ 完成：请货/主动送货、行改价+整单折扣、send 后 FEFO/手工分配+OUTBOUND_SALE、取消回补、支付/确认收货、零售只读无成本） | §5.5/§8.2      | ck-08b |
 | [ck-09b](ck-09b-returns.md) | P9b  | 零售售后退货闭环（✅ 完成：发起→审核→收货，原批次优先/待检批次兜底 RETURN_IN，部分退货，迁移 0005） | §5.2/§5.5      | ck-09a |
 | [ck-10](ck-10-polish.md)    | P10  | 通知/审计/邮件桥/上线（✅ 完成：通知中心+工作台待办、audit_logs+查询、EmailProvider+mail-bridge+email_logs(迁移 0006)+test-email、deploy.md/go-live-checklist、vitest 全链路冒烟） | §8.5/§8.8/§9   | ck-09b |
+| [ck-11](ck-11-smtp.md)      | P10+ | SMTP 直连并移除邮件桥（✅ 完成：默认 provider 改 smtp、移除 createBridgeProvider/BRIDGE_*、删除 infra/mail-bridge、wrangler [vars]+secrets、deploy.yml `wrangler secret put SMTP_*`、设计/部署/上线文档同步） | §8.8            | ck-10  |
 
 ## 每轮统一要求
 

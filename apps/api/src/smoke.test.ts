@@ -327,7 +327,7 @@ describe('ck-10 全链路冒烟', () => {
     expect(res.status).toBe(403);
   });
 
-  it('邮件连通性：未配置桥时 ADMIN 得到降级原因（200）；非 ADMIN 403', async () => {
+  it('邮件连通性：未配置 SMTP 时 ADMIN 得到降级原因（200）；非 ADMIN 403', async () => {
     const { app } = makeApp();
     let res = await app.request('/api/v1/admin/test-email', {
       method: 'POST',
@@ -337,8 +337,8 @@ describe('ck-10 全链路冒烟', () => {
     expect(res.status).toBe(200);
     const result = await data<{ ok: boolean; provider: string; reason: string }>(res);
     expect(result.ok).toBe(false);
-    expect(result.provider).toBe('bridge');
-    expect(result.reason).toContain('未配置 BRIDGE_URL');
+    expect(result.provider).toBe('smtp');
+    expect(result.reason).toContain('未配置 SMTP_HOST');
 
     res = await app.request('/api/v1/admin/test-email', {
       method: 'POST',

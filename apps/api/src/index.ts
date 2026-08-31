@@ -175,7 +175,7 @@ export async function scheduled(
       `[scheduled] expiry scan done: created=${result.createdCount} expiring=${result.expiringCount} expired=${result.expiredCount}`,
     );
 
-    // ck-10 §8.8：配置了邮件桥时，将效期预警邮件发给对应仓库的活跃用户（无桥则跳过）。
+    // §8.8：配置了 SMTP 时，将效期预警邮件发给对应仓库的活跃用户（未配置则跳过）。
     const mailer = createMailer(env as unknown as AppEnv);
     if (mailer && result.alerts.length > 0) {
       const users = await repos.users.list();

@@ -37,14 +37,10 @@ export interface Env extends Record<string, unknown> {
   HYPERDRIVE?: unknown;
   DATABASE_URL?: string;
   ADMIN_SECRET?: string;
-  // 邮件桥（ck-10 §8.8）：BRIDGE_URL/BRIDGE_API_KEY 指向 infra/mail-bridge；
-  // MAIL_PROVIDER=bridge 显式启用，缺省配置时降级为仅站内通知。
-  MAIL_PROVIDER?: string;
-  BRIDGE_URL?: string;
-  BRIDGE_API_KEY?: string;
-  MAIL_FROM?: string;
-  // SMTP 直连（ck-11 §8.8）：MAIL_PROVIDER=smtp 时经 Cloudflare connect()（TCP socket）直连外部 SMTP。
+  // 邮件（design.md §8.8）：MAIL_PROVIDER=smtp（默认）经 Cloudflare connect()（TCP socket）直连外部 SMTP；
   // SMTP_SECURE=true 走 465 隐式 TLS（secureTransport=on）；否则 SMTP_STARTTLS=true 走 587 STARTTLS。
+  MAIL_PROVIDER?: string;
+  MAIL_FROM?: string;
   SMTP_HOST?: string;
   SMTP_PORT?: string;
   SMTP_USER?: string;

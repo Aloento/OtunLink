@@ -40,3 +40,4 @@ design.md：§8.5 通知、§8.8 邮件、§6.2/§6.1、§9 非功能、§10 P10
 - ⏭️ 数据导入（可选）：**按父任务要求跳过**（物品 CSV/Excel 导入未实现，留待后续迭代）。
 - ℹ️ 说明：email_logs 表在迁移 0000 已存在（ck-08b 前置），本 checkpoint 仅新增迁移 `0006_shallow_peter_quill`（补 `body`/`attempts` 列 + meta snapshot）。
 - 验证：`pnpm -r typecheck`（4/4 通过）、`pnpm -r test`（33 文件 / 200 用例全过：shared 16、db 8、api 136、web 40）、`pnpm -r build`（shared/db tsc、web vite、api wrangler dry-run 均通过）。
+- ▶️ 后续（ck-11）：邮件由 `infra/mail-bridge`（HTTP→SMTP 桥）改造为 **SMTP 直连**（Worker 出站 TCP 465/587），并删除邮件桥，详见 [ck-11-smtp.md](ck-11-smtp.md)。
