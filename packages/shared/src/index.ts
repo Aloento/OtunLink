@@ -4,6 +4,8 @@ export * from './errors';
 export * from './i18n';
 export * from './inbound';
 export * from './items';
+export * from './outbound';
 export * from './returns';
 export * from './schemas';
 export * from './shipments';
+export * from './stock';

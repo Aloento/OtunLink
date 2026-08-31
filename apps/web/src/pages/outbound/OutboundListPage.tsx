@@ -4,59 +4,67 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-import { INBOUND_STATUSES, type InboundOrderDto, type InboundStatus } from '@otunlink/shared';
+import {
+  OUTBOUND_STATUSES,
+  OUTBOUND_TYPES,
+  type OutboundOrderDto,
+  type OutboundStatus,
+  type OutboundType,
+} from '@otunlink/shared';
 
-import { listInbounds } from '../../api/inbound';
+import { listOutboundOrders } from '../../api/outbound';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
 
-// 入库单列表（ck-07 §6.1）：确认收货自动建档的 DRAFT / POSTED。
-export function InboundListPage() {
+// 出库单列表（ck-08a §4.3）：手工出库（NORMAL），草稿可过账。
+export function OutboundListPage() {
   const { t } = useTranslation();
 
-  const [status, setStatus] = useState<InboundStatus | ''>('');
+  const [status, setStatus] = useState<OutboundStatus | ''>('');
+  const [type, setType] = useState<OutboundType | ''>('');
   const [page, setPage] = useState(1);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['inbound-orders', 'list', status || undefined, page],
-    queryFn: () => listInbounds({ status: status || undefined, page, size: PAGE_SIZE }),
+    queryKey: ['outbound-orders', 'list', status || undefined, type || undefined, page],
+    queryFn: () =>
+      listOutboundOrders({ status: status || undefined, type: type || undefined, page, size: PAGE_SIZE }),
     placeholderData: keepPreviousData,
   });
 
-  const columns: ResponsiveTableColumn<InboundOrderDto>[] = [
+  const columns: ResponsiveTableColumn<OutboundOrderDto>[] = [
     {
-      key: 'inboundNo',
-      header: t('inbound.inboundNo'),
+      key: 'outboundNo',
+      header: t('outbound.outboundNo'),
       render: (order) => (
-        <Link to={`/inbound/${order.id}`} className="font-medium text-blue-600 hover:underline">
-          {order.inboundNo}
+        <Link to={`/outbound/${order.id}`} className="font-medium text-blue-600 hover:underline">
+          {order.outboundNo}
         </Link>
       ),
     },
     {
-      key: 'sourceType',
-      header: t('inbound.sourceType'),
-      render: (order) => t(`inbound.sourceTypes.${order.sourceType}`),
-    },
-    {
-      key: 'shipmentNo',
-      header: t('inbound.shipmentNo'),
-      render: (order) => order.shipmentNo ?? '—',
+      key: 'type',
+      header: t('outbound.type'),
+      render: (order) => t(`outbound.types.${order.type}`),
     },
     {
       key: 'warehouse',
-      header: t('inbound.warehouse'),
+      header: t('outbound.warehouse'),
       render: (order) => order.warehouseName ?? order.warehouseUnitId,
     },
     {
+      key: 'counterparty',
+      header: t('outbound.counterparty'),
+      render: (order) => order.counterpartyName ?? order.counterpartyUnitId ?? '—',
+    },
+    {
       key: 'status',
-      header: t('inbound.status'),
-      render: (order) => t(`inbound.statuses.${order.status}`),
+      header: t('outbound.status'),
+      render: (order) => t(`outbound.statuses.${order.status}`),
     },
     {
       key: 'createdAt',
-      header: t('inbound.createdAt'),
+      header: t('outbound.createdAt'),
       render: (order) => order.createdAt,
     },
   ];
@@ -67,26 +75,40 @@ export function InboundListPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">{t('inbound.title')}</Title1>
+        <Title1 as="h1">{t('outbound.title')}</Title1>
         <div className="flex items-center gap-2">
           <Select
-            value={status}
+            value={type}
             onChange={(_, d) => {
-              setStatus(d.value as InboundStatus | '');
+              setType(d.value as OutboundType | '');
               setPage(1);
             }}
-            className="min-w-40"
-            aria-label={t('inbound.status')}
+            aria-label={t('outbound.type')}
           >
-            <option value="">{t('inbound.allStatuses')}</option>
-            {INBOUND_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {t(`inbound.statuses.${s}`)}
+            <option value="">{t('outbound.allTypes')}</option>
+            {OUTBOUND_TYPES.map((v) => (
+              <option key={v} value={v}>
+                {t(`outbound.types.${v}`)}
               </option>
             ))}
           </Select>
-          <Link to="/inbound/new">
-            <Button appearance="primary">{t('inbound.manualCreateTitle')}</Button>
+          <Select
+            value={status}
+            onChange={(_, d) => {
+              setStatus(d.value as OutboundStatus | '');
+              setPage(1);
+            }}
+            aria-label={t('outbound.status')}
+          >
+            <option value="">{t('outbound.allStatuses')}</option>
+            {OUTBOUND_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {t(`outbound.statuses.${s}`)}
+              </option>
+            ))}
+          </Select>
+          <Link to="/outbound/new">
+            <Button appearance="primary">{t('outbound.newOutbound')}</Button>
           </Link>
         </div>
       </div>
@@ -101,10 +123,10 @@ export function InboundListPage() {
             columns={columns}
             items={data?.items ?? []}
             rowKey={(order) => order.id}
-            emptyText={t('inbound.empty')}
+            emptyText={t('outbound.empty')}
           />
           <div className="flex items-center justify-between text-sm text-neutral-600">
-            <span>{t('inbound.total', { total })}</span>
+            <span>{t('outbound.total', { total })}</span>
             <div className="flex items-center gap-2">
               <Button
                 size="small"

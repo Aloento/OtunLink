@@ -204,6 +204,44 @@ export const reviewRejectSchema = z.object({
   reason: z.string().trim().min(1).max(4096),
 });
 
+// ── 库存台账与手动出入库（ck-08a）────────────────────────────────────────────
+
+/** 手动入库单行：物品 + 数量 + 成本单价（可选）+ 批次信息（可选，缺省自动生成）。 */
+export const inboundManualLineSchema = z.object({
+  itemId: z.uuid(),
+  qty: shipmentQty,
+  unitCost: shipmentMoney.optional().nullable(),
+  productionDate: dateOnly.optional().nullable(),
+  expiryDate: dateOnly.optional().nullable(),
+  batchNo: z.string().trim().min(1).max(64).optional().nullable(),
+  lineNote: z.string().trim().max(1024).optional().nullable(),
+});
+
+/** 新建手动入库单（POST /inbound-orders）：sourceType=MANUAL。 */
+export const inboundManualCreateSchema = z.object({
+  warehouseUnitId: z.uuid(),
+  counterpartyUnitId: z.uuid().optional().nullable(),
+  remark: z.string().trim().max(4096).optional().nullable(),
+  photoFileIds: z.array(z.uuid()).max(9).optional(),
+  lines: z.array(inboundManualLineSchema).min(1).max(500),
+});
+
+/** 出库单行：物品 + 数量；batchId 缺省时过账按 FEFO 自动分配。 */
+export const outboundLineSchema = z.object({
+  itemId: z.uuid(),
+  qty: shipmentQty,
+  batchId: z.uuid().optional().nullable(),
+});
+
+/** 新建手工出库单（POST /outbound-orders）：type=NORMAL（报损留给 ck-08b）。 */
+export const outboundCreateSchema = z.object({
+  warehouseUnitId: z.uuid(),
+  counterpartyUnitId: z.uuid().optional().nullable(),
+  remark: z.string().trim().max(4096).optional().nullable(),
+  photoFileIds: z.array(z.uuid()).max(9).optional(),
+  lines: z.array(outboundLineSchema).min(1).max(500),
+});
+
 // ── 确认入库与发货退货（ck-07）─────────────────────────────────────────────────
 
 /** 确认收货（POST /shipments/:id/confirm-receipt）行级批次号（可选，缺省自动生成）。 */
@@ -269,3 +307,7 @@ export type ReturnCreateItemInput = z.infer<typeof returnCreateItemSchema>;
 export type ReturnCreateInput = z.infer<typeof returnCreateSchema>;
 export type ReturnAcceptInput = z.infer<typeof returnAcceptSchema>;
 export type ReturnRejectInput = z.infer<typeof returnRejectSchema>;
+export type InboundManualLineInput = z.infer<typeof inboundManualLineSchema>;
+export type InboundManualCreateInput = z.infer<typeof inboundManualCreateSchema>;
+export type OutboundLineInput = z.infer<typeof outboundLineSchema>;
+export type OutboundCreateInput = z.infer<typeof outboundCreateSchema>;

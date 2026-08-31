@@ -1,7 +1,9 @@
 import type {
   ConfirmReceiptRepoInput,
   CreateFileInput,
+  CreateInboundManualRepoInput,
   CreateItemInput,
+  CreateOutboundRepoInput,
   CreateReturnRepoInput,
   CreateReviewInput,
   CreateShipmentInput,
@@ -21,6 +23,11 @@ import type {
   ItemListResult,
   ItemRecord,
   ItemRepository,
+  OutboundListQuery,
+  OutboundListResult,
+  OutboundOrderItemRecord,
+  OutboundOrderRecord,
+  OutboundRepository,
   Repos,
   ReturnListQuery,
   ReturnListResult,
@@ -35,6 +42,13 @@ import type {
   ShipmentRecord,
   ShipmentRepository,
   ShipmentTrackingRecord,
+  StockListQuery,
+  StockListResult,
+  StockMovementListQuery,
+  StockMovementListResult,
+  StockMovementRecord,
+  StockRepository,
+  StockRowRecord,
   UnitRecord,
   UnitRepository,
   UpdateItemInput,
@@ -379,6 +393,11 @@ const INBOUND_STATE_CONFLICT_MESSAGE = 'INBOUND_STATE_CONFLICT: only DRAFT inbou
 const RETURN_STATE_CONFLICT_MESSAGE = 'RETURN_STATE_CONFLICT: shipment is not READY for return';
 const RETURN_ALREADY_PROCESSED_MESSAGE = 'RETURN_ALREADY_PROCESSED: return order already processed';
 const RETURN_LINE_INVALID_MESSAGE = 'RETURN_LINE_INVALID: return line is invalid';
+const OUTBOUND_STATE_CONFLICT_MESSAGE =
+  'OUTBOUND_STATE_CONFLICT: only DRAFT outbound orders can be posted';
+const INSUFFICIENT_STOCK_MESSAGE = 'INSUFFICIENT_STOCK: insufficient stock for outbound';
+const STOCK_BATCH_NOT_FOUND_MESSAGE =
+  'STOCK_BATCH_NOT_FOUND: no stock of the specified batch in the warehouse';
 
 /** 单据编号 §8.4：SH-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号）。 */
 function shipmentNoDate(now: Date): string {
@@ -875,6 +894,7 @@ export interface MemoryStockRecord {
   qty: number;
   avgCost: number;
   version: number;
+  updatedAt: Date;
 }
 
 /** 供测试断言用的内存台账快照。 */
@@ -891,6 +911,152 @@ export interface MemoryStockMovementRecord {
   orderId: string;
   refNo: string;
   operatorId: string | null;
+  createdAt: Date;
+}
+
+/**
+ * 共享内存台账（ck-08a）：batches / stock / movements 三个 Map 供入库、
+ * 出库、库存查询三个仓储共用，保证测试/联调时数据一致。
+ */
+class MemoryStockLedger {
+  readonly batches = new Map<string, MemoryBatchRecord>();
+  readonly stock = new Map<string, MemoryStockRecord>();
+  readonly movements: MemoryStockMovementRecord[] = [];
+
+  stockKey(unitId: string, itemId: string, batchId: string): string {
+    return `${unitId}|${itemId}|${batchId}`;
+  }
+
+  /** 入库：建档批次 + 库存（加权平均成本）+ 台账流水。 */
+  applyInbound(params: {
+    unitId: string;
+    itemId: string;
+    batch: MemoryBatchRecord;
+    qty: number;
+    unitCost: number;
+    type: string;
+    orderType: string;
+    orderId: string;
+    refNo: string;
+    operatorId: string | null;
+  }): void {
+    const { unitId, itemId } = params;
+    const now = new Date();
+    this.batches.set(params.batch.id, { ...params.batch });
+    const key = this.stockKey(unitId, itemId, params.batch.id);
+    const before = this.stock.get(key);
+    const qtyBefore = before ? before.qty : 0;
+    const qtyAfter = qtyBefore + params.qty;
+    const avgCost =
+      qtyAfter > 0
+        ? (qtyBefore * (before ? before.avgCost : 0) + params.qty * params.unitCost) / qtyAfter
+        : 0;
+    this.stock.set(key, {
+      unitId,
+      itemId,
+      batchId: params.batch.id,
+      qty: round2(qtyAfter),
+      avgCost: round2(avgCost),
+      version: (before ? before.version : 0) + 1,
+      updatedAt: now,
+    });
+    this.movements.push({
+      unitId,
+      itemId,
+      batchId: params.batch.id,
+      type: params.type,
+      qtyDelta: round2(params.qty),
+      qtyBefore: round2(qtyBefore),
+      qtyAfter: round2(qtyAfter),
+      unitCost: params.unitCost,
+      orderType: params.orderType,
+      orderId: params.orderId,
+      refNo: params.refNo,
+      operatorId: params.operatorId,
+      createdAt: now,
+    });
+  }
+
+  /**
+   * 出库扣减：batchId 缺省按 FEFO（到期日 → 生产日期升序）自动分配（可拆多批）；
+   * 指定批次则须存在且数量足够。逐批写台账流水并返回分配明细。
+   * 库存不足抛 INSUFFICIENT_STOCK；指定批次无库存抛 STOCK_BATCH_NOT_FOUND。
+   */
+  applyOutbound(params: {
+    unitId: string;
+    itemId: string;
+    qty: number;
+    batchId: string | null;
+    type: string;
+    orderType: string;
+    orderId: string;
+    refNo: string;
+    operatorId: string | null;
+  }): { batchId: string; qty: number; unitCost: number }[] {
+    const keyOf = (batchId: string) => this.stockKey(params.unitId, params.itemId, batchId);
+    const candidates = [...this.stock.values()]
+      .filter((row) => row.unitId === params.unitId && row.itemId === params.itemId && row.qty > 0)
+      .sort((a, b) => {
+        const ea = this.batches.get(a.batchId)?.expiryDate ?? null;
+        const eb = this.batches.get(b.batchId)?.expiryDate ?? null;
+        if (ea !== eb) return (ea ?? '9999-12-31') < (eb ?? '9999-12-31') ? -1 : 1;
+        const pa = this.batches.get(a.batchId)?.productionDate ?? null;
+        const pb = this.batches.get(b.batchId)?.productionDate ?? null;
+        if (pa !== pb) return (pa ?? '9999-12-31') < (pb ?? '9999-12-31') ? -1 : 1;
+        return a.batchId < b.batchId ? -1 : a.batchId > b.batchId ? 1 : 0;
+      });
+
+    const now = new Date();
+    const allocations: { batchId: string; qty: number; unitCost: number }[] = [];
+    const consume = (row: MemoryStockRecord, qty: number) => {
+      const qtyAfter = round2(row.qty - qty);
+      if (qtyAfter < 0) throw new Error(INSUFFICIENT_STOCK_MESSAGE);
+      this.stock.set(keyOf(row.batchId), {
+        ...row,
+        qty: qtyAfter,
+        version: row.version + 1,
+        updatedAt: now,
+      });
+      this.movements.push({
+        unitId: params.unitId,
+        itemId: params.itemId,
+        batchId: row.batchId,
+        type: params.type,
+        qtyDelta: -round2(qty),
+        qtyBefore: round2(row.qty),
+        qtyAfter,
+        unitCost: row.avgCost,
+        orderType: params.orderType,
+        orderId: params.orderId,
+        refNo: params.refNo,
+        operatorId: params.operatorId,
+        createdAt: now,
+      });
+      allocations.push({ batchId: row.batchId, qty: round2(qty), unitCost: row.avgCost });
+    };
+
+    if (params.batchId) {
+      const row = this.stock.get(keyOf(params.batchId));
+      if (!row || row.qty < params.qty) {
+        throw new Error(
+          row && row.qty >= 0 ? INSUFFICIENT_STOCK_MESSAGE : STOCK_BATCH_NOT_FOUND_MESSAGE,
+        );
+      }
+      consume(row, params.qty);
+      return allocations;
+    }
+
+    const total = candidates.reduce((sum, row) => sum + row.qty, 0);
+    if (round2(total) < params.qty) throw new Error(INSUFFICIENT_STOCK_MESSAGE);
+    let remaining = params.qty;
+    for (const row of candidates) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, row.qty);
+      consume(row, take);
+      remaining = round2(remaining - take);
+    }
+    return allocations;
+  }
 }
 
 function cloneInbound(row: InboundOrderRecord): InboundOrderRecord {
@@ -921,19 +1087,40 @@ function cloneReturnItem(row: ReturnOrderItemRecord): ReturnOrderItemRecord {
   return { ...row, createdAt: new Date(row.createdAt) };
 }
 
+function cloneOutbound(row: OutboundOrderRecord): OutboundOrderRecord {
+  return {
+    ...row,
+    photoFileIds: [...row.photoFileIds],
+    postedAt: row.postedAt ? new Date(row.postedAt) : null,
+    createdAt: new Date(row.createdAt),
+    updatedAt: new Date(row.updatedAt),
+  };
+}
+
+function cloneOutboundItem(row: OutboundOrderItemRecord): OutboundOrderItemRecord {
+  return { ...row, createdAt: new Date(row.createdAt) };
+}
+
 class MemoryInboundRepository implements InboundRepository {
   private rows = new Map<string, InboundOrderRecord>();
   private items = new Map<string, InboundOrderItemRecord[]>();
   private dailyCounters = new Map<string, number>();
 
-  /** 测试可检查的批次 / 库存 / 台账快照。 */
-  readonly batches = new Map<string, MemoryBatchRecord>();
-  readonly stock = new Map<string, MemoryStockRecord>();
-  readonly movements: MemoryStockMovementRecord[] = [];
+  /** 测试可检查的批次 / 库存 / 台账快照（委托共享台账）。 */
+  get batches(): Map<string, MemoryBatchRecord> {
+    return this.ledger.batches;
+  }
+  get stock(): Map<string, MemoryStockRecord> {
+    return this.ledger.stock;
+  }
+  get movements(): MemoryStockMovementRecord[] {
+    return this.ledger.movements;
+  }
 
   constructor(
     private readonly shipmentRepo: MemoryShipmentRepository,
     seed: { inbounds?: InboundOrderRecord[]; inboundItems?: InboundOrderItemRecord[] } = {},
+    private readonly ledger: MemoryStockLedger = new MemoryStockLedger(),
   ) {
     for (const row of seed.inbounds ?? []) this.rows.set(row.id, cloneInbound(row));
     for (const row of seed.inboundItems ?? []) {
@@ -950,8 +1137,43 @@ class MemoryInboundRepository implements InboundRepository {
     return `IB-${key}-${String(next).padStart(4, '0')}`;
   }
 
-  private stockKey(unitId: string, itemId: string, batchId: string): string {
-    return `${unitId}|${itemId}|${batchId}`;
+  /** 新建手动入库单（sourceType=MANUAL, DRAFT）。 */
+  async createManual(input: CreateInboundManualRepoInput): Promise<InboundOrderRecord> {
+    const now = new Date();
+    const inbound: InboundOrderRecord = {
+      id: uuid(),
+      inboundNo: this.nextInboundNo(),
+      sourceType: 'MANUAL',
+      shipmentId: null,
+      warehouseUnitId: input.warehouseUnitId,
+      counterpartyUnitId: normalizeEmpty(input.counterpartyUnitId),
+      status: 'DRAFT',
+      remark: normalizeEmpty(input.remark),
+      photoFileIds: [...input.photoFileIds],
+      postedBy: null,
+      postedAt: null,
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(inbound.id, cloneInbound(inbound));
+    this.items.set(
+      inbound.id,
+      input.lines.map((line) => ({
+        id: uuid(),
+        inboundOrderId: inbound.id,
+        itemId: line.itemId,
+        batchId: null,
+        qty: line.qty,
+        unitCost: line.unitCost ?? '0',
+        lineNote: normalizeEmpty(line.lineNote),
+        productionDate: normalizeEmpty(line.productionDate),
+        expiryDate: normalizeEmpty(line.expiryDate),
+        batchNo: normalizeEmpty(line.batchNo),
+        createdAt: now,
+      })).map(cloneInboundItem),
+    );
+    return cloneInbound(inbound);
   }
 
   /**
@@ -1109,33 +1331,13 @@ class MemoryInboundRepository implements InboundRepository {
         sourceOrderId: existing.shipmentId,
         createdBy: postedBy,
       };
-      this.batches.set(batch.id, batch);
-
-      const inQty = Number(row.qty);
-      const inCost = Number(row.unitCost);
-      const key = this.stockKey(existing.warehouseUnitId, row.itemId, batch.id);
-      const before = this.stock.get(key);
-      const qtyBefore = before ? before.qty : 0;
-      const qtyAfter = qtyBefore + inQty;
-      const avgCost =
-        qtyAfter > 0 ? (qtyBefore * (before ? before.avgCost : 0) + inQty * inCost) / qtyAfter : 0;
-      this.stock.set(key, {
+      this.ledger.applyInbound({
         unitId: existing.warehouseUnitId,
         itemId: row.itemId,
-        batchId: batch.id,
-        qty: round2(qtyAfter),
-        avgCost: round2(avgCost),
-        version: (before ? before.version : 0) + 1,
-      });
-      this.movements.push({
-        unitId: existing.warehouseUnitId,
-        itemId: row.itemId,
-        batchId: batch.id,
-        type: 'INBOUND_SHIPMENT',
-        qtyDelta: round2(inQty),
-        qtyBefore: round2(qtyBefore),
-        qtyAfter: round2(qtyAfter),
-        unitCost: inCost,
+        batch,
+        qty: Number(row.qty),
+        unitCost: Number(row.unitCost),
+        type: existing.sourceType === 'MANUAL' ? 'INBOUND_MANUAL' : 'INBOUND_SHIPMENT',
         orderType: 'inbound',
         orderId: existing.id,
         refNo: existing.inboundNo,
@@ -1347,6 +1549,222 @@ class MemoryReturnRepository implements ReturnRepository {
   }
 }
 
+// ── ck-08a 内存实现：手动出入库 + 库存台账。 ──────────────────────────────────
+
+class MemoryOutboundRepository implements OutboundRepository {
+  private rows = new Map<string, OutboundOrderRecord>();
+  private items = new Map<string, OutboundOrderItemRecord[]>();
+  private dailyCounters = new Map<string, number>();
+
+  constructor(
+    private readonly ledger: MemoryStockLedger,
+    seed: { outbounds?: OutboundOrderRecord[]; outboundItems?: OutboundOrderItemRecord[] } = {},
+  ) {
+    for (const row of seed.outbounds ?? []) this.rows.set(row.id, cloneOutbound(row));
+    for (const row of seed.outboundItems ?? []) {
+      const list = this.items.get(row.outboundOrderId) ?? [];
+      list.push(cloneOutboundItem(row));
+      this.items.set(row.outboundOrderId, list);
+    }
+  }
+
+  private nextOutboundNo(): string {
+    const key = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const next = (this.dailyCounters.get(key) ?? 0) + 1;
+    this.dailyCounters.set(key, next);
+    return `OB-${key}-${String(next).padStart(4, '0')}`;
+  }
+
+  async list(query: OutboundListQuery): Promise<OutboundListResult> {
+    const all = [...this.rows.values()]
+      .filter((row) => (query.status ? row.status === query.status : true))
+      .filter((row) => (query.type ? row.type === query.type : true))
+      .filter((row) => (query.warehouseUnitId ? row.warehouseUnitId === query.warehouseUnitId : true))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+    const page = Math.max(query.page ?? 1, 1);
+    const start = (page - 1) * size;
+    return { items: all.slice(start, start + size).map(cloneOutbound), total: all.length, page, size };
+  }
+
+  async findById(id: string): Promise<OutboundOrderRecord | null> {
+    const row = this.rows.get(id);
+    return row ? cloneOutbound(row) : null;
+  }
+
+  async listItems(outboundOrderId: string): Promise<OutboundOrderItemRecord[]> {
+    return (this.items.get(outboundOrderId) ?? []).map(cloneOutboundItem);
+  }
+
+  async create(input: CreateOutboundRepoInput): Promise<OutboundOrderRecord> {
+    const now = new Date();
+    const order: OutboundOrderRecord = {
+      id: uuid(),
+      outboundNo: this.nextOutboundNo(),
+      type: 'NORMAL',
+      warehouseUnitId: input.warehouseUnitId,
+      counterpartyUnitId: normalizeEmpty(input.counterpartyUnitId),
+      status: 'DRAFT',
+      lossReason: null,
+      photoFileIds: [...input.photoFileIds],
+      remark: normalizeEmpty(input.remark),
+      postedBy: null,
+      postedAt: null,
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(order.id, cloneOutbound(order));
+    this.items.set(
+      order.id,
+      input.lines.map((line) => ({
+        id: uuid(),
+        outboundOrderId: order.id,
+        itemId: line.itemId,
+        batchId: line.batchId ?? null,
+        qty: line.qty,
+        unitCost: null,
+        createdAt: now,
+      })).map(cloneOutboundItem),
+    );
+    return cloneOutbound(order);
+  }
+
+  async post(id: string, postedBy: string): Promise<OutboundOrderRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'DRAFT') throw new Error(OUTBOUND_STATE_CONFLICT_MESSAGE);
+
+    const now = new Date();
+    const allocated: OutboundOrderItemRecord[] = [];
+    for (const line of this.items.get(id) ?? []) {
+      const qty = Number(line.qty);
+      if (!Number.isFinite(qty) || qty <= 0) throw new Error(INSUFFICIENT_STOCK_MESSAGE);
+      // FEFO 自动分配（line.batchId 缺省）或指定批次；可能拆分为多行。
+      const allocations = this.ledger.applyOutbound({
+        unitId: existing.warehouseUnitId,
+        itemId: line.itemId,
+        qty,
+        batchId: line.batchId,
+        type: 'OUTBOUND_NORMAL',
+        orderType: 'outbound',
+        orderId: existing.id,
+        refNo: existing.outboundNo,
+        operatorId: postedBy,
+      });
+      for (const alloc of allocations) {
+        allocated.push({
+          id: uuid(),
+          outboundOrderId: existing.id,
+          itemId: line.itemId,
+          batchId: alloc.batchId,
+          qty: alloc.qty.toFixed(2),
+          unitCost: alloc.unitCost.toFixed(2),
+          createdAt: now,
+        });
+      }
+    }
+    this.items.set(id, allocated.map(cloneOutboundItem));
+
+    const next: OutboundOrderRecord = {
+      ...existing,
+      status: 'POSTED',
+      postedBy,
+      postedAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(id, cloneOutbound(next));
+    return cloneOutbound(next);
+  }
+}
+
+class MemoryStockRepository implements StockRepository {
+  constructor(
+    private readonly ledger: MemoryStockLedger,
+    private readonly unitRepo: MemoryUnitRepository,
+    private readonly itemRepo: MemoryItemRepository,
+  ) {}
+
+  async list(query: StockListQuery): Promise<StockListResult> {
+    const rows = [...this.ledger.stock.values()]
+      .filter((row) => row.qty > 0)
+      .filter((row) => (query.unitId ? row.unitId === query.unitId : true))
+      .filter((row) => (query.itemId ? row.itemId === query.itemId : true))
+      .filter((row) => (query.batchId ? row.batchId === query.batchId : true))
+      .sort((a, b) =>
+        `${a.unitId}|${a.itemId}|${a.batchId}`.localeCompare(`${b.unitId}|${b.itemId}|${b.batchId}`),
+      );
+    const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+    const page = Math.max(query.page ?? 1, 1);
+    const start = (page - 1) * size;
+    const items: StockRowRecord[] = [];
+    for (const row of rows.slice(start, start + size)) {
+      const [unit, item, batch] = await Promise.all([
+        this.unitRepo.findById(row.unitId),
+        this.itemRepo.findById(row.itemId),
+        Promise.resolve(this.ledger.batches.get(row.batchId) ?? null),
+      ]);
+      items.push({
+        unitId: row.unitId,
+        unitName: unit?.name ?? null,
+        itemId: row.itemId,
+        itemName: item?.name ?? null,
+        spec: item?.specUnit ?? null,
+        batchId: row.batchId,
+        batchNo: batch?.batchNo ?? null,
+        productionDate: batch?.productionDate ?? null,
+        expiryDate: batch?.expiryDate ?? null,
+        qty: String(row.qty),
+        avgCost: String(row.avgCost),
+        version: row.version,
+        updatedAt: row.updatedAt,
+      });
+    }
+    return { items, total: rows.length, page, size };
+  }
+
+  async listMovements(query: StockMovementListQuery): Promise<StockMovementListResult> {
+    const filtered = this.ledger.movements
+      .filter((row) => (query.unitId ? row.unitId === query.unitId : true))
+      .filter((row) => (query.itemId ? row.itemId === query.itemId : true))
+      .filter((row) => (query.batchId ? row.batchId === query.batchId : true))
+      .reverse();
+    const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+    const page = Math.max(query.page ?? 1, 1);
+    const start = (page - 1) * size;
+    const items: StockMovementRecord[] = [];
+    for (const row of filtered.slice(start, start + size)) {
+      const [unit, item, batch] = await Promise.all([
+        this.unitRepo.findById(row.unitId),
+        this.itemRepo.findById(row.itemId),
+        Promise.resolve(this.ledger.batches.get(row.batchId) ?? null),
+      ]);
+      items.push({
+        id: `${row.orderType}:${row.orderId}:${row.batchId}:${row.operatorId ?? ''}:${row.createdAt.getTime()}`,
+        unitId: row.unitId,
+        unitName: unit?.name ?? null,
+        itemId: row.itemId,
+        itemName: item?.name ?? null,
+        spec: item?.specUnit ?? null,
+        batchId: row.batchId,
+        batchNo: batch?.batchNo ?? null,
+        type: row.type as StockMovementRecord['type'],
+        qtyDelta: String(row.qtyDelta),
+        qtyBefore: String(row.qtyBefore),
+        qtyAfter: String(row.qtyAfter),
+        unitCost: String(row.unitCost),
+        orderType: row.orderType,
+        orderId: row.orderId,
+        refNo: row.refNo,
+        note: null,
+        operatorId: row.operatorId,
+        createdAt: row.createdAt,
+      });
+    }
+    return { items, total: filtered.length, page, size };
+  }
+}
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -1371,7 +1789,10 @@ export function createMemoryRepos(seed?: {
   inboundItems?: InboundOrderItemRecord[];
   returns?: ReturnOrderRecord[];
   returnItems?: ReturnOrderItemRecord[];
+  outbounds?: OutboundOrderRecord[];
+  outboundItems?: OutboundOrderItemRecord[];
 }): Repos {
+  const stockLedger = new MemoryStockLedger();
   const shipmentRepo = new MemoryShipmentRepository({
     shipments: seed?.shipments,
     trackings: seed?.shipmentTrackings,
@@ -1381,18 +1802,25 @@ export function createMemoryRepos(seed?: {
   const inboundRepo = new MemoryInboundRepository(shipmentRepo, {
     inbounds: seed?.inbounds,
     inboundItems: seed?.inboundItems,
-  });
+  }, stockLedger);
   const returnRepo = new MemoryReturnRepository(shipmentRepo, inboundRepo, {
     returns: seed?.returns,
     returnItems: seed?.returnItems,
   });
+  const unitRepo = new MemoryUnitRepository(seed?.units);
+  const itemRepo = new MemoryItemRepository(seed?.items);
   return {
     users: new MemoryUserRepository(seed?.users),
-    units: new MemoryUnitRepository(seed?.units),
-    items: new MemoryItemRepository(seed?.items),
+    units: unitRepo,
+    items: itemRepo,
     files: new MemoryFileRepository(seed?.files),
     shipments: shipmentRepo,
     inbounds: inboundRepo,
     returns: returnRepo,
+    outbounds: new MemoryOutboundRepository(stockLedger, {
+      outbounds: seed?.outbounds,
+      outboundItems: seed?.outboundItems,
+    }),
+    stock: new MemoryStockRepository(stockLedger, unitRepo, itemRepo),
   };
 }

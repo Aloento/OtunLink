@@ -13,9 +13,11 @@ import { authRouter } from './routes/auth';
 import { filesRouter } from './routes/files';
 import { inboundOrdersRouter } from './routes/inbound-orders';
 import { itemsRouter } from './routes/items';
+import { outboundOrdersRouter } from './routes/outbound-orders';
 import { returnOrdersRouter } from './routes/return-orders';
 import { reviewsRouter } from './routes/reviews';
 import { shipmentsRouter } from './routes/shipments';
+import { stockRouter } from './routes/stock';
 import { unitsRouter } from './routes/units';
 import { usersRouter } from './routes/users';
 import type { AppEnv } from './types';
@@ -76,6 +78,14 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // 发货退货单（登录用户，RBAC 见各路由）
   app.use('/api/v1/return-orders/*', requireToken);
   app.route('/api/v1/return-orders', returnOrdersRouter());
+
+  // 手动出库单（登录用户，RBAC 见各路由）
+  app.use('/api/v1/outbound-orders/*', requireToken);
+  app.route('/api/v1/outbound-orders', outboundOrdersRouter());
+
+  // 库存台账（登录用户，RBAC 见各路由）
+  app.use('/api/v1/stock/*', requireToken);
+  app.route('/api/v1/stock', stockRouter());
 
   // 图片上传 / 预签名 URL（登录用户，RBAC 见各路由）
   app.use('/api/v1/files/*', requireToken);

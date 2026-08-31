@@ -1,9 +1,9 @@
-import { ErrorCodes, Permissions, type InboundStatus } from '@otunlink/shared';
+import { ErrorCodes, Permissions, inboundManualCreateSchema, type InboundStatus } from '@otunlink/shared';
 import { Hono } from 'hono';
 
 import { requirePermission, unitScopeFilter } from '../auth/middleware';
 import { inboundDto, inboundItemDto } from '../lib/dto';
-import { dbUnavailable, error, forbidden, notFound, ok } from '../lib/http';
+import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
 import type { AppEnv, InboundOrderRecord, Repos } from '../types';
 
 // 入库单（design.md §5.3）：确认收货自动生成的 DRAFT 在 POST 后建档批次 +
@@ -48,6 +48,68 @@ export function inboundOrdersRouter(): Hono<AppEnv> {
     }
 
     return ok(c, await detailOf(repos, inbound));
+  });
+
+  router.post('/', post, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const body = await readJson(c);
+    if (body === undefined) return validationError(c, '请求体不是合法 JSON');
+    const parsed = inboundManualCreateSchema.safeParse(body);
+    if (!parsed.success) return validationError(c, '参数不合法', parsed.error.flatten());
+    const input = parsed.data;
+
+    if (!scopeAllows(c.get('auth').user?.scopeUnitId ?? null, input.warehouseUnitId)) {
+      return forbidden(c, '数据范围越界（scope_unit_id 不匹配）');
+    }
+
+    const [warehouse, counterparty] = await Promise.all([
+      repos.units.findById(input.warehouseUnitId),
+      input.counterpartyUnitId
+        ? repos.units.findById(input.counterpartyUnitId)
+        : Promise.resolve(null),
+    ]);
+    if (!warehouse || warehouse.type !== 'WAREHOUSE') {
+      return validationError(c, '仓库不存在或不是仓库类型', {
+        warehouseUnitId: input.warehouseUnitId,
+      });
+    }
+    if (input.counterpartyUnitId && !counterparty) {
+      return validationError(c, '交易对手业务单元不存在', {
+        counterpartyUnitId: input.counterpartyUnitId,
+      });
+    }
+
+    const itemIds = [...new Set(input.lines.map((l) => l.itemId))];
+    const items = await Promise.all(itemIds.map((id) => repos.items.findById(id)));
+    const found = new Set(items.filter((i) => i).map((i) => i!.id));
+    const missing = itemIds.filter((id) => !found.has(id));
+    if (missing.length > 0) {
+      return validationError(c, '部分物品不存在', { itemIds: missing });
+    }
+
+    try {
+      const created = await repos.inbounds.createManual({
+        warehouseUnitId: input.warehouseUnitId,
+        counterpartyUnitId: input.counterpartyUnitId ?? null,
+        remark: input.remark ?? null,
+        photoFileIds: input.photoFileIds ?? [],
+        createdBy: c.get('auth').user!.id,
+        lines: input.lines.map((l) => ({
+          itemId: l.itemId,
+          qty: String(l.qty),
+          unitCost: l.unitCost != null ? String(l.unitCost) : '0',
+          productionDate: l.productionDate ? String(l.productionDate) : null,
+          expiryDate: l.expiryDate ? String(l.expiryDate) : null,
+          batchNo: l.batchNo ?? null,
+          lineNote: l.lineNote ?? null,
+        })),
+      });
+      return ok(c, await detailOf(repos, created), 201);
+    } catch (cause) {
+      throw cause;
+    }
   });
 
   router.post('/:id/post', post, async (c) => {
@@ -138,4 +200,12 @@ async function detailOf(repos: Repos, inbound: InboundOrderRecord) {
 
 function isInboundStateConflict(cause: unknown): boolean {
   return cause instanceof Error && cause.message.includes('INBOUND_STATE_CONFLICT');
+}
+
+async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<unknown | undefined> {
+  try {
+    return await c.req.json();
+  } catch {
+    return undefined;
+  }
 }

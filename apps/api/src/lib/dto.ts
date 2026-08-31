@@ -6,11 +6,15 @@ import type {
   InboundOrderRecord,
   ItemImageRecord,
   ItemRecord,
+  OutboundOrderItemRecord,
+  OutboundOrderRecord,
   ReturnOrderItemRecord,
   ReturnOrderRecord,
   ShipmentItemRecord,
   ShipmentRecord,
   ShipmentTrackingRecord,
+  StockMovementRecord,
+  StockRowRecord,
   UnitRecord,
   UserRecord,
 } from '../types';
@@ -284,5 +288,92 @@ export function returnDto(
     processedNote: order.processedNote,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+  };
+}
+
+// ── 库存台账与手动出入库 DTO（ck-08a）──────────────────────────────────────────
+
+export function outboundItemDto(item: OutboundOrderItemRecord) {
+  return {
+    id: item.id,
+    outboundOrderId: item.outboundOrderId,
+    itemId: item.itemId,
+    batchId: item.batchId,
+    qty: item.qty,
+    unitCost: item.unitCost,
+    createdAt: item.createdAt.toISOString(),
+    itemName: item.itemName ?? null,
+    spec: item.spec ?? null,
+    batchNo: item.batchNo ?? null,
+  };
+}
+
+export function outboundDto(
+  order: OutboundOrderRecord,
+  options: {
+    warehouseName: string | null;
+    counterpartyName: string | null;
+  },
+) {
+  return {
+    id: order.id,
+    outboundNo: order.outboundNo,
+    type: order.type,
+    warehouseUnitId: order.warehouseUnitId,
+    counterpartyUnitId: order.counterpartyUnitId,
+    warehouseName: options.warehouseName,
+    counterpartyName: options.counterpartyName,
+    status: order.status,
+    lossReason: order.lossReason,
+    photoFileIds: order.photoFileIds,
+    remark: order.remark,
+    postedBy: order.postedBy,
+    postedAt: order.postedAt ? order.postedAt.toISOString() : null,
+    createdBy: order.createdBy,
+    createdAt: order.createdAt.toISOString(),
+    updatedAt: order.updatedAt.toISOString(),
+  };
+}
+
+export function stockRowDto(row: StockRowRecord) {
+  return {
+    unitId: row.unitId,
+    unitName: row.unitName,
+    itemId: row.itemId,
+    itemName: row.itemName,
+    spec: row.spec,
+    batchId: row.batchId,
+    batchNo: row.batchNo,
+    productionDate: row.productionDate,
+    expiryDate: row.expiryDate,
+    qty: row.qty,
+    avgCost: row.avgCost,
+    availableQty: row.qty,
+    version: row.version,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export function stockMovementDto(movement: StockMovementRecord) {
+  return {
+    id: movement.id,
+    unitId: movement.unitId,
+    unitName: movement.unitName,
+    itemId: movement.itemId,
+    itemName: movement.itemName,
+    spec: movement.spec,
+    batchId: movement.batchId,
+    batchNo: movement.batchNo,
+    type: movement.type,
+    qtyDelta: movement.qtyDelta,
+    qtyBefore: movement.qtyBefore,
+    qtyAfter: movement.qtyAfter,
+    unitCost: movement.unitCost,
+    orderType: movement.orderType,
+    orderId: movement.orderId,
+    refNo: movement.refNo,
+    note: movement.note,
+    operatorId: movement.operatorId,
+    createdAt: movement.createdAt.toISOString(),
   };
 }

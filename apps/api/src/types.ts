@@ -2,11 +2,14 @@ import type {
   InboundSourceType,
   InboundStatus,
   ItemStatus,
+  OutboundStatus,
+  OutboundType,
   ReturnSourceType,
   ReturnStatus,
   ReviewStatus,
   ShipmentStatus,
   SpecUnit,
+  StockMovementType,
   UnitType,
   UserRole,
   UserStatus,
@@ -524,6 +527,24 @@ export interface CreateReturnRepoInput {
   lines: { shipmentItemId: string; qty: string; reason: string | null }[];
 }
 
+/** 新建手动入库单（POST /inbound-orders, sourceType=MANUAL）仓库入参。 */
+export interface CreateInboundManualRepoInput {
+  warehouseUnitId: string;
+  counterpartyUnitId: string | null;
+  remark: string | null;
+  photoFileIds: string[];
+  createdBy: string;
+  lines: {
+    itemId: string;
+    qty: string;
+    unitCost: string | null;
+    productionDate: string | null;
+    expiryDate: string | null;
+    batchNo: string | null;
+    lineNote: string | null;
+  }[];
+}
+
 export interface InboundListQuery {
   page?: number;
   size?: number;
@@ -565,8 +586,13 @@ export interface InboundRepository {
    */
   confirmReceipt(shipmentId: string, input: ConfirmReceiptRepoInput): Promise<InboundOrderRecord>;
   /**
+   * 新建手动入库单（sourceType=MANUAL，DRAFT）：对手方（供应商）+ 仓库 +
+   * 清单（批次信息可选，缺省过账时自动生成）。
+   */
+  createManual(input: CreateInboundManualRepoInput): Promise<InboundOrderRecord>;
+  /**
    * 入库过账：DRAFT → POSTED；按行建档批次、写 stock + stock_movements
-   * （INBOUND_SHIPMENT）。非 DRAFT 抛 INBOUND_STATE_CONFLICT 信号。
+   * （INBOUND_SHIPMENT / INBOUND_MANUAL）。非 DRAFT 抛 INBOUND_STATE_CONFLICT 信号。
    */
   post(id: string, postedBy: string): Promise<InboundOrderRecord | null>;
 }
@@ -592,6 +618,157 @@ export interface ReturnRepository {
   reject(id: string, processedBy: string, note: string): Promise<ReturnOrderRecord | null>;
 }
 
+// ── 库存台账与手动出入库（ck-08a）──────────────────────────────────────────────
+// 对应 packages/db schema.ts outbound_orders / outbound_order_items 与既有
+// batches / stock / stock_movements。出库过账行级写流水，voucher 以流水为准。
+
+export interface OutboundOrderRecord {
+  id: string;
+  outboundNo: string;
+  type: OutboundType;
+  warehouseUnitId: string;
+  counterpartyUnitId: string | null;
+  status: OutboundStatus;
+  lossReason: string | null;
+  photoFileIds: string[];
+  remark: string | null;
+  postedBy: string | null;
+  postedAt: Date | null;
+  createdBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface OutboundOrderItemRecord {
+  id: string;
+  outboundOrderId: string;
+  itemId: string;
+  batchId: string | null;
+  qty: string;
+  unitCost: string | null;
+  createdAt: Date;
+  /** 联表带出（列表/详情展示用）。 */
+  itemName?: string | null;
+  spec?: string | null;
+  batchNo?: string | null;
+}
+
+/** 新建手工出库单（POST /outbound-orders, type=NORMAL）仓库入参。 */
+export interface CreateOutboundRepoInput {
+  warehouseUnitId: string;
+  counterpartyUnitId: string | null;
+  remark: string | null;
+  photoFileIds: string[];
+  createdBy: string;
+  lines: { itemId: string; qty: string; batchId: string | null }[];
+}
+
+export interface OutboundListQuery {
+  page?: number;
+  size?: number;
+  status?: OutboundStatus;
+  type?: OutboundType;
+  /** 数据范围：仅返回该仓库的出库单。 */
+  warehouseUnitId?: string;
+}
+
+export interface OutboundListResult {
+  items: OutboundOrderRecord[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface OutboundRepository {
+  list(query: OutboundListQuery): Promise<OutboundListResult>;
+  findById(id: string): Promise<OutboundOrderRecord | null>;
+  listItems(outboundOrderId: string): Promise<OutboundOrderItemRecord[]>;
+  /** 新建 DRAFT 出库单 + 明细（batchId 缺省，过账时 FEFO 分配）。 */
+  create(input: CreateOutboundRepoInput): Promise<OutboundOrderRecord>;
+  /**
+   * 出库过账：DRAFT → POSTED；按行 FEFO（无 batchId）或指定 batchId 扣减
+   * stock 并写 stock_movements（OUTBOUND_NORMAL），回填分配与成本快照。
+   * 非 DRAFT 抛 OUTBOUND_STATE_CONFLICT；库存不足抛 INSUFFICIENT_STOCK；
+   * 指定批次不存在抛 STOCK_BATCH_NOT_FOUND 信号。
+   */
+  post(id: string, postedBy: string): Promise<OutboundOrderRecord | null>;
+}
+
+/** 库存台账行（stock JOIN batches/items/units）。 */
+export interface StockRowRecord {
+  unitId: string;
+  unitName: string | null;
+  itemId: string;
+  itemName: string | null;
+  spec: string | null;
+  batchId: string;
+  batchNo: string | null;
+  productionDate: string | null;
+  expiryDate: string | null;
+  qty: string;
+  avgCost: string;
+  version: number;
+  updatedAt: Date;
+}
+
+/** 台账流水（stock_movements JOIN 展示字段）。 */
+export interface StockMovementRecord {
+  id: string;
+  unitId: string;
+  unitName: string | null;
+  itemId: string;
+  itemName: string | null;
+  spec: string | null;
+  batchId: string;
+  batchNo: string | null;
+  type: StockMovementType;
+  qtyDelta: string;
+  qtyBefore: string;
+  qtyAfter: string;
+  unitCost: string | null;
+  orderType: string | null;
+  orderId: string | null;
+  refNo: string | null;
+  note: string | null;
+  operatorId: string | null;
+  createdAt: Date;
+}
+
+export interface StockListQuery {
+  page?: number;
+  size?: number;
+  unitId?: string;
+  itemId?: string;
+  batchId?: string;
+}
+
+export interface StockListResult {
+  items: StockRowRecord[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface StockMovementListQuery {
+  page?: number;
+  size?: number;
+  unitId?: string;
+  itemId?: string;
+  batchId?: string;
+}
+
+export interface StockMovementListResult {
+  items: StockMovementRecord[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface StockRepository {
+  list(query: StockListQuery): Promise<StockListResult>;
+  listMovements(query: StockMovementListQuery): Promise<StockMovementListResult>;
+}
+
 export interface Repos {
   users: UserRepository;
   units: UnitRepository;
@@ -600,6 +777,8 @@ export interface Repos {
   shipments: ShipmentRepository;
   inbounds: InboundRepository;
   returns: ReturnRepository;
+  outbounds: OutboundRepository;
+  stock: StockRepository;
 }
 
 export interface AuthState {

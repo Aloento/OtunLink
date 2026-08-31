@@ -1,8 +1,14 @@
-import type { InboundOrderDetailDto, InboundOrderDto, InboundStatus, Paged } from '@otunlink/shared';
+import type {
+  InboundOrderDetailDto,
+  InboundOrderDto,
+  InboundStatus,
+  InboundManualCreateInput,
+  Paged,
+} from '@otunlink/shared';
 
 import { apiGet, apiPost } from './http';
 
-// 入库单 API 客户端（ck-07）：确认收货自动生成的入库单在 POST 后建档批次 + 写库存。
+// 入库单 API 客户端（ck-07/ck-08a）：确认收货自动建档的 DRAFT/POSTED + 手工入库单（sourceType=MANUAL）。
 
 export interface InboundListQuery {
   status?: InboundStatus;
@@ -30,4 +36,9 @@ export function getInbound(id: string): Promise<InboundOrderDetailDto> {
 /** 过账：DRAFT → POSTED，建档批次并写库存/台账。 */
 export function postInbound(id: string): Promise<InboundOrderDetailDto> {
   return apiPost<InboundOrderDetailDto>(`/api/v1/inbound-orders/${id}/post`);
+}
+
+/** 新建手工入库单（sourceType=MANUAL，ck-08a §4.3）。 */
+export function createManualInbound(input: InboundManualCreateInput): Promise<InboundOrderDetailDto> {
+  return apiPost<InboundOrderDetailDto>('/api/v1/inbound-orders', input);
 }

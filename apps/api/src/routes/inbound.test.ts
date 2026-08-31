@@ -325,3 +325,133 @@ describe('ck-07 确认收货 → 入库建档', () => {
     expect(payload.data.items[0].expiryDate).toBe('2025-06-01');
   });
 });
+
+describe('ck-08a 手动入库单', () => {
+  it('手动入库创建：DRAFT + sourceType=MANUAL + 行字段；再 POST 建档批次/库存/流水', async () => {
+    const { app, repos } = makeApp({ users: [collector, warehouse], units, items });
+
+    const created = await app.request('/api/v1/inbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        counterpartyUnitId: COLLECTOR_UNIT,
+        remark: '手动补货',
+        lines: [
+          {
+            itemId: ITEM_A,
+            qty: '5',
+            unitCost: '2.50',
+            batchNo: 'B-MAN-01',
+            productionDate: '2025-01-01',
+            expiryDate: '2025-12-31',
+            lineNote: '渠道批次',
+          },
+        ],
+      }),
+    });
+    expect(created.status).toBe(201);
+    const payload = (await created.json()) as {
+      data: { id: string; sourceType: string; status: string; items: Array<Record<string, unknown>> };
+    };
+    expect(payload.data.sourceType).toBe('MANUAL');
+    expect(payload.data.status).toBe('DRAFT');
+    expect(payload.data.items).toHaveLength(1);
+    expect(payload.data.items[0]).toMatchObject({
+      qty: '5',
+      unitCost: '2.50',
+      batchNo: 'B-MAN-01',
+      lineNote: '渠道批次',
+    });
+
+    const posted = await app.request(`/api/v1/inbound-orders/${payload.data.id}/post`, {
+      method: 'POST',
+      headers: json('warehouse'),
+    });
+    expect(posted.status).toBe(200);
+    const postedPayload = (await posted.json()) as {
+      data: { status: string; items: Array<{ batchId: string | null }> };
+    };
+    expect(postedPayload.data.status).toBe('POSTED');
+
+    const memoryInbound = repos.inbounds as unknown as {
+      batches: Map<string, { batchNo: string; sourceType: string }>;
+      stock: Map<string, { qty: number; avgCost: number }>;
+      movements: Array<{ type: string; qtyDelta: number; unitCost: number; orderId: string }>;
+    };
+    expect(memoryInbound.batches.size).toBe(1);
+    const batch = [...memoryInbound.batches.values()][0];
+    expect(batch.batchNo).toBe('B-MAN-01');
+    expect(batch.sourceType).toBe('MANUAL');
+    const stockRow = [...memoryInbound.stock.values()][0];
+    expect(stockRow.qty).toBe(5);
+    expect(stockRow.avgCost).toBe(2.5);
+    expect(memoryInbound.movements).toHaveLength(1);
+    expect(memoryInbound.movements[0]).toMatchObject({
+      type: 'INBOUND_MANUAL',
+      qtyDelta: 5,
+      unitCost: 2.5,
+      orderId: payload.data.id,
+    });
+  });
+
+  it('手动入库校验：非仓库目标 → 400；物品不存在 → 400；非法 JSON → 400', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+
+    const badUnit = await app.request('/api/v1/inbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: COLLECTOR_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '1', unitCost: '1.00' }],
+      }),
+    });
+    expect(badUnit.status).toBe(400);
+
+    const badItem = await app.request('/api/v1/inbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        lines: [{ itemId: '00000000-0000-4000-8000-000000000099', qty: '1', unitCost: '1.00' }],
+      }),
+    });
+    expect(badItem.status).toBe(400);
+
+    const badJson = await app.request('/api/v1/inbound-orders', {
+      method: 'POST',
+      headers: auth('warehouse'),
+      body: 'not-json',
+    });
+    expect(badJson.status).toBe(400);
+    expect(await badJson.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+  });
+
+  it('手动入库权限与 scope：集货方 403；scopeUnitId 不匹配 403', async () => {
+    const scoped = user({
+      entraSub: 'warehouse-scoped',
+      role: 'WAREHOUSE',
+      scopeUnitId: COLLECTOR_UNIT,
+    });
+    const { app } = makeApp({ users: [collector, warehouse, scoped], units, items });
+    const body = JSON.stringify({
+      warehouseUnitId: WAREHOUSE_UNIT,
+      lines: [{ itemId: ITEM_A, qty: '1', unitCost: '1.00' }],
+    });
+
+    const forbiddenRole = await app.request('/api/v1/inbound-orders', {
+      method: 'POST',
+      headers: json('collector'),
+      body,
+    });
+    expect(forbiddenRole.status).toBe(403);
+
+    const forbiddenScope = await app.request('/api/v1/inbound-orders', {
+      method: 'POST',
+      headers: json('warehouse-scoped'),
+      body,
+    });
+    expect(forbiddenScope.status).toBe(403);
+    expect(await forbiddenScope.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+  });
+});

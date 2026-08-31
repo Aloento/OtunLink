@@ -12,7 +12,12 @@ import { ItemDetailPage } from './pages/items/ItemDetailPage';
 import { ItemFormPage } from './pages/items/ItemFormPage';
 import { ItemsPage } from './pages/items/ItemsPage';
 import { InboundDetailPage } from './pages/inbound/InboundDetailPage';
+import { InboundFormPage } from './pages/inbound/InboundFormPage';
 import { InboundListPage } from './pages/inbound/InboundListPage';
+import { InventoryPage } from './pages/inventory/InventoryPage';
+import { OutboundDetailPage } from './pages/outbound/OutboundDetailPage';
+import { OutboundFormPage } from './pages/outbound/OutboundFormPage';
+import { OutboundListPage } from './pages/outbound/OutboundListPage';
 import { ReturnDetailPage } from './pages/returns/ReturnDetailPage';
 import { ReturnsListPage } from './pages/returns/ReturnsListPage';
 import { ShipmentDetailPage } from './pages/shipments/ShipmentDetailPage';
@@ -21,15 +26,8 @@ import { ShipmentsPage } from './pages/shipments/ShipmentsPage';
 import { RequireActive, RequireAuth, RequirePermission } from './routes/guards';
 import { CALLBACK_PATH, LOGIN_PATH, ROUTES, type RouteKey } from './routes/routes';
 
-// 业务页面（除工作台与物品目录外）在 ck-03/ck-04 以「开发中」占位。
-const PLACEHOLDER_KEYS = [
-  'outbound',
-  'sales',
-  'inventory',
-  'notifications',
-  'adminUsers',
-  'adminUnits',
-] as const satisfies readonly RouteKey[];
+// 业务页面（除工作台、物品目录、发货/入库/出库/库存/退货外）在 ck-03/ck-04 以「开发中」占位。
+const PLACEHOLDER_KEYS = ['sales', 'notifications', 'adminUsers', 'adminUnits'] as const satisfies readonly RouteKey[];
 
 export default function App() {
   const { t } = useTranslation();
@@ -129,10 +127,50 @@ export default function App() {
           }
         />
         <Route
+          path={`${ROUTES.inbound.path}/new`}
+          element={
+            <RequirePermission permissions={[Permissions.INBOUND_CONFIRM]}>
+              <InboundFormPage />
+            </RequirePermission>
+          }
+        />
+        <Route
           path={`${ROUTES.inbound.path}/:id`}
           element={
             <RequirePermission permissions={ROUTES.inbound.permissions}>
               <InboundDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={ROUTES.outbound.path}
+          element={
+            <RequirePermission permissions={ROUTES.outbound.permissions}>
+              <OutboundListPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={`${ROUTES.outbound.path}/new`}
+          element={
+            <RequirePermission permissions={[Permissions.STOCK_WRITE]}>
+              <OutboundFormPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={`${ROUTES.outbound.path}/:id`}
+          element={
+            <RequirePermission permissions={ROUTES.outbound.permissions}>
+              <OutboundDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={ROUTES.inventory.path}
+          element={
+            <RequirePermission permissions={ROUTES.inventory.permissions}>
+              <InventoryPage />
             </RequirePermission>
           }
         />

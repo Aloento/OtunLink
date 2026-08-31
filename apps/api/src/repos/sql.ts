@@ -3,7 +3,9 @@ import type { SqlExecutor } from '@otunlink/db';
 import type {
   ConfirmReceiptRepoInput,
   CreateFileInput,
+  CreateInboundManualRepoInput,
   CreateItemInput,
+  CreateOutboundRepoInput,
   CreateReturnRepoInput,
   CreateReviewInput,
   CreateShipmentInput,
@@ -20,6 +22,10 @@ import type {
   ItemListQuery,
   ItemListResult,
   ItemRecord,
+  OutboundListQuery,
+  OutboundListResult,
+  OutboundOrderItemRecord,
+  OutboundOrderRecord,
   Repos,
   ReturnListQuery,
   ReturnListResult,
@@ -32,6 +38,12 @@ import type {
   ShipmentListResult,
   ShipmentRecord,
   ShipmentTrackingRecord,
+  StockListQuery,
+  StockListResult,
+  StockMovementListQuery,
+  StockMovementListResult,
+  StockMovementRecord,
+  StockRowRecord,
   UnitRecord,
   UpdateItemInput,
   UpdateShipmentInput,
@@ -80,6 +92,12 @@ const RETURN_STATE_CONFLICT = 'RETURN_STATE_CONFLICT: shipment is not READY for 
 const RETURN_ALREADY_PROCESSED =
   'RETURN_ALREADY_PROCESSED: return order already processed';
 const RETURN_LINE_INVALID = 'RETURN_LINE_INVALID: return line is invalid';
+// ck-08a：手动出入库 / 库存台账业务信号（路由层映射为对应错误码）。
+const OUTBOUND_STATE_CONFLICT =
+  'OUTBOUND_STATE_CONFLICT: only DRAFT outbound orders can be posted';
+const INSUFFICIENT_STOCK = 'INSUFFICIENT_STOCK: insufficient stock for outbound';
+const STOCK_BATCH_NOT_FOUND =
+  'STOCK_BATCH_NOT_FOUND: no stock of the specified batch in the warehouse';
 
 function mapUser(row: Record<string, unknown>): UserRecord {
   return {
@@ -314,6 +332,82 @@ function mapReturnItem(row: Record<string, unknown>): ReturnOrderItemRecord {
   };
 }
 
+function mapOutbound(row: Record<string, unknown>): OutboundOrderRecord {
+  return {
+    id: String(row.id),
+    outboundNo: String(row.outbound_no),
+    type: (row.type as OutboundOrderRecord['type']) ?? 'NORMAL',
+    warehouseUnitId: String(row.warehouse_unit_id),
+    counterpartyUnitId: row.counterparty_unit_id ? String(row.counterparty_unit_id) : null,
+    status: (row.status as OutboundOrderRecord['status']) ?? 'DRAFT',
+    lossReason: row.loss_reason ? String(row.loss_reason) : null,
+    photoFileIds: parsePhotoIds(row.photo_file_ids),
+    remark: row.remark ? String(row.remark) : null,
+    postedBy: row.posted_by ? String(row.posted_by) : null,
+    postedAt: row.posted_at ? new Date(String(row.posted_at)) : null,
+    createdBy: row.created_by ? String(row.created_by) : null,
+    createdAt: new Date(String(row.created_at)),
+    updatedAt: new Date(String(row.updated_at)),
+  };
+}
+
+function mapOutboundItem(row: Record<string, unknown>): OutboundOrderItemRecord {
+  return {
+    id: String(row.id),
+    outboundOrderId: String(row.outbound_order_id),
+    itemId: String(row.item_id),
+    batchId: row.batch_id ? String(row.batch_id) : null,
+    qty: row.qty != null ? String(row.qty) : '0',
+    unitCost: row.unit_cost != null ? String(row.unit_cost) : null,
+    createdAt: new Date(String(row.created_at)),
+    itemName: row.item_name ? String(row.item_name) : null,
+    spec: row.spec ? String(row.spec) : null,
+    batchNo: row.batch_no ? String(row.batch_no) : null,
+  };
+}
+
+function mapStockRow(row: Record<string, unknown>): StockRowRecord {
+  return {
+    unitId: String(row.unit_id),
+    unitName: row.unit_name ? String(row.unit_name) : null,
+    itemId: String(row.item_id),
+    itemName: row.item_name ? String(row.item_name) : null,
+    spec: row.spec ? String(row.spec) : null,
+    batchId: String(row.batch_id),
+    batchNo: row.batch_no ? String(row.batch_no) : null,
+    productionDate: row.production_date ? String(row.production_date).slice(0, 10) : null,
+    expiryDate: row.expiry_date ? String(row.expiry_date).slice(0, 10) : null,
+    qty: row.qty != null ? String(row.qty) : '0',
+    avgCost: row.avg_cost != null ? String(row.avg_cost) : '0',
+    version: Number(row.version ?? 0),
+    updatedAt: new Date(String(row.updated_at)),
+  };
+}
+
+function mapStockMovement(row: Record<string, unknown>): StockMovementRecord {
+  return {
+    id: String(row.id),
+    unitId: String(row.unit_id),
+    unitName: row.unit_name ? String(row.unit_name) : null,
+    itemId: String(row.item_id),
+    itemName: row.item_name ? String(row.item_name) : null,
+    spec: row.spec ? String(row.spec) : null,
+    batchId: String(row.batch_id),
+    batchNo: row.batch_no ? String(row.batch_no) : null,
+    type: row.type as StockMovementRecord['type'],
+    qtyDelta: String(row.qty_delta),
+    qtyBefore: String(row.qty_before),
+    qtyAfter: String(row.qty_after),
+    unitCost: row.unit_cost != null ? String(row.unit_cost) : null,
+    orderType: row.order_type ? String(row.order_type) : null,
+    orderId: row.order_id ? String(row.order_id) : null,
+    refNo: row.ref_no ? String(row.ref_no) : null,
+    note: row.note ? String(row.note) : null,
+    operatorId: row.operator_id ? String(row.operator_id) : null,
+    createdAt: new Date(String(row.created_at)),
+  };
+}
+
 /** IB-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号，唯一索引兜底顺延）。 */
 async function nextInboundNo(exec: SqlExecutor): Promise<string> {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -345,6 +439,25 @@ async function nextReturnNo(exec: SqlExecutor): Promise<string> {
   for (let attempt = 0; attempt < 50; attempt++) {
     const exists = await exec.query(
       `SELECT count(*)::int AS n FROM return_orders WHERE return_no = ${quote(no)}`,
+    );
+    if (Number(exists.rows[0]?.n ?? 0) === 0) break;
+    no = `${prefix}${String(base + attempt + 1).padStart(4, '0')}`;
+  }
+  return no;
+}
+
+/** OB-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号，唯一索引兜底顺延）。 */
+async function nextOutboundNo(exec: SqlExecutor): Promise<string> {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const prefix = `OB-${date}-`;
+  const countResult = await exec.query(
+    `SELECT count(*)::int AS n FROM outbound_orders WHERE outbound_no LIKE ${quote(`${prefix}%`)}`,
+  );
+  const base = Number(countResult.rows[0]?.n ?? 0) + 1;
+  let no = `${prefix}${String(base).padStart(4, '0')}`;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const exists = await exec.query(
+      `SELECT count(*)::int AS n FROM outbound_orders WHERE outbound_no = ${quote(no)}`,
     );
     if (Number(exists.rows[0]?.n ?? 0) === 0) break;
     no = `${prefix}${String(base + attempt + 1).padStart(4, '0')}`;
@@ -1049,13 +1162,16 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     inbound: InboundOrderRecord,
     line: InboundOrderItemRecord,
     operatorId: string | null,
+    opts?: { movementType?: string; sourceOrderId?: string | null },
   ): Promise<string> {
+    const movementType = opts?.movementType ?? 'INBOUND_SHIPMENT';
+    const sourceOrderId = opts?.sourceOrderId ?? inbound.shipmentId;
     const { rows: batchRows } = await exec.query(
       `INSERT INTO batches
          (item_id, batch_no, production_date, expiry_date, source_type, source_order_id, created_by)
        VALUES (${quote(line.itemId)}, ${quote(nn(line.batchNo))}, ${quote(nn(line.productionDate))},
               ${quote(nn(line.expiryDate))}, ${quote(inbound.sourceType)},
-              ${quote(inbound.shipmentId)}, ${quote(operatorId)})
+              ${quote(sourceOrderId)}, ${quote(operatorId)})
        RETURNING id`,
     );
     const batchId = String(batchRows[0].id);
@@ -1096,7 +1212,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
          (unit_id, item_id, batch_id, type, qty_delta, qty_before, qty_after, unit_cost,
           order_type, order_id, ref_no, operator_id)
        VALUES (${quote(inbound.warehouseUnitId)}, ${quote(line.itemId)}, ${quote(batchId)},
-              'INBOUND_SHIPMENT', ${quote(inQty.toFixed(2))}, ${quote(qtyBefore.toFixed(2))},
+              ${quote(movementType)}, ${quote(inQty.toFixed(2))}, ${quote(qtyBefore.toFixed(2))},
               ${quote(qtyAfter.toFixed(2))}, ${quote(line.unitCost)}, 'inbound',
               ${quote(inbound.id)}, ${quote(inbound.inboundNo)}, ${quote(operatorId)})`,
     );
@@ -1143,6 +1259,38 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
          ORDER BY ioi.created_at ASC, ioi.id ASC`,
       );
       return rows.map(mapInboundItem);
+    },
+    async createManual(input: CreateInboundManualRepoInput): Promise<InboundOrderRecord> {
+      const inboundNo = await nextInboundNo(exec);
+      await exec.query('BEGIN');
+      try {
+        const { rows } = await exec.query(
+          `INSERT INTO inbound_orders
+             (inbound_no, source_type, shipment_id, warehouse_unit_id, counterparty_unit_id,
+              status, remark, photo_file_ids, created_by)
+           VALUES (${quote(inboundNo)}, 'MANUAL', NULL,
+                  ${quote(input.warehouseUnitId)}, ${quote(input.counterpartyUnitId)},
+                  'DRAFT', ${quote(nn(input.remark))}, ${photoArray(input.photoFileIds)},
+                  ${quote(input.createdBy)})
+           RETURNING *`,
+        );
+        const inbound = mapInbound(rows[0]);
+        for (const line of input.lines) {
+          await exec.query(
+            `INSERT INTO inbound_order_items
+               (inbound_order_id, item_id, qty, unit_cost, production_date, expiry_date, batch_no, line_note)
+             VALUES (${quote(inbound.id)}, ${quote(line.itemId)}, ${quote(line.qty)},
+                    ${quote(line.unitCost)}, ${quote(nn(line.productionDate))},
+                    ${quote(nn(line.expiryDate))}, ${quote(nn(line.batchNo))},
+                    ${quote(nn(line.lineNote ?? null))})`,
+          );
+        }
+        await exec.query('COMMIT');
+        return inbound;
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
     },
     async confirmReceipt(
       shipmentId: string,
@@ -1216,7 +1364,14 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         );
         const items = itemRows.map(mapInboundItem);
         for (const line of items) {
-          await postInboundLine(inbound, line, postedBy);
+          await postInboundLine(
+            inbound,
+            line,
+            postedBy,
+            inbound.sourceType === 'MANUAL'
+              ? { movementType: 'INBOUND_MANUAL', sourceOrderId: inbound.id }
+              : undefined,
+          );
         }
         const { rows: updated } = await exec.query(
           `UPDATE inbound_orders
@@ -1463,7 +1618,261 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  return { users, units, items, files, shipments, inbounds, returns };
+  const outbounds = {
+    async list(query: OutboundListQuery): Promise<OutboundListResult> {
+      const where = (alias: string): string => {
+        const parts: string[] = [];
+        if (query.status) parts.push(`${alias}status = ${quote(query.status)}`);
+        if (query.type) parts.push(`${alias}type = ${quote(query.type)}`);
+        if (query.warehouseUnitId) {
+          parts.push(`${alias}warehouse_unit_id = ${quote(query.warehouseUnitId)}`);
+        }
+        return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
+      };
+      const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+      const page = Math.max(query.page ?? 1, 1);
+      const offset = (page - 1) * size;
+      const totalResult = await exec.query(
+        `SELECT count(*)::int AS n FROM outbound_orders${where('')}`,
+      );
+      const total = Number(totalResult.rows[0]?.n ?? 0);
+      const { rows } = await exec.query(
+        `SELECT oo.*, bu.name AS warehouse_name, cp.name AS counterparty_name
+         FROM outbound_orders oo
+         LEFT JOIN business_units bu ON bu.id = oo.warehouse_unit_id
+         LEFT JOIN business_units cp ON cp.id = oo.counterparty_unit_id
+         ${where('oo.')} ORDER BY oo.created_at DESC, oo.id ASC LIMIT ${size} OFFSET ${offset}`,
+      );
+      return { items: rows.map(mapOutbound), total, page, size };
+    },
+    async findById(id: string): Promise<OutboundOrderRecord | null> {
+      const { rows } = await exec.query(
+        `SELECT * FROM outbound_orders WHERE id = ${quote(id)} LIMIT 1`,
+      );
+      return rows[0] ? mapOutbound(rows[0]) : null;
+    },
+    async listItems(outboundOrderId: string): Promise<OutboundOrderItemRecord[]> {
+      const { rows } = await exec.query(
+        `SELECT ooi.*, i.name AS item_name, i.spec_unit AS spec, b.batch_no
+         FROM outbound_order_items ooi
+         LEFT JOIN items i ON i.id = ooi.item_id
+         LEFT JOIN batches b ON b.id = ooi.batch_id
+         WHERE ooi.outbound_order_id = ${quote(outboundOrderId)}
+         ORDER BY ooi.created_at ASC, ooi.id ASC`,
+      );
+      return rows.map(mapOutboundItem);
+    },
+    async create(input: CreateOutboundRepoInput): Promise<OutboundOrderRecord> {
+      const outboundNo = await nextOutboundNo(exec);
+      await exec.query('BEGIN');
+      try {
+        const { rows } = await exec.query(
+          `INSERT INTO outbound_orders
+             (outbound_no, type, warehouse_unit_id, counterparty_unit_id, status,
+              remark, photo_file_ids, created_by)
+           VALUES (${quote(outboundNo)}, 'NORMAL', ${quote(input.warehouseUnitId)},
+                  ${quote(input.counterpartyUnitId)}, 'DRAFT', ${quote(nn(input.remark))},
+                  ${photoArray(input.photoFileIds)}, ${quote(input.createdBy)})
+           RETURNING *`,
+        );
+        const outbound = mapOutbound(rows[0]);
+        for (const line of input.lines) {
+          await exec.query(
+            `INSERT INTO outbound_order_items
+               (outbound_order_id, item_id, batch_id, qty)
+             VALUES (${quote(outbound.id)}, ${quote(line.itemId)}, ${quote(line.batchId)},
+                    ${quote(line.qty)})`,
+          );
+        }
+        await exec.query('COMMIT');
+        return outbound;
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async post(id: string, postedBy: string): Promise<OutboundOrderRecord | null> {
+      await exec.query('BEGIN');
+      try {
+        const { rows: locked } = await exec.query(
+          `SELECT * FROM outbound_orders WHERE id = ${quote(id)} FOR UPDATE`,
+        );
+        if (!locked[0]) {
+          await exec.query('ROLLBACK');
+          return null;
+        }
+        const outbound = mapOutbound(locked[0]);
+        if (outbound.status !== 'DRAFT') throw new Error(OUTBOUND_STATE_CONFLICT);
+
+        const { rows: itemRows } = await exec.query(
+          `SELECT ooi.*, i.spec_unit AS spec FROM outbound_order_items ooi
+           LEFT JOIN items i ON i.id = ooi.item_id
+           WHERE ooi.outbound_order_id = ${quote(id)}
+           ORDER BY ooi.created_at ASC, ooi.id ASC`,
+        );
+        const items = itemRows.map(mapOutboundItem);
+        const allocations: { itemId: string; batchId: string; qty: number; unitCost: string }[] = [];
+        for (const line of items) {
+          const qty = Number(line.qty);
+          if (line.batchId) {
+            const { rows: stockRows } = await exec.query(
+              `SELECT qty, avg_cost FROM stock
+                WHERE unit_id = ${quote(outbound.warehouseUnitId)}
+                  AND item_id = ${quote(line.itemId)}
+                  AND batch_id = ${quote(line.batchId)}
+                FOR UPDATE`,
+            );
+            if (!stockRows[0]) throw new Error(STOCK_BATCH_NOT_FOUND);
+            const avail = Number(String(stockRows[0].qty ?? '0'));
+            if (avail < qty) throw new Error(INSUFFICIENT_STOCK);
+            allocations.push({
+              itemId: line.itemId,
+              batchId: line.batchId,
+              qty,
+              unitCost: String(stockRows[0].avg_cost ?? '0'),
+            });
+          } else {
+            const { rows: fefoRows } = await exec.query(
+              `SELECT s.batch_id, s.qty, s.avg_cost
+               FROM stock s
+               JOIN batches b ON b.id = s.batch_id
+               WHERE s.unit_id = ${quote(outbound.warehouseUnitId)}
+                 AND s.item_id = ${quote(line.itemId)}
+                 AND s.qty > 0
+               ORDER BY b.expiry_date ASC NULLS LAST,
+                        b.production_date ASC NULLS LAST, s.batch_id ASC
+               FOR UPDATE`,
+            );
+            const availTotal = fefoRows.reduce(
+              (sum, r) => sum + Number(String(r.qty ?? '0')),
+              0,
+            );
+            if (availTotal < qty) throw new Error(INSUFFICIENT_STOCK);
+            let remaining = qty;
+            for (const row of fefoRows) {
+              if (remaining <= 0) break;
+              const take = Math.min(Number(String(row.qty ?? '0')), remaining);
+              allocations.push({
+                itemId: line.itemId,
+                batchId: String(row.batch_id),
+                qty: take,
+                unitCost: String(row.avg_cost ?? '0'),
+              });
+              remaining -= take;
+            }
+          }
+        }
+
+        await exec.query(
+          `DELETE FROM outbound_order_items WHERE outbound_order_id = ${quote(id)}`,
+        );
+        for (const alloc of allocations) {
+          const { rows: updated } = await exec.query(
+            `UPDATE stock
+             SET qty = qty - ${quote(alloc.qty.toFixed(2))}, version = version + 1, updated_at = now()
+             WHERE unit_id = ${quote(outbound.warehouseUnitId)}
+               AND item_id = ${quote(alloc.itemId)}
+               AND batch_id = ${quote(alloc.batchId)}
+               AND qty >= ${quote(alloc.qty.toFixed(2))}
+             RETURNING qty`,
+          );
+          if (!updated[0]) throw new Error(INSUFFICIENT_STOCK);
+          const qtyAfter = Number(String(updated[0].qty));
+          const qtyBefore = qtyAfter + alloc.qty;
+          await exec.query(
+            `INSERT INTO stock_movements
+               (unit_id, item_id, batch_id, type, qty_delta, qty_before, qty_after, unit_cost,
+                order_type, order_id, ref_no, operator_id)
+             VALUES (${quote(outbound.warehouseUnitId)}, ${quote(alloc.itemId)},
+                    ${quote(alloc.batchId)}, 'OUTBOUND_NORMAL',
+                    ${quote(`-${alloc.qty.toFixed(2)}`)}, ${quote(qtyBefore.toFixed(2))},
+                    ${quote(qtyAfter.toFixed(2))}, ${quote(alloc.unitCost)}, 'outbound',
+                    ${quote(outbound.id)}, ${quote(outbound.outboundNo)}, ${quote(postedBy)})`,
+          );
+          await exec.query(
+            `INSERT INTO outbound_order_items
+               (outbound_order_id, item_id, batch_id, qty, unit_cost)
+             VALUES (${quote(outbound.id)}, ${quote(alloc.itemId)}, ${quote(alloc.batchId)},
+                    ${quote(alloc.qty.toFixed(2))}, ${quote(alloc.unitCost)})`,
+          );
+        }
+        const { rows: updated } = await exec.query(
+          `UPDATE outbound_orders
+           SET status = 'POSTED', posted_by = ${quote(postedBy)}, posted_at = now(), updated_at = now()
+           WHERE id = ${quote(id)} AND status = 'DRAFT' RETURNING *`,
+        );
+        if (!updated[0]) throw new Error(OUTBOUND_STATE_CONFLICT);
+        await exec.query('COMMIT');
+        return mapOutbound(updated[0]);
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+  };
+
+  const stock = {
+    async list(query: StockListQuery): Promise<StockListResult> {
+      const where = (alias: string): string => {
+        const parts: string[] = [`${alias}qty > 0`];
+        if (query.unitId) parts.push(`${alias}unit_id = ${quote(query.unitId)}`);
+        if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
+        if (query.batchId) parts.push(`${alias}batch_id = ${quote(query.batchId)}`);
+        return ` WHERE ${parts.join(' AND ')}`;
+      };
+      const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+      const page = Math.max(query.page ?? 1, 1);
+      const offset = (page - 1) * size;
+      const totalResult = await exec.query(
+        `SELECT count(*)::int AS n FROM stock${where('')}`,
+      );
+      const total = Number(totalResult.rows[0]?.n ?? 0);
+      const { rows } = await exec.query(
+        `SELECT s.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+                b.batch_no, b.production_date, b.expiry_date
+         FROM stock s
+         JOIN business_units bu ON bu.id = s.unit_id
+         JOIN items i ON i.id = s.item_id
+         JOIN batches b ON b.id = s.batch_id
+         ${where('s.')}
+         ORDER BY bu.name ASC, i.name ASC, b.expiry_date ASC NULLS LAST, s.batch_id ASC
+         LIMIT ${size} OFFSET ${offset}`,
+      );
+      return { items: rows.map(mapStockRow), total, page, size };
+    },
+    async listMovements(
+      query: StockMovementListQuery,
+    ): Promise<StockMovementListResult> {
+      const where = (alias: string): string => {
+        const parts: string[] = [];
+        if (query.unitId) parts.push(`${alias}unit_id = ${quote(query.unitId)}`);
+        if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
+        if (query.batchId) parts.push(`${alias}batch_id = ${quote(query.batchId)}`);
+        return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
+      };
+      const size = Math.min(Math.max(query.size ?? 20, 1), 50);
+      const page = Math.max(query.page ?? 1, 1);
+      const offset = (page - 1) * size;
+      const totalResult = await exec.query(
+        `SELECT count(*)::int AS n FROM stock_movements${where('')}`,
+      );
+      const total = Number(totalResult.rows[0]?.n ?? 0);
+      const { rows } = await exec.query(
+        `SELECT m.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+                b.batch_no
+         FROM stock_movements m
+         LEFT JOIN business_units bu ON bu.id = m.unit_id
+         LEFT JOIN items i ON i.id = m.item_id
+         LEFT JOIN batches b ON b.id = m.batch_id
+         ${where('m.')}
+         ORDER BY m.created_at DESC, m.id DESC
+         LIMIT ${size} OFFSET ${offset}`,
+      );
+      return { items: rows.map(mapStockMovement), total, page, size };
+    },
+  };
+
+  return { users, units, items, files, shipments, inbounds, returns, outbounds, stock };
 }
 
 // 将 undefined/空字符串归一化为 null（写入 DB 的 NULL）。
