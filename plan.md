@@ -14,15 +14,13 @@
 
 | 阶段 | Checkpoint | 状态 |
 | ---- | ---------- | ---- |
-| P0-P8b | ck-00 ~ ck-08b | ✅ 全部完成（ck-08b 提交 8bdb2bf，已推送 origin/main） |
-| P9a | ck-09a 销售单 + 请货 + FEFO | ⏳ 下一步 |
-| P9b | ck-09b 零售售后退货闭环 | 待启动 |
+| P0-P9a | ck-00 ~ ck-09a | ✅ 全部完成（ck-09a 提交 2dfcfe8，已推送 origin/main） |
+| P9b | ck-09b 零售售后退货闭环 | ⏳ 下一步 |
 | P10 | ck-10 通知/审计/邮件桥/上线 | 待启动 |
 
-## 下一步（ck-09a）
+## 下一步（ck-09b）
 
-- 依据 [docs/checkpoints/ck-09a-sales.md](docs/checkpoints/ck-09a-sales.md) 与 design.md §5.5/§8.2 实现：
-  - 销售单（仓库→零售，送货方式：自提/快递等；行级改价 + 整体百分比折扣）
-  - 零售方查看仓库库存与零售价；零售请货
-  - POST 后立即扣库存（OUTBOUND_SALE 流水）
+- 依据 [docs/checkpoints/ck-09b-aftersale.md](docs/checkpoints/ck-09b-aftersale.md) 与 design.md §5.6 实现：
+  - 售后单（零售发起退货/退款 → 仓库处理 → 回仓/拒退）
+  - RETURN_IN 流水回补库存；与销售单联动（可部分退货）
 - 由子 agent 实现（模型 `deepseek/deepseek-v4-flash-vision-exp`），完成后主对话审查验收并提交。
