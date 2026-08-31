@@ -1,0 +1,32 @@
+# 实施 Checkpoint 总览
+
+> 规则：**每轮一个 checkpoint**，由独立 agent（全新上下文）串行实现；每轮只读本文件 + 自己的 `ck-XX-*.md` + design.md 相关章节；完成后运行验证并提交；主对话验收通过才启动下一轮。
+
+| ID | 阶段 | 主题 | 设计章节 | 前置 |
+|---|---|---|---|---|
+| [ck-00](ck-00-scaffold.md) | P0 | 项目脚手架与 CI | §2.2/§2.3/§6.3 | - |
+| [ck-01](ck-01-db.md) | P1 | 数据库与基础设施（PG/Hyperdrive 可达性先行） | §7/§6.2 | ck-00 |
+| [ck-02](ck-02-auth.md) | P2 | 认证与岗位/业务单元 | §3 | ck-01 |
+| [ck-03](ck-03-shell.md) | P3 | 前端骨架（响应式+双语+守卫） | §6.1/§8.3 | ck-02 |
+| [ck-04](ck-04-items.md) | P4 | 物品目录+图片压缩+相机扫码 | §8.1/§8.7 | ck-03 |
+| [ck-05](ck-05-shipments.md) | P5 | 发货单（多单号/效期上报/转交） | §4.2/§5.1 | ck-04 |
+| [ck-06](ck-06-counting.md) | P6 | 收货点货与差异协商 | §5.1/附录A | ck-05 |
+| [ck-07](ck-07-inbound.md) | P7 | 确认入库（批次建档）+发货退货 | §5.2/§5.3 | ck-06 |
+| [ck-08a](ck-08a-stock.md) | P8a | 库存台账+手动出入库 | §4.3/§8.2 | ck-07 |
+| [ck-08b](ck-08b-loss.md) | P8b | 报损+效期预警+零售价 | §5.4/附录B | ck-08a |
+| [ck-09a](ck-09a-sales.md) | P9a | 销售单+请货+FEFO 分配 | §5.5/§8.2 | ck-08b |
+| [ck-09b](ck-09b-returns.md) | P9b | 零售售后退货闭环 | §5.2/§5.5 | ck-09a |
+| [ck-10](ck-10-polish.md) | P10 | 通知/审计/邮件桥/上线 | §8.5/§8.8/§9 | ck-09b |
+
+## 每轮统一要求
+
+1. **范围**：只实现本 checkpoint 文档列出的内容；不顺手改其他模块，不预实现后续功能。
+2. **上下文**：只依赖 design.md 与本 checkpoint 文档；如与 design.md 冲突，以 design.md 为准并记录问题。
+3. **验证**（每轮必跑）：
+   - `pnpm -r typecheck`
+   - `pnpm -r test`（有测试则跑）
+   - `pnpm -r build`
+   - 涉及 UI：本地起 dev server 冒烟关键流程；有 Playwright 则跑 smoke。
+4. **提交**：一个 checkpoint 一个 commit，消息如 `feat(items): 物品目录与扫码 (ck-04)`，附 `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`。
+5. **收尾**：更新本 README 中该行状态（✅ 完成 / ⚠️ 部分 / ❌ 阻塞），并在 checkpoint 文档末尾记录「完成情况」。
+6. 验收标准全部满足才算完成；无法完成的部分必须在「完成情况」中说明原因与后续建议。
