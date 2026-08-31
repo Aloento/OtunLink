@@ -3,11 +3,25 @@ import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
 import { adminRouter } from './routes/admin';
+import type { AppEnv, AuthState, UserRecord } from './types';
 
-type AppEnv = {
-  Bindings: Record<string, unknown>;
-  Variables: { authRole: string | null };
-};
+function makeAuth(role: UserRecord['role']): AuthState {
+  return {
+    claims: { sub: 'test-sub' },
+    user: {
+      id: 'u1',
+      entraSub: 'test-sub',
+      email: 'a@b.c',
+      name: 'Tester',
+      role,
+      scopeUnitId: null,
+      status: 'ACTIVE',
+      locale: 'zh-CN',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  };
+}
 
 const TEST_MIGRATIONS: Migration[] = [
   { name: '0001_init', sql: 'CREATE TABLE a (id int);' },
@@ -49,8 +63,10 @@ function makeApp(overrides: {
   const app = new Hono<AppEnv>();
 
   app.use('*', async (c, next) => {
-    const role = c.req.header('X-Test-Role') ?? null;
-    c.set('authRole', role);
+    const role = c.req.header('X-Test-Role');
+    if (role === 'ADMIN' || role === 'COLLECTOR') {
+      c.set('auth', makeAuth(role));
+    }
     await next();
   });
 
@@ -150,7 +166,7 @@ describe('POST /api/v1/admin/migrate', () => {
     });
     const testApp = new Hono<AppEnv>();
     testApp.use('*', async (c, next) => {
-      c.set('authRole', 'ADMIN');
+      c.set('auth', makeAuth('ADMIN'));
       await next();
     });
     testApp.route('/api/v1/admin', router);

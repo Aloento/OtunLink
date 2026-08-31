@@ -13,7 +13,8 @@
   "dependencies": {
     "@otunlink/db": "workspace:*",
     "@otunlink/shared": "workspace:*",
-    "hono": "^4.13.5"
+    "hono": "^4.13.5",
+    "jose": "^6.2.10"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260831.1",

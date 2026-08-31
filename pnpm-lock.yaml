@@ -19,6 +19,9 @@ importers:
       hono:
         specifier: ^4.13.5
         version: 4.13.5
+      jose:
+        specifier: ^6.2.10
+        version: 6.2.10
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^5.20260831.1
@@ -2162,6 +2165,9 @@ packages:
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
+
+  jose@6.2.10:
+    resolution: {integrity: sha512-iiW7J9qRFlGxvCOIBDBDxFePQSn7ZMAnrYGhrrOo6siO/MIqwfyilLR27pkfDgUk+raLuzADS8A3S/KLBisc0g==}
 
   keyborg@2.14.1:
     resolution: {integrity: sha512-/WmmVBa6Me3hIKAOIyIq1sql+6oydQZzGMBDLNfOcJ8710byMsq3KSLS8GQhBJHOMtvnXnUBrDAIbABcZVipcg==}
@@ -4805,6 +4811,8 @@ snapshots:
       typescript: 7.0.2
 
   jiti@2.7.0: {}
+
+  jose@6.2.10: {}
 
   keyborg@2.14.1: {}
 

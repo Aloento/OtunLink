@@ -27,3 +27,15 @@
 
 ## 参考
 design.md：§3 认证与权限、附录 C 权限矩阵、§11 风险 8。
+
+## 完成情况
+
+- ✅ `docs/auth-setup.md`：Entra 单租户 App Registration 指南（重定向 `https://app.otunlink.com/auth/callback`、API 范围 `api://<app-id>/OtunLink.API`、配置项写入 `.dev.vars.example` / `.env.example`）。
+- ✅ apps/web：MSAL（auth code + PKCE）配置与登录/登出；`/auth/callback` 路由占位；登录后调 `/auth/me`；PENDING 引导页；未配置环境变量时给出提示。
+- ✅ apps/api：jose JWT 校验（JWKS 经 KV 24h 缓存 + 内存降级）；`requireAuth`/`requireRole`/`requirePermission`/`requireUnitScope` 中间件；`GET /auth/me` 自动开户（PENDING）；`GET/PATCH /users/me`；`GET/POST /admin/users`、`PATCH /admin/users/:id`；`GET /units`、`GET/POST /admin/units`、`PATCH /admin/units/:id`。
+- ✅ RBAC：`packages/shared` 落 permission 常量 + role→permission 映射 + `hasPermission`；本 checkpoint 对 auth/users/units 路由生效，中间件通用（后续业务路由复用）。
+- ✅ 测试：RBAC 矩阵抽样单测（shared 9 项）+ API 鉴权/RBAC e2e（内存 repository，20 项）+ Web 可测部分（12 项）。
+- ⚠️ 生产数据层：PG 不可达（ck-01 BLOCKED 遗留），repositories 为「接口 + SQL 实现 + 内存实现」，生产最终应切 Drizzle（接口接缝已留，注入方式不变）。
+- ⚠️ 真实登录未在开发环境实测：需提供真实 `TENANT_ID`/`CLIENT_ID`；代码使用占位符可先行，token→user 流程由注入 fake `verifyToken` 的 e2e 测试覆盖。
+- ⚠️ 审计日志：按 checkpoint 约定仅留桩，ck-10 完善。
+

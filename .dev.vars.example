@@ -4,6 +4,12 @@
 # ── 本地 PostgreSQL（ck-01 起使用；ck-00 的 health 端点不需要）────────────
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/otunlink
 
-# ── Azure AD / Entra ID（ck-02 起使用）─────────────────────────────────────
+# ── Azure AD / Entra ID（ck-02 起使用，见 docs/auth-setup.md）──────────────
 ENTRA_TENANT_ID=
 ENTRA_CLIENT_ID=
+# 可选：显式 audience（默认接受 CLIENT_ID；也可设为 api://<client-id>/OtunLink.API）
+ENTRA_AUDIENCE=
+# 可选：JWT issuer 覆盖（默认 https://login.microsoftonline.com/<TENANT_ID>/v2.0）
+ENTRA_ISSUER=
+# 可选：客户端密码（本 checkpoint 服务端仅验签、不发起机密客户端请求，可不填）
+ENTRA_CLIENT_SECRET=
