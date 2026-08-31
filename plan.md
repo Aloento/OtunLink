@@ -14,13 +14,13 @@
 
 | 阶段 | Checkpoint | 状态 |
 | ---- | ---------- | ---- |
-| P0-P9a | ck-00 ~ ck-09a | ✅ 全部完成（ck-09a 提交 2dfcfe8，已推送 origin/main） |
-| P9b | ck-09b 零售售后退货闭环 | ⏳ 下一步 |
-| P10 | ck-10 通知/审计/邮件桥/上线 | 待启动 |
+| P0-P9b | ck-00 ~ ck-09b | ✅ 全部完成（ck-09b 提交 f61e824，已推送 origin/main） |
+| P10 | ck-10 通知/审计/邮件桥/上线打磨 | ⏳ 下一步 |
 
-## 下一步（ck-09b）
+## 下一步（ck-10，收官）
 
-- 依据 [docs/checkpoints/ck-09b-aftersale.md](docs/checkpoints/ck-09b-aftersale.md) 与 design.md §5.6 实现：
-  - 售后单（零售发起退货/退款 → 仓库处理 → 回仓/拒退）
-  - RETURN_IN 流水回补库存；与销售单联动（可部分退货）
+- 依据 [docs/checkpoints/ck-10-polish.md](docs/checkpoints/ck-10-polish.md) 与 design.md §8.5/§8.8/§10 实现：
+  - 站内通知接入关键事件 + 工作台待办聚合；audit_logs 完善与查询
+  - EmailProvider 接口 + mail-bridge 适配器（infra/mail-bridge 轻量 Node 服务，可降级仅站内通知）
+  - docs/deploy.md + go-live-checklist.md；冒烟（复用现有 vitest 全链路，不新增 Playwright）
 - 由子 agent 实现（模型 `deepseek/deepseek-v4-flash-vision-exp`），完成后主对话审查验收并提交。
