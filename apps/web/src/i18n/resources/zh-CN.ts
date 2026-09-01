@@ -99,6 +99,7 @@ export const zhCN = {
       deleteTitle: '删除用户',
       deleteConfirm: '确定删除用户「{{name}}」？该操作不可撤销，相关审计与单据记录将解除关联。',
       deleteConfirmBtn: '确认删除',
+      deleteSelfHint: '不能删除当前登录账号',
       entraSub: 'Entra 对象 ID（objectId）',
       locale: '语言偏好',
       empty: '暂无用户',

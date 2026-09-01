@@ -102,6 +102,7 @@ export const en: TranslationSchema = {
       deleteTitle: 'Delete user',
       deleteConfirm: 'Delete user "{{name}}"? This cannot be undone; related audit and document records will be unlinked.',
       deleteConfirmBtn: 'Delete',
+      deleteSelfHint: 'You cannot delete your own account',
       entraSub: 'Entra object ID (objectId)',
       locale: 'Locale',
       empty: 'No users',

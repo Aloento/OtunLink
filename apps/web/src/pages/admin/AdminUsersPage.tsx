@@ -19,6 +19,8 @@ import { useTranslation } from 'react-i18next';
 
 import { USER_ROLES, USER_STATUSES } from '@otunlink/shared';
 
+import { useSession } from '../../auth/SessionProvider';
+
 import { errorI18nKey, isApiError } from '../../api/http';
 import {
   createAdminUser,
@@ -60,6 +62,7 @@ const emptyDraft = (): Draft => ({
 export function AdminUsersPage() {
   const { t } = useTranslation();
   const { locale } = useLocale();
+  const { me } = useSession();
   const queryClient = useQueryClient();
 
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -112,11 +115,12 @@ export function AdminUsersPage() {
     mutationFn: (id: string) => deleteAdminUser(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      setSaving(null);
       setDeleting(null);
     },
     onError: (cause) => {
-      setDeleting(null);
-      setSaving({ error: isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN') });
+      // 关闭对话框会让错误信息随关闭动画一闪而过，这里保留对话框以显示具体原因。
+      setSaving({ error: isApiError(cause) ? cause.message : t('errors.UNKNOWN') });
     },
   });
 
@@ -205,6 +209,8 @@ export function AdminUsersPage() {
               <Button
                 size="small"
                 appearance="secondary"
+                disabled={me?.id === u.id}
+                title={t('admin.users.deleteSelfHint')}
                 onClick={() => {
                   setSaving(null);
                   setDeleting(u);
@@ -315,7 +321,15 @@ export function AdminUsersPage() {
         </DialogSurface>
       </Dialog>
 
-      <Dialog open={deleting !== null} onOpenChange={(_, d) => !d.open && setDeleting(null)}>
+      <Dialog
+        open={deleting !== null}
+        onOpenChange={(_, d) => {
+          if (!d.open) {
+            setDeleting(null);
+            setSaving(null);
+          }
+        }}
+      >
         <DialogSurface>
           <DialogBody>
             <DialogTitle>{t('admin.users.deleteTitle')}</DialogTitle>
@@ -326,7 +340,10 @@ export function AdminUsersPage() {
             <DialogActions>
               <Button
                 appearance="secondary"
-                onClick={() => setDeleting(null)}
+                onClick={() => {
+                  setDeleting(null);
+                  setSaving(null);
+                }}
                 disabled={deleteMutation.isPending}
               >
                 {t('common.cancel')}
