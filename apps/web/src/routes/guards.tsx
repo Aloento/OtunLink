@@ -2,7 +2,7 @@ import { useIsAuthenticated } from '@azure/msal-react';
 import { Body1, Button, Title3 } from '@fluentui/react-components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 import type { Permission } from '@otunlink/shared';
 
@@ -48,11 +48,17 @@ function SessionErrorPage({ onRetry }: { onRetry: () => void }) {
 
 export function RequireActive({ children }: { children: ReactNode }) {
   const { me, loading, error, reload } = useSession();
+  const navigate = useNavigate();
+
   if (loading) return <FullPageSpinner />;
   if (!me) {
-    // 会话仍在（authenticated=true）但 /auth/me 因服务器/网络失败：展示可重试错误页，
-    // 避免与 LoginPage 的「已登录即回首页」守卫互相导航导致死循环。
-    if (error === 'server') return <SessionErrorPage onRetry={reload} />;
+    // 服务器/网络异常：允许重试，避免把可恢复的错误误判为会话失效。
+    if (error === 'server') return <SessionErrorPage onRetry={() => void reload()} />;
+    // 资源 scope / consent 问题会让 acquireTokenSilent 失败；保留 MSAL account，
+    // 引导用户重新走登录流程而不是直接清缓存并循环回到 /login。
+    if (error === 'token') {
+      return <SessionErrorPage onRetry={() => navigate(LOGIN_PATH, { replace: true })} />;
+    }
     // 已登录但 /auth/me 返回空（如令牌失效被清缓存）：记录原目标路径，登录后回跳原页。
     // 与 RequireAuth 相同，避免 `<Navigate replace>` 重渲染后把深链覆盖成 /login。
     if (window.location.pathname !== LOGIN_PATH) {

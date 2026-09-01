@@ -51,14 +51,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       const token = await acquireAccessToken(instance, [config.apiScope]);
       if (!token) {
-        // MSAL 有 account 但无法获取有效 token：会话不可用，清缓存。
+        // 资源 scope / consent 异常（例如 API scope 配置不匹配）会导致 acquireTokenSilent 失败，
+        // 但这不一定意味着账户本身无效；不要直接清空 MSAL 缓存，否则会把用户踢回登录页并
+        // 让可恢复的授权问题变成循环登录。
         setMe(null);
         setError('token');
-        try {
-          await instance.clearCache();
-        } catch {
-          // 忽略
-        }
         return;
       }
       try {
