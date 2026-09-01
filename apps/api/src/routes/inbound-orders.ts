@@ -7,7 +7,7 @@ import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '
 import { recordAudit } from '../lib/audit';
 import type { AppEnv, InboundOrderRecord, Repos } from '../types';
 
-// 入库单（design.md §5.3）：确认收货自动生成的 DRAFT 在 POST 后建档批次 +
+// 入库单：确认收货自动生成的 DRAFT 在 POST 后建档批次并
 // 写库存/台账。读 = STOCK_READ（仓库/管理员）；POST = INBOUND_CONFIRM（仓库）。
 export function inboundOrdersRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();

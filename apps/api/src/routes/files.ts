@@ -23,7 +23,7 @@ export interface FilesDeps {
   randomUUID?: () => string;
 }
 
-// 图片上传与预签名 URL（design.md §8.1 图片管线）。
+// 图片上传与预签名 URL（图片管线）。
 // POST /files 为 multipart：`image`（必填，压缩后的展示图）+ `thumb`（可选，320px 缩略图）。
 // 后端仅校验魔数（JPEG/PNG/WebP）、decoded 尺寸与大小（≤5MB），压缩在浏览器完成。
 export function filesRouter(deps: FilesDeps = {}): Hono<AppEnv> {

@@ -1,7 +1,7 @@
 import { Permissions, type Permission } from '@otunlink/shared';
 
-// 路由表（design.md §6.1 全部路由）+ 导航分组。
-// 业务页面在 ck-03 均以「开发中」占位；权限映射遵循 design.md §3.2 权限矩阵。
+// 路由表（全部路由）+ 导航分组。
+// 业务页面均以「开发中」占位；权限映射遵循 RBAC 权限矩阵。
 
 export interface AppRouteDef {
   path: string;

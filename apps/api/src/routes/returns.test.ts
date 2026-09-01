@@ -86,7 +86,7 @@ function json(token: string) {
   return { ...auth(token), 'Content-Type': 'application/json' };
 }
 
-describe('ck-07 发货退货（拒收）闭环', () => {
+describe(' 发货退货（拒收）闭环', () => {
   async function readyShipment(
     app: Awaited<ReturnType<typeof makeApp>>['app'],
     expectedQty = 5,

@@ -2,7 +2,7 @@ import type { Paged, StockBatchDto, StockMovementDto, StockRowDto } from '@otunl
 
 import { apiGet } from './http';
 
-// 库存台账 API 客户端（ck-08a / ck-08b）：仓库 × 物品 × 批次维度只读查询 + 效期批次。
+// 库存台账 API 客户端：仓库 × 物品 × 批次维度只读查询 + 效期批次。
 
 export interface StockListQuery {
   unitId?: string;

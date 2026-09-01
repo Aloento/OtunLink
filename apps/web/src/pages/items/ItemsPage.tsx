@@ -15,7 +15,7 @@ import { ScannerDialog } from '../../components/ScannerDialog';
 
 const PAGE_SIZE = 20;
 
-// 物品目录列表（ck-04 §6.1）：搜索 + 扫码定位 + 分页。
+// 物品目录列表：搜索 + 扫码定位 + 分页。
 export function ItemsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();

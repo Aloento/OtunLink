@@ -6,7 +6,7 @@ import { dbUnavailable, ok } from '../lib/http';
 import { loadPartnerWarehouseIds } from '../lib/partnerships';
 import type { AppEnv, Repos } from '../types';
 
-// 工作台待办聚合（ck-10 §8.5）：按岗位 + 数据范围返回待办列表（供 `/` 首页）。
+// 工作台待办聚合：按岗位 + 数据范围返回待办列表（供 `/` 首页）。
 // 复用各业务列表查询（page=1&size=1 只取 total），避免新增聚合 SQL。
 
 export type { DashboardTodoItem };

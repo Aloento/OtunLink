@@ -12,7 +12,7 @@ import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
-// 出库单详情（ck-08a §4.3）：批次分配结果 + 草稿过账（扣减库存 / 写台账流水）。
+// 出库单详情：批次分配结果 + 草稿过账（扣减库存 / 写台账流水）。
 export function OutboundDetailPage() {
   const { t } = useTranslation();
   const { me } = useSession();

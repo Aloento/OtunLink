@@ -13,8 +13,8 @@ import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '
 import { recordAudit } from '../lib/audit';
 import type { AppEnv, OutboundOrderRecord, Repos } from '../types';
 
-// 手动出库单（design.md §4.3）：DRAFT → POSTED 扣减库存 + 写流水。
-// 读 = STOCK_READ（仓库/管理员）；写 = STOCK_WRITE（仓库）。报损（LOSS）留 ck-08b。
+// 手动出库单：DRAFT → POSTED 扣减库存 + 写流水。
+// 读 = STOCK_READ（仓库/管理员）；写 = STOCK_WRITE（仓库）。报损（LOSS）同走写权限。
 export function outboundOrdersRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 

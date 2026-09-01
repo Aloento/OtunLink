@@ -407,7 +407,7 @@ describe('shipments 发货单 API', () => {
   });
 });
 
-// ── ck-06: 收货点货与差异协商 ────────────────────────────────────────────────
+// ── 收货点货与差异协商 ────────────────────────────────────────────────
 
 const warehouseScoped = user({
   entraSub: 'warehouse-scoped',
@@ -420,7 +420,7 @@ const warehouseOtherScoped = user({
   scopeUnitId: OTHER_WAREHOUSE,
 });
 
-describe('shipments 收货点货与差异协商 (ck-06)', () => {
+describe('shipments 收货点货与差异协商 ()', () => {
   let seq = 0;
   async function createdShipment(
     app: Awaited<ReturnType<typeof makeApp>>['app'],

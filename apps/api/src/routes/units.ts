@@ -6,7 +6,7 @@ import { unitDto } from '../lib/dto';
 import { dbUnavailable, ok } from '../lib/http';
 import type { AppEnv } from '../types';
 
-// GET /units：登录用户可见的业务单元（design.md §3.2 数据范围）。
+// GET /units：登录用户可见的业务单元（数据范围）。
 export function unitsRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 

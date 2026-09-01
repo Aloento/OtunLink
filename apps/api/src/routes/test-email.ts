@@ -6,7 +6,7 @@ import { emailParagraph, renderEmailHtml } from '../lib/email-template';
 import { dbUnavailable, ok } from '../lib/http';
 import type { AppEnv } from '../types';
 
-// 邮件连通性测试（design.md §8.8）：仅 ADMIN；未配置 SMTP 时返回降级原因（200，不抛错）。
+// 邮件连通性测试：仅 ADMIN；未配置 SMTP 时返回降级原因（200，不抛错）。
 // 配置 SMTP 时向系统管理员邮箱发一封测试邮件，成功/失败均如实返回。
 export function testEmailRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();

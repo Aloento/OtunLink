@@ -101,7 +101,7 @@ export function requireRole(...roles: UserRole[]): MiddlewareHandler<AppEnv> {
   };
 }
 
-/** 要求已登录、ACTIVE 且具备全部给定权限（RBAC 权限矩阵，design.md §3.2）。 */
+/** 要求已登录、ACTIVE 且具备全部给定权限（RBAC 权限矩阵）。 */
 export function requirePermission(...permissions: Permission[]): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const user = c.get('auth').user;
@@ -161,7 +161,7 @@ export function requireUnitScopeAssigned(): MiddlewareHandler<AppEnv> {
 
 /**
  * 数据范围校验中间件：当用户 scope_unit_id 非空时，目标单元必须等于其范围单元。
- * 用于后续业务路由（单据/库存等），本 checkpoint 先落地并被单测覆盖。
+ * 用于后续业务路由（单据/库存等），本实现已落地并被单测覆盖。
  */
 export function requireUnitScope(
   resolveUnitId: (c: Ctx) => string | null | undefined,

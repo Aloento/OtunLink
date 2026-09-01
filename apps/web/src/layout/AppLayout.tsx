@@ -11,7 +11,7 @@ import { canAccessPermissions } from '../routes/access';
 import { NAV_ADMIN, NAV_MAIN, ROUTES, type RouteKey } from '../routes/routes';
 import { useMediaQuery } from './useMediaQuery';
 
-// 响应式布局（design.md §6.1）：
+// 响应式布局：
 // 桌面（>1024）：左侧边栏导航
 // 平板（768–1024）：顶部横向导航
 // 手机（<768）：底部导航

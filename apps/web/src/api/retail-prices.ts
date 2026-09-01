@@ -2,7 +2,7 @@ import type { RetailPriceDto, RetailPriceHistoryDto } from '@otunlink/shared';
 
 import { apiGet, apiPut } from './http';
 
-// 零售价 API 客户端（ck-08b §4.2）：仓库 × 物品当前价 + 改价历史。
+// 零售价 API 客户端：仓库 × 物品当前价 + 改价历史。
 // 原始 unit_cost 仅服务端计算并只读返回，任何写入入口都不接受该字段。
 
 export interface RetailPriceListQuery {

@@ -183,7 +183,6 @@ export const en: TranslationSchema = {
     NETWORK: 'Network error, please check your connection',
     UNKNOWN: 'An unknown error occurred, please try again later',
   },
-  placeholder: { title: 'In development' },
   forbidden: {
     title: 'Access denied',
     description: 'Your role does not have access to this page.',

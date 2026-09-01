@@ -180,7 +180,6 @@ export const zhCN = {
     NETWORK: '网络异常，请检查网络连接',
     UNKNOWN: '发生未知错误，请稍后重试',
   },
-  placeholder: { title: '开发中' },
   forbidden: {
     title: '无权访问',
     description: '当前岗位没有访问该页面的权限。',

@@ -140,7 +140,7 @@ async function seedStock(
   return { inboundId, batchId: payload.data.items[0].batchId, qty: payload.data.items[0].qty };
 }
 
-describe('ck-08a 手动出库单', () => {
+describe(' 手动出库单', () => {
   it('创建校验：非仓库目标 → 400；物品不存在 → 400；集货方写 → 403；scope 越界 → 403', async () => {
     const scoped = user({
       entraSub: 'warehouse-scoped',

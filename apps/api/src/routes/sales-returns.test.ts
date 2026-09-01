@@ -229,7 +229,7 @@ async function createdOf(
   return { returnId: payload.data.id, returnItemId: payload.data.items[0].id };
 }
 
-describe('ck-09b 零售售后退货（SALES）闭环', () => {
+describe(' 零售售后退货（SALES）闭环', () => {
   it('发起：部分退货 → 201 REQUESTED，含销售单号；售后列表可按销售单过滤', async () => {
     const { app } = makeApp();
     const { orderId, salesOrderItemId } = await readySalesOrder(app, '5', [

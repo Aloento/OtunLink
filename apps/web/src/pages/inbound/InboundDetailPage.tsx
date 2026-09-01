@@ -11,7 +11,7 @@ import { getInbound, postInbound } from '../../api/inbound';
 import { useSession } from '../../auth/SessionProvider';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
-// 入库单详情（ck-07 §6.1）：批次清单 + 草稿过账（建档批次 / 写库存台账）。
+// 入库单详情：批次清单 + 草稿过账（建档批次 / 写库存台账）。
 export function InboundDetailPage() {
   const { t } = useTranslation();
   const { me } = useSession();

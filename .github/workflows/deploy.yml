@@ -53,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ── 邮件 SMTP 直连（design.md §8.8）：写入 Worker secrets。非敏感配置
+      # ── 邮件 SMTP 直连：写入 Worker secrets。非敏感配置
       #    （SMTP_HOST/MAIL_FROM/SMTP_PORT/SMTP_SECURE/SMTP_STARTTLS/SMTP_AUTH）已在
       #    wrangler.toml [vars]；GitHub 仓库需配置以下 secrets：SMTP_USER / SMTP_PASS。
       #    未配置时跳过，API 降级为仅站内通知。

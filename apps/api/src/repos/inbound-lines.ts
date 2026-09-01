@@ -19,7 +19,7 @@ type Group = {
 };
 
 /**
- * 按 (itemId, productionDate, expiryDate) 归并入库行（ck-07 确认收货 / 部分退货剩余入库）。
+ * 按 (itemId, productionDate, expiryDate) 归并入库行（确认收货 / 部分退货剩余入库）。
  * - qtyOf 返回该发货行应入库的数量（0/空跳过）；
  * - unit_cost 取发货价加权平均（同组多行价格不同时保成本口径），保留两位；
  * - batchNoOf 返回用户录入批号；缺省自动 `${autoBatchPrefix}-B{n}`（n 为归并后行序）。

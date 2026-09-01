@@ -1,4 +1,4 @@
-// 发货单相关的类型与常量（design.md §4.2 / §5.1 / §8.4）。
+// 发货单相关的类型与常量。
 // 与 packages/db 的 shipment_status 枚举保持语义一致；shared 只放前后端共用的
 // 类型与常量，数据库层枚举在 packages/db/src/enums.ts 独立维护。
 
@@ -74,7 +74,7 @@ export interface ShipmentDto {
 /** 发货单详情 DTO（在列表 DTO 基础上附带清单）。 */
 export interface ShipmentDetailDto extends ShipmentDto {
   items: ShipmentItemDto[];
-  /** 差异修订记录（按创建时间倒序；详见 §4.2 discrepancy_reviews）。 */
+  /** 差异修订记录（按创建时间倒序；详见 discrepancy_reviews）。 */
   reviews: DiscrepancyReviewDto[];
 }
 

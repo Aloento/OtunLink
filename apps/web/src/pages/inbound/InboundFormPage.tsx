@@ -42,7 +42,7 @@ function emptyLine(): ItemLine {
   };
 }
 
-// 手工入库单新建（ck-08a §4.3）：指定仓库/交易对手/行（物品 + 数量 + 成本单价 + 可选批次）。
+// 手工入库单新建：指定仓库/交易对手/行（物品 + 数量 + 成本单价 + 可选批次）。
 export function InboundFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();

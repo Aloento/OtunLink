@@ -88,10 +88,10 @@ import { mergeInboundLines, qtyEqual, type MergedInboundLine } from './inbound-l
 
 // SQL 数据访问实现（stopgap）。
 // 说明：生产最终应使用 Drizzle 查询构建（db.select().from(schema.users)...）走
-// Hyperdrive/连接池；本实现受 ck-01 引入的 SqlExecutor（仅 query(sql)）抽象约束，
+// Hyperdrive/连接池；本实现受 SqlExecutor（仅 query(sql)）抽象约束，
 // 采用「单引号转义 + RETURNING」的参数化等价写法，注入方式与 Drizzle 相同
 // （Repository 接口），后续可无痛替换为 Drizzle 实现。
-// ck-02 期间 PG 不可达（见 docs/checkpoints/README.md ck-01 状态），此处仅做正确性兜底，
+// 本地开发期间 PG 不可达（见 docs/db-setup.md），此处仅做正确性兜底，
 // 单测覆盖走内存实现。
 
 const quote = (value: unknown): string => {
@@ -120,31 +120,31 @@ const photoArray = (ids: string[]): string =>
 // 路由层据此把仓库层异常映射为 409 与对应错误码。
 const SHIPMENT_STATE_CONFLICT = 'SHIPMENT_STATE_CONFLICT: only DRAFT shipments can be edited or sent';
 const SHIPMENT_TRACKING_CONFLICT = 'TRACKING_CONFLICT: carrier+tracking_no already exists';
-// ck-06：点货/差异协商业务信号（路由层映射为对应错误码）。
+// 点货/差异协商业务信号（路由层映射为对应错误码）。
 const COUNTING_STATE_CONFLICT =
   'COUNTING_STATE_CONFLICT: shipment is not in a countable state or version mismatch';
 const COUNT_LINE_INVALID = 'COUNT_LINE_INVALID: count line does not belong to the shipment';
 const REVIEW_ALREADY_PROCESSED =
   'REVIEW_ALREADY_PROCESSED: review already processed or pending review exists';
 const REVIEW_NO_DIFFERENCE = 'REVIEW_NO_DIFFERENCE: no discrepancy to review';
-// ck-07：确认入库 / 发货退货业务信号（路由层映射为对应错误码）。
+// 确认入库 / 发货退货业务信号（路由层映射为对应错误码）。
 const SHIPMENT_NOT_READY = 'SHIPMENT_NOT_READY: shipment is not READY or lines mismatch';
 const INBOUND_STATE_CONFLICT = 'INBOUND_STATE_CONFLICT: only DRAFT inbound orders can be posted';
 const RETURN_STATE_CONFLICT = 'RETURN_STATE_CONFLICT: shipment is not READY for return';
 const RETURN_ALREADY_PROCESSED =
   'RETURN_ALREADY_PROCESSED: return order already processed';
 const RETURN_LINE_INVALID = 'RETURN_LINE_INVALID: return line is invalid';
-// ck-08a：手动出入库 / 库存台账业务信号（路由层映射为对应错误码）。
+// 手动出入库 / 库存台账业务信号（路由层映射为对应错误码）。
 const OUTBOUND_STATE_CONFLICT =
   'OUTBOUND_STATE_CONFLICT: only DRAFT outbound orders can be posted';
 const INSUFFICIENT_STOCK = 'INSUFFICIENT_STOCK: insufficient stock for outbound';
 const STOCK_BATCH_NOT_FOUND =
   'STOCK_BATCH_NOT_FOUND: no stock of the specified batch in the warehouse';
-// ck-09a：销售单业务信号（路由层映射为对应错误码）。
+// 销售单业务信号（路由层映射为对应错误码）。
 const SALES_STATE_CONFLICT =
   'SALES_STATE_CONFLICT: sales order is not in a valid state for this operation';
 const SALES_LINE_INVALID = 'SALES_LINE_INVALID: sales order line is invalid';
-// ck-09b：零售售后退货业务信号（路由层映射为对应错误码）。
+// 零售售后退货业务信号（路由层映射为对应错误码）。
 const RETURN_QTY_EXCEEDED = 'RETURN_QTY_EXCEEDED: return qty exceeds returnable qty';
 
 function mapUser(row: Record<string, unknown>): UserRecord {
@@ -1107,7 +1107,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       );
       return rows.map(mapShipmentItem);
     },
-    // ── 收货点货与差异协商（ck-06）─────────────────────────────────────────────
+    // ── 收货点货与差异协商─────────────────────────────────────────────
     async startCounting(id: string): Promise<ShipmentRecord | null> {
       const { rows } = await exec.query(
         `UPDATE shipments SET status = 'COUNTING', updated_at = now()
@@ -1373,7 +1373,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  // ── 确认入库与发货退货（ck-07）───────────────────────────────────────────────
+  // ── 确认入库与发货退货───────────────────────────────────────────────
   // 入库单 / 退货单复用同一 SqlExecutor；确认收货与退货接受跨表事务在此实现。
 
   /** 在事务内插入 DRAFT 入库单 + 明细；返回入库单记录（调用方负责 COMMIT/ROLLBACK）。 */
@@ -1874,7 +1874,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         throw err;
       }
     },
-    // ── ck-09b：零售售后退货（source_type=SALES）────────────────────────────────
+    // ── 零售售后退货（source_type=SALES）────────────────────────────────
     async createFromSales(input: CreateSalesReturnRepoInput): Promise<ReturnOrderRecord> {
       const order = await sales.findById(input.salesOrderId);
       if (!order) throw new Error('SALES_NOT_FOUND: sales order does not exist');
@@ -2287,7 +2287,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
            ORDER BY ooi.created_at ASC, ooi.id ASC`,
         );
         const items = itemRows.map(mapOutboundItem);
-        // ck-08b：报损（type=LOSS）→ OUTBOUND_LOSS 流水；手工出库 → OUTBOUND_NORMAL。
+        // 报损（type=LOSS）→ OUTBOUND_LOSS 流水；手工出库 → OUTBOUND_NORMAL。
         const movementType = outbound.type === 'LOSS' ? 'OUTBOUND_LOSS' : 'OUTBOUND_NORMAL';
         const allocations: { itemId: string; batchId: string; qty: number; unitCost: string }[] = [];
         for (const line of items) {
@@ -2495,7 +2495,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  // ── ck-08b：零售价（retail_prices + retail_price_history）─────────────────────────
+  // ── 零售价（retail_prices + retail_price_history）─────────────────────────
 
   const retailPrices: RetailPriceRepository = {
     async list(query: RetailPriceListQuery): Promise<RetailPriceRecord[]> {
@@ -2563,7 +2563,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  // ── ck-08b/ck-10：站内通知（notifications）────────────────────────────────────
+  // ── /：站内通知（notifications）────────────────────────────────────
 
   const notifications = {
     async create(input: {
@@ -2639,7 +2639,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  // ── ck-10：邮件日志（email_logs）────────────────────────────────────────────
+  // ── 邮件日志（email_logs）────────────────────────────────────────────
 
   const emailLogs = {
     async create(input: {
@@ -2670,7 +2670,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  // ── ck-10：审计日志（audit_logs）────────────────────────────────────────────
+  // ── 审计日志（audit_logs）────────────────────────────────────────────
 
   const auditLogs = {
     async create(input: {
@@ -2714,7 +2714,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  // ── ck-09a：销售单（sales_orders + 明细 + 批次分配 + 支付）─────────────────────
+  // ── 销售单（sales_orders + 明细 + 批次分配 + 支付）─────────────────────
 
   async function readSalesOrder(id: string): Promise<SalesOrderRecord | null> {
     const { rows } = await exec.query(

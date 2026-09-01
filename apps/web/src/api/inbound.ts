@@ -8,7 +8,7 @@ import type {
 
 import { apiGet, apiPost } from './http';
 
-// 入库单 API 客户端（ck-07/ck-08a）：确认收货自动建档的 DRAFT/POSTED + 手工入库单（sourceType=MANUAL）。
+// 入库单 API 客户端：确认收货自动建档的 DRAFT/POSTED + 手工入库单（sourceType=MANUAL）。
 
 export interface InboundListQuery {
   status?: InboundStatus;
@@ -38,7 +38,7 @@ export function postInbound(id: string): Promise<InboundOrderDetailDto> {
   return apiPost<InboundOrderDetailDto>(`/api/v1/inbound-orders/${id}/post`);
 }
 
-/** 新建手工入库单（sourceType=MANUAL，ck-08a §4.3）。 */
+/** 新建手工入库单（sourceType=MANUAL）。 */
 export function createManualInbound(input: InboundManualCreateInput): Promise<InboundOrderDetailDto> {
   return apiPost<InboundOrderDetailDto>('/api/v1/inbound-orders', input);
 }

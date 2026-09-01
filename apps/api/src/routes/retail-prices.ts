@@ -9,7 +9,7 @@ import { recordAudit } from '../lib/audit';
 import { resolvePartnerWarehouseScope } from '../lib/partnerships';
 import type { AppEnv } from '../types';
 
-// 零售价管理（design.md §4.2 retail_prices）：仓库 × 物品当前价 + 历史。
+// 零售价管理（retail_prices）：仓库 × 物品当前价 + 历史。
 // 权限：读 = RETAIL_PRICES_READ，写 = RETAIL_PRICES_WRITE（WAREHOUSE/ADMIN）。
 // 入库原价 unit_cost 只读（接口不接受该字段），历史由本接口改写时自动记录。
 export function retailPricesRouter(): Hono<AppEnv> {
@@ -96,7 +96,7 @@ export function retailPricesRouter(): Hono<AppEnv> {
     const itemId = c.req.param('itemId');
     const user = c.get('auth').user!;
     if (user.role === 'RETAILER') {
-      // RETAILER 仅可见已签约仓库的改价历史（design.md §3.2.1）。
+      // RETAILER 仅可见已签约仓库的改价历史。
       const partnerIds = await resolvePartnerWarehouseScope(c, repos, unitId);
       if (partnerIds.denied) return notFound(c, '仓库不存在或未与您的门店签约');
     } else if (!readScopeAllows(user.role ?? null, user.scopeUnitId ?? null, unitId)) {

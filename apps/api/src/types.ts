@@ -18,9 +18,9 @@ import type {
   UserStatus,
 } from '@otunlink/shared';
 
-// 认证与数据层共享类型（ck-02）。
+// 认证与数据层共享类型。
 // Repository 接口是「生产 Drizzle / 测试内存实现」的接缝：生产最终应以
-// drizzle-orm 查询构建替换本 checkpoint 的 SQL 实现，注入方式不变。
+// drizzle-orm 查询构建替换本实现的 SQL 实现，注入方式不变。
 
 export interface JwksKv {
   get(key: string, type: 'json'): Promise<unknown>;
@@ -37,7 +37,7 @@ export interface Env extends Record<string, unknown> {
   HYPERDRIVE?: unknown;
   DATABASE_URL?: string;
   ADMIN_SECRET?: string;
-  // 邮件（design.md §8.8）：MAIL_PROVIDER=smtp（默认）经 Cloudflare connect()（TCP socket）直连外部 SMTP；
+  // 邮件：MAIL_PROVIDER=smtp（默认）经 Cloudflare connect()（TCP socket）直连外部 SMTP；
   // SMTP_SECURE=true 走 465 隐式 TLS（secureTransport=on）；否则 SMTP_STARTTLS=true 走 587 STARTTLS。
   MAIL_PROVIDER?: string;
   MAIL_FROM?: string;
@@ -133,7 +133,7 @@ export interface UpdateUnitInput {
   isActive?: boolean;
 }
 
-// ── 物品 / 文件（ck-04）────────────────────────────────────────────────────
+// ── 物品 / 文件────────────────────────────────────────────────────
 
 export interface ItemRecord {
   id: string;
@@ -255,7 +255,7 @@ export interface FileRepository {
   create(input: CreateFileInput): Promise<FileRecord>;
 }
 
-// ── 发货单（ck-05）────────────────────────────────────────────────────────
+// ── 发货单────────────────────────────────────────────────────────
 
 export interface ShipmentRecord {
   id: string;
@@ -268,7 +268,7 @@ export interface ShipmentRecord {
   expectedArrivalDate: string | null;
   remark: string | null;
   sentAt: Date | null;
-  /** 点货草稿版本号（乐观并发，ck-06）。 */
+  /** 点货草稿版本号（乐观并发）。 */
   countVersion: number;
   createdBy: string | null;
   createdAt: Date;
@@ -356,7 +356,7 @@ export interface ShipmentListResult {
   size: number;
 }
 
-// ── 差异修订（ck-06）───────────────────────────────────────────────────────
+// ── 差异修订───────────────────────────────────────────────────────
 // 对应 packages/db schema.ts discrepancy_reviews / discrepancy_review_items。
 
 export interface DiscrepancyReviewItemRecord {
@@ -416,7 +416,7 @@ export interface ShipmentRepository {
   listTrackings(shipmentId: string): Promise<ShipmentTrackingRecord[]>;
   listTrackingsForShipments(ids: string[]): Promise<Map<string, ShipmentTrackingRecord[]>>;
   listItems(shipmentId: string): Promise<ShipmentItemRecord[]>;
-  // ── 收货点货与差异协商（ck-06）─────────────────────────────────────────────
+  // ── 收货点货与差异协商─────────────────────────────────────────────
   /** SENT → COUNTING；非 SENT 抛 COUNTING_STATE_CONFLICT 信号。 */
   startCounting(id: string): Promise<ShipmentRecord | null>;
   /**
@@ -453,7 +453,7 @@ export interface ShipmentCountRepoInput {
   lines: { shipmentItemId: string; actualQty: string }[];
 }
 
-// ── 确认入库与发货退货（ck-07）──────────────────────────────────────────────
+// ── 确认入库与发货退货──────────────────────────────────────────────
 // 对应 packages/db schema.ts inbound_orders / inbound_order_items / return_orders /
 // return_order_items / batches / stock / stock_movements。
 
@@ -691,7 +691,7 @@ export interface ReturnRepository {
   ): Promise<ReturnOrderRecord | null>;
 }
 
-// ── 库存台账与手动出入库（ck-08a）──────────────────────────────────────────────
+// ── 库存台账与手动出入库──────────────────────────────────────────────
 // 对应 packages/db schema.ts outbound_orders / outbound_order_items 与既有
 // batches / stock / stock_movements。出库过账行级写流水，voucher 以流水为准。
 
@@ -726,7 +726,7 @@ export interface OutboundOrderItemRecord {
   batchNo?: string | null;
 }
 
-/** 新建出库单（POST /outbound-orders）：NORMAL 手工出库 / LOSS 报损（ck-08b）。 */
+/** 新建出库单（POST /outbound-orders）：NORMAL 手工出库 / LOSS 报损。 */
 export interface CreateOutboundRepoInput {
   warehouseUnitId: string;
   counterpartyUnitId: string | null;
@@ -844,7 +844,7 @@ export interface StockMovementListResult {
   size: number;
 }
 
-/** 库存批次视图记录（叠加效期计算字段，ck-08b）。 */
+/** 库存批次视图记录（叠加效期计算字段）。 */
 export interface StockBatchRecord extends StockRowRecord {
   /** 剩余天数（按 UTC 当日）；null = 无到期日。 */
   remainingDays: number | null;
@@ -906,7 +906,7 @@ export interface RetailPriceListQuery {
   itemId?: string;
 }
 
-/** 零售价仓储（design.md §4.2）：upsert 当前价并写历史；无 unit_cost 写入口。 */
+/** 零售价仓储：upsert 当前价并写历史；无 unit_cost 写入口。 */
 export interface RetailPriceRepository {
   list(query: RetailPriceListQuery): Promise<RetailPriceRecord[]>;
   /** 设置/更新零售价：写入 retail_prices（唯一 unit×item）+ retail_price_history。 */
@@ -1044,7 +1044,7 @@ export interface SalesOrderWithItemsRecord {
 }
 
 /**
- * 销售单仓储（design.md §4.2 / §5.5）。
+ * 销售单仓储。
  * 金额快照由服务端计算；send/cancel 与库存扣减/回补同一事务；支付 upsert。
  */
 export interface SalesRepository {
@@ -1083,7 +1083,7 @@ export interface SalesRepository {
   confirmReceipt(id: string, confirmedBy: string): Promise<SalesOrderRecord | null>;
 }
 
-/** 站内通知行（notifications，ck-08b 先写表，ck-10 通知中心使用）。 */
+/** 站内通知行（notifications， 先写表， 通知中心使用）。 */
 export interface NotificationRecord {
   id: string;
   userId: string | null;
@@ -1136,7 +1136,7 @@ export interface NotificationRepository {
   markRead(scope: NotificationVisibility, ids: string[]): Promise<number>;
 }
 
-/** 邮件发送日志行（email_logs，ck-10 §8.8）。 */
+/** 邮件发送日志行（email_logs）。 */
 export interface EmailLogRecord {
   id: string;
   toAddress: string;
@@ -1165,7 +1165,7 @@ export interface EmailLogRepository {
   ): Promise<void>;
 }
 
-/** 审计日志行（audit_logs，ck-10 §6.2 审计）。 */
+/** 审计日志行（audit_logs， 审计）。 */
 export interface AuditLogRecord {
   id: string;
   userId: string | null;
@@ -1209,7 +1209,7 @@ export interface AuditLogRepository {
   list(query?: AuditLogListQuery): Promise<AuditLogListResult>;
 }
 
-/** 仓库-零售签约行（retail_partnerships JOIN business_units，design.md §4.2）。 */
+/** 仓库-零售签约行（retail_partnerships JOIN business_units）。 */
 export interface PartnershipRecord {
   id: string;
   warehouseUnitId: string;

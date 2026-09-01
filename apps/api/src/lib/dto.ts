@@ -189,7 +189,7 @@ export function shipmentDto(
   };
 }
 
-// ── 差异修订 DTO（ck-06）───────────────────────────────────────────────────────
+// ── 差异修订 DTO───────────────────────────────────────────────────────
 
 export function discrepancyReviewItemDto(item: DiscrepancyReviewItemRecord) {
   return {
@@ -218,7 +218,7 @@ export function discrepancyReviewDto(review: DiscrepancyReviewRecord) {
   };
 }
 
-// ── 确认入库与发货退货 DTO（ck-07）─────────────────────────────────────────────
+// ── 确认入库与发货退货 DTO─────────────────────────────────────────────
 
 export function inboundItemDto(item: InboundOrderItemRecord) {
   return {
@@ -320,7 +320,7 @@ export function returnDto(
   };
 }
 
-// ── 库存台账与手动出入库 DTO（ck-08a）──────────────────────────────────────────
+// ── 库存台账与手动出入库 DTO──────────────────────────────────────────
 
 export function outboundItemDto(item: OutboundOrderItemRecord) {
   return {
@@ -407,7 +407,7 @@ export function stockMovementDto(movement: StockMovementRecord, options: { hideC
   };
 }
 
-// ── 效期视图与零售价 DTO（ck-08b）────────────────────────────────────────────
+// ── 效期视图与零售价 DTO────────────────────────────────────────────
 
 export function stockBatchDto(row: StockBatchRecord, options: { hideCost?: boolean } = {}) {
   return {
@@ -449,7 +449,7 @@ export function retailPriceHistoryDto(row: RetailPriceHistoryRecord) {
   };
 }
 
-// ── 销售单 DTO（ck-09a）────────────────────────────────────────────────────────
+// ── 销售单 DTO────────────────────────────────────────────────────────
 
 export function salesOrderItemDto(item: SalesOrderItemRecord) {
   return {
@@ -522,7 +522,7 @@ export function salesOrderDto(
   };
 }
 
-// ── 通知/邮件/审计 DTO（ck-10）────────────────────────────────────────────────
+// ── 通知/邮件/审计 DTO────────────────────────────────────────────────
 
 export function notificationDto(row: NotificationRecord) {
   return {

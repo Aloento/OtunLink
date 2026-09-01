@@ -27,7 +27,7 @@ function isBarcodeConflict(cause: unknown): boolean {
   return false;
 }
 
-// 物品目录（design.md §6.1/§6.2）。条码「ACTIVE 部分唯一」由数据库唯一索引与
+// 物品目录。条码「ACTIVE 部分唯一」由数据库唯一索引与
 // 内存实现的显式检查共同保障；冲突统一映射为 409 BARCODE_CONFLICT。
 export function itemsRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();

@@ -11,7 +11,7 @@ import { useSession } from '../auth/SessionProvider';
 
 const PAGE_SIZE = 20;
 
-// 通知中心（ck-10 §8.5）：本人 + 所属 scope 的通知列表，支持未读筛选与批量已读。
+// 通知中心：本人 + 所属 scope 的通知列表，支持未读筛选与批量已读。
 export function NotificationsPage() {
   const { t } = useTranslation();
   const { me } = useSession();

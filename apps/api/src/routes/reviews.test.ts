@@ -121,7 +121,7 @@ function body(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('差异修订审批 API (ck-06)', () => {
+describe('差异修订审批 API ()', () => {
   let seq = 0;
 
   async function setupDiscrepancy(

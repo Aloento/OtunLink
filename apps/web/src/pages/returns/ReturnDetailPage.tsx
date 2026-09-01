@@ -18,8 +18,8 @@ import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
-// 退货单详情：ck-07 发货退货（集货方 PENDING → accept/reject）；
-// ck-09b 零售售后（仓库 REQUESTED → approve/reject，APPROVED → receive 闭环回补）。
+// 退货单详情：发货退货（集货方 PENDING → accept/reject）；
+// 零售售后（仓库 REQUESTED → approve/reject，APPROVED → receive 闭环回补）。
 export function ReturnDetailPage() {
   const { t } = useTranslation();
   const { me } = useSession();

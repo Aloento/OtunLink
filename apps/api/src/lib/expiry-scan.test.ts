@@ -14,7 +14,7 @@ function isoDay(offsetDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-describe('ck-08b 每日效期预警扫描', () => {
+describe(' 每日效期预警扫描', () => {
   it('7 天内到期 → 通知对应仓库；已过期 → 通知对应仓库；远期/无到期日不通知', async () => {
     const repos = createMemoryRepos({
       users: [
@@ -115,7 +115,7 @@ describe('ck-08b 每日效期预警扫描', () => {
     expect(titles.some((t) => t.includes('7 天内到期'))).toBe(true);
   });
 
-  it('重复扫描会重复写通知（幂等留待 ck-10），计数正确', async () => {
+  it('重复扫描会重复写通知（幂等留待后续处理），计数正确', async () => {
     const repos = createMemoryRepos();
     const result = await runExpiryScan(repos);
     expect(result.createdCount).toBe(0);

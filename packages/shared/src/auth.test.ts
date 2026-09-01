@@ -7,7 +7,7 @@ import {
   hasPermission,
 } from './auth';
 
-// RBAC 权限矩阵抽样单测（design.md §3.2 + 附录 C）。
+// RBAC 权限矩阵抽样单测。
 // 覆盖：ADMIN 全量、各岗位差异点、PENDING/未知岗位一律拒绝。
 describe('RBAC role → permission matrix', () => {
   it('grants every permission to ADMIN', () => {

@@ -57,7 +57,7 @@ function auth(token: string) {
   return { Authorization: `Bearer ${token}` };
 }
 
-describe('auth / RBAC（ck-02 抽样）', () => {
+describe('auth / RBAC', () => {
   it('无 token 访问受保护路由返回 401', async () => {
     const { app } = makeApp({});
     const res = await app.request('/api/v1/auth/me');

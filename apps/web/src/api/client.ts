@@ -1,7 +1,7 @@
 import type { IPublicClientApplication } from '@azure/msal-browser';
 import type { UserRole, UserStatus } from '@otunlink/shared';
 
-// 前端 API 客户端（ck-02 范围）：/auth/me 与轻量鉴权辅助。
+// 前端 API 客户端：/auth/me 与轻量鉴权辅助。
 
 export interface MeUser {
   id: string;

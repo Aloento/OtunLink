@@ -2,7 +2,7 @@ import type { Repos } from '../types';
 import { deliverEmail, type EmailMessage, type EmailProvider } from './email';
 import { emailParagraph, renderEmailHtml } from './email-template';
 
-// 关键业务事件接入（ck-10 §8.5）：站内通知为必达（fail-safe），
+// 关键业务事件接入：站内通知为必达（fail-safe），
 // 邮件为可选增强（provider 为 null 或未提供收件人时跳过，失败仅记日志不阻断业务）。
 
 export interface NotifyEvent {

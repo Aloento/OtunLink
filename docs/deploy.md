@@ -2,7 +2,7 @@
 
 > 目标形态：Cloudflare Pages（前端）+ Cloudflare Workers（API）+ Hyperdrive
 >（私有 PostgreSQL 连接池）+ R2/S3 OBS（图片，见 `docs/cloud-config.md`）+ KV
->（JWKS 缓存）+ SMTP 直连邮件（§8.8）。
+>（JWKS 缓存）+ SMTP 直连邮件。
 
 ## 1. 组件与域名
 

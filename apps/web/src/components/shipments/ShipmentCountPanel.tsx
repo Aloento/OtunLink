@@ -22,7 +22,7 @@ import { saveCount, submitReview, type ShipmentCountLineInput } from '../../api/
 import { ImageUpload } from '../ImageUpload';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../ResponsiveTable';
 
-// 收货点货面板（ck-06 §5.1）：SENT → 开始点货；COUNTING/DISCREPANCY → 逐项录实收
+// 收货点货面板：SENT → 开始点货；COUNTING/DISCREPANCY → 逐项录实收
 // + 保存草稿（带版本号）；DISCREPANCY → 提交差异修订（逐行原因 + 照片）。
 export function ShipmentCountPanel({
   shipment,

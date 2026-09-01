@@ -4,7 +4,7 @@ import { createApp } from './index';
 import { createMemoryRepos } from './repos/memory';
 import type { ItemRecord, TokenClaims, UnitRecord, UserRecord } from './types';
 
-// ck-10 全链路冒烟（vitest，api 层）：集货发发货单 → 仓库点货 → 确认入库 → 手动出库 →
+// 全链路冒烟（vitest，api 层）：集货发发货单 → 仓库点货 → 确认入库 → 手动出库 →
 // 零售销售单（发送/支付/确认收货）→ 售后退货（申请/审核/收货），并校验通知/审计/工作台。
 
 const now = new Date('2025-01-01T00:00:00.000Z');
@@ -99,7 +99,7 @@ async function data<T>(res: Response): Promise<T> {
   return payload.data;
 }
 
-describe('ck-10 全链路冒烟', () => {
+describe(' 全链路冒烟', () => {
   it('集货→仓库→零售→售后 全流程：状态流转 + 站内通知 + 审计日志 + 工作台待办', async () => {
     const { app } = makeApp();
 

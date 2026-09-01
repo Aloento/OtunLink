@@ -24,7 +24,7 @@
 - [ ] 预发库做一次「备份 → 迁移 → 回滚演练」（见 deploy.md §4.1）
 - [ ] 关键表索引核对：`audit_logs(entity_type, entity_id)`、
       `notifications(user_id, read_at)`、`email_logs(status, created_at)`
-- [ ] 确认 P10 新增 `email_logs.body` / `email_logs.attempts` 列已生效
+- [ ] 确认 `email_logs.body` / `email_logs.attempts` 列已生效
 
 ## 阶段 3：应用
 

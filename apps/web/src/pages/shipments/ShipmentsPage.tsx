@@ -12,7 +12,7 @@ import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/Re
 
 const PAGE_SIZE = 20;
 
-// 发货单列表（ck-05 §6.1）：状态过滤 + 分页 + 物流单号卡片。
+// 发货单列表：状态过滤 + 分页 + 物流单号卡片。
 export function ShipmentsPage() {
   const { t } = useTranslation();
   const { me } = useSession();

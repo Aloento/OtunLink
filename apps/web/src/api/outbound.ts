@@ -8,7 +8,7 @@ import type { OutboundCreateInput } from '@otunlink/shared';
 
 import { apiGet, apiPost } from './http';
 
-// 出库单 API 客户端（ck-08a）：手工出库（NORMAL），POST 后按 FEFO 或指定批次扣减。
+// 出库单 API 客户端：手工出库（NORMAL），POST 后按 FEFO 或指定批次扣减。
 
 export interface OutboundOrderListQuery {
   status?: OutboundOrderDto['status'];

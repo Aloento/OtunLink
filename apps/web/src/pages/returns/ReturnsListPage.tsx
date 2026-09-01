@@ -16,7 +16,7 @@ import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/Re
 
 const PAGE_SIZE = 20;
 
-/** ck-09b：SALES 来源的售后状态机（REQUESTED → APPROVED → RETURNED；拒绝 → CANCELLED）。 */
+/** ：SALES 来源的售后状态机（REQUESTED → APPROVED → RETURNED；拒绝 → CANCELLED）。 */
 const SALES_RETURN_STATUSES: ReturnStatus[] = [
   'REQUESTED',
   'APPROVED',
@@ -26,7 +26,7 @@ const SALES_RETURN_STATUSES: ReturnStatus[] = [
 
 type SourceTab = 'SHIPMENT' | 'SALES';
 
-// 退货单列表（ck-07 发货退货 + ck-09b 零售售后）：按来源 Tab 切换。
+// 退货单列表（发货退货 + 零售售后）：按来源 Tab 切换。
 export function ReturnsListPage() {
   const { t } = useTranslation();
 

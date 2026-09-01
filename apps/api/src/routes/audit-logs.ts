@@ -6,7 +6,7 @@ import { auditLogDto } from '../lib/dto';
 import { dbUnavailable, ok, validationError } from '../lib/http';
 import type { AppEnv } from '../types';
 
-// 审计日志查询（ck-10 §6.2）：仅 ADMIN（AUDIT_ADMIN 权限）。
+// 审计日志查询：仅 ADMIN（AUDIT_ADMIN 权限）。
 // 分页 + entityType/entityId/actorId（=用户 id）/from/to（YYYY-MM-DD）筛选。
 export function auditLogsRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();

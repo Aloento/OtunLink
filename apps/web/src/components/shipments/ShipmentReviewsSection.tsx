@@ -20,7 +20,7 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import { approveReview, rejectReview } from '../../api/shipments';
 import { FileImage } from '../FileImage';
 
-// 差异修订记录区（ck-06 §5.1）：仓库提交后在此展示；集货方在此审批（同意/拒绝）。
+// 差异修订记录区：仓库提交后在此展示；集货方在此审批（同意/拒绝）。
 export function ShipmentReviewsSection({
   shipment,
   canSubmitReview,

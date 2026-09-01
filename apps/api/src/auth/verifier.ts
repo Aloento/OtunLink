@@ -3,7 +3,7 @@ import { ErrorCodes } from '@otunlink/shared';
 
 import type { Env, TokenClaims } from '../types';
 
-// Entra ID JWT 校验（design.md §3.3）。
+// Entra ID JWT 校验。
 // - JWKS 从 `https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys` 获取；
 // - 优先 KV（JWKS_CACHE，24h TTL）缓存，KV 不可用或读取失败时降级到模块内存缓存，
 //   内存也失效时直连 issuer 重新拉取（均有注释说明）。

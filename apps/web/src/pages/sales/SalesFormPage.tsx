@@ -46,7 +46,7 @@ function emptyLine(): LineState {
   return { key: genKey(), itemId: '', qty: '', unitPriceOverride: '' };
 }
 
-// 销售单新建/编辑（ck-09a §5.5/§6）：选仓库/门店/物品/数量（行改价可选）/折扣/送货方式。
+// 销售单新建/编辑：选仓库/门店/物品/数量（行改价可选）/折扣/送货方式。
 // 金额由服务端按零售价快照计算，前端仅展示提示。
 export function SalesFormPage() {
   const { t } = useTranslation();

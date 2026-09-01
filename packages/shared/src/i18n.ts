@@ -1,4 +1,4 @@
-// 国际化常量与语言归一化（design.md §8.3）。
+// 国际化常量与语言归一化。
 // 文案资源位于 apps/web/src/i18n/resources；此处只放语言语义与跨端共用的判定逻辑。
 
 export const SUPPORTED_LOCALES = ['zh-CN', 'en'] as const;

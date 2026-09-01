@@ -34,7 +34,7 @@ function expiryCell(expiryDate: string | null): ReactNode {
   return expiryDate;
 }
 
-// 库存台账（ck-08a §4.3 / ck-08b §5.4）：库存 / 流水 / 已过期批次视图 + 一键报损 + 零售价入口。
+// 库存台账：库存 / 流水 / 已过期批次视图 + 一键报损 + 零售价入口。
 export function InventoryPage() {
   const { t } = useTranslation();
   const { me } = useSession();

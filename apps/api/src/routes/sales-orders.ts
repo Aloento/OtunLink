@@ -27,7 +27,7 @@ import { notify } from '../lib/notify';
 import { loadPartnerWarehouseIds } from '../lib/partnerships';
 import type { AppEnv, ReturnOrderRecord, SalesOrderRecord, Repos } from '../types';
 
-// 销售单（design.md §4.2/§5.5）：DRAFT → SENT（FEFO/手工分配）→ PAYMENT_UPLOADED → CONFIRMED；
+// 销售单：DRAFT → SENT（FEFO/手工分配）→ PAYMENT_UPLOADED → CONFIRMED；
 // DRAFT/SENT/PAYMENT_UPLOADED → CANCELLED（回补）。买方=零售单元、卖方=仓库单元。
 export function salesOrdersRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
@@ -97,7 +97,7 @@ export function salesOrdersRouter(): Hono<AppEnv> {
       }
     }
 
-    // RETAILER 请货：卖方仓库必须 ∈ 已签约仓库（design.md §3.2.1）。
+    // RETAILER 请货：卖方仓库必须 ∈ 已签约仓库。
     if (user.role === 'RETAILER') {
       const partnerIds = await loadPartnerWarehouseIds(repos, scope!);
       if (!partnerIds.includes(input.sellerUnitId)) {
@@ -348,7 +348,7 @@ export function salesOrdersRouter(): Hono<AppEnv> {
     }
   });
 
-  // ── ck-09b：零售售后退货（source_type=SALES）───────────────────────────────
+  // ── 零售售后退货（source_type=SALES）───────────────────────────────
   router.post('/:id/returns', requirePermission(Permissions.AFTER_SALE_CREATE), async (c) => {
     const repos = c.get('repos');
     if (!repos) return dbUnavailable(c);

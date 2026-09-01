@@ -1,4 +1,4 @@
-// 通知 / 工作台待办相关类型（design.md §8.5）。
+// 通知 / 工作台待办相关类型。
 // 前后端共用；数据库层字段见 packages/db/src/schema.ts（notifications 表）。
 
 /** 站内通知 DTO（GET /notifications 返回；time 均为 ISO 字符串）。 */

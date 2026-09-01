@@ -1,4 +1,4 @@
-// 零售价相关的类型与常量（design.md §4.2 retail_prices）。
+// 零售价相关的类型与常量（retail_prices）。
 // 铁律：零售价由仓库/管理员随时修改（写 retail_price_history 留痕）；
 // 入库原价 unit_cost 任何接口/页面均不可修改，仅只读展示。
 

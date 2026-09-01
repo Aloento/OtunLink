@@ -1,7 +1,7 @@
 import { apiDelete, apiGet, apiPost } from './http';
 import type { UnitDto } from './units';
 
-// 仓库-零售签约 API 客户端（design.md §3.2.1/§4.2）：
+// 仓库-零售签约 API 客户端：
 // 签约只由仓库侧发起（把零售加入「可售客户」），零售无需同意、无状态字段。
 // 数据范围由服务端按岗位决定：WAREHOUSE=自己仓库客户、RETAILER=已签约仓库、ADMIN=全量。
 

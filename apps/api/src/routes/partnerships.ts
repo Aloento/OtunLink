@@ -7,7 +7,7 @@ import { partnershipDto, unitDto } from '../lib/dto';
 import { dbUnavailable, forbidden, notFound, ok, validationError } from '../lib/http';
 import type { AppEnv, UserRecord } from '../types';
 
-// 仓库-零售签约（design.md §3.2.1/§4.2）：签约只由仓库侧发起（把零售加入「可售客户」），
+// 仓库-零售签约：签约只由仓库侧发起（把零售加入「可售客户」），
 // 零售无需同意、无状态字段。数据范围：
 //   GET    WAREHOUSE → 自己归属仓库的客户列表；RETAILER → 已签约仓库列表；ADMIN → 全量
 //   POST   仅 WAREHOUSE（自身归属仓库）或 ADMIN

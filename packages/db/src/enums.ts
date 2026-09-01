@@ -1,6 +1,6 @@
 import { pgEnum } from 'drizzle-orm/pg-core';
 
-// ── 枚举定义（design.md §4.2 / §7）───────────────────────────────────────────
+// ── 枚举定义───────────────────────────────────────────
 
 export const unitTypeEnum = pgEnum('unit_type', ['COLLECTOR', 'WAREHOUSE', 'RETAILER']);
 export const userRoleEnum = pgEnum('user_role', ['ADMIN', 'COLLECTOR', 'WAREHOUSE', 'RETAILER']);

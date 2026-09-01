@@ -7,7 +7,7 @@ import { dbUnavailable, notFound, ok, validationError } from '../lib/http';
 import { resolvePartnerWarehouseScope } from '../lib/partnerships';
 import type { AppEnv } from '../types';
 
-// 库存台账（design.md §4.3）：仓库 × 物品 × 批次维度只读查询（STOCK_READ）。
+// 库存台账：仓库 × 物品 × 批次维度只读查询（STOCK_READ）。
 export function stockRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
   const read = requirePermission(Permissions.STOCK_READ);
@@ -72,7 +72,7 @@ export function stockRouter(): Hono<AppEnv> {
     });
   });
 
-  // 效期视图（ck-08b）：全部有库存批次 + 剩余天数；已过期（remainingDays < 0）。
+  // 效期视图：全部有库存批次 + 剩余天数；已过期（remainingDays < 0）。
   router.get('/batches', read, async (c) => {
     const repos = c.get('repos');
     if (!repos) return dbUnavailable(c);
@@ -92,7 +92,7 @@ export function stockRouter(): Hono<AppEnv> {
     return ok(c, { items: items.map((row) => stockBatchDto(row, { hideCost })) });
   });
 
-  // 已过期批次（ck-08b）：必须指定 unitId，或按 scope 收敛（RETAILER 不附加自身门店，须显式给 unitId）。
+  // 已过期批次：必须指定 unitId，或按 scope 收敛（RETAILER 不附加自身门店，须显式给 unitId）。
   router.get('/expired', read, async (c) => {
     const repos = c.get('repos');
     if (!repos) return dbUnavailable(c);

@@ -19,7 +19,7 @@ import type { ShipmentDetailDto } from '@otunlink/shared';
 import { errorI18nKey, isApiError } from '../../api/http';
 import { createReturn } from '../../api/shipments';
 
-// 发货退货（拒收）面板（ck-07 §6.1）：READY 发货单 → 仓库发起部分/全部拒收，
+// 发货退货（拒收）面板：READY 发货单 → 仓库发起部分/全部拒收，
 // 生成 PENDING 退货单并置发货单为 RETURN_PENDING。
 export function ReturnCreatePanel({
   shipment,

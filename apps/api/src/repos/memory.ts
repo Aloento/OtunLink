@@ -420,14 +420,14 @@ function cloneFile(row: FileRecord): FileRecord {
 // 物流单号 / 状态冲突信号：内存实现用消息前缀标记，路由层据此映射 409。
 const TRACKING_CONFLICT_MESSAGE = 'TRACKING_CONFLICT: carrier+tracking_no already exists';
 const SHIPMENT_STATE_MESSAGE = 'SHIPMENT_STATE_CONFLICT: only DRAFT shipments can be edited or sent';
-// ck-06：点货/差异协商业务信号（路由层映射为对应错误码）。
+// 点货/差异协商业务信号（路由层映射为对应错误码）。
 const COUNTING_STATE_MESSAGE =
   'COUNTING_STATE_CONFLICT: shipment is not in a countable state or version mismatch';
 const COUNT_LINE_INVALID_MESSAGE = 'COUNT_LINE_INVALID: count line does not belong to the shipment';
 const REVIEW_ALREADY_PROCESSED_MESSAGE =
   'REVIEW_ALREADY_PROCESSED: review already processed or pending review exists';
 const REVIEW_NO_DIFFERENCE_MESSAGE = 'REVIEW_NO_DIFFERENCE: no discrepancy to review';
-// ck-07：确认入库 / 发货退货业务信号（路由层映射为对应错误码）。
+// 确认入库 / 发货退货业务信号（路由层映射为对应错误码）。
 const SHIPMENT_NOT_READY_MESSAGE = 'SHIPMENT_NOT_READY: shipment is not READY or lines mismatch';
 const INBOUND_STATE_CONFLICT_MESSAGE = 'INBOUND_STATE_CONFLICT: only DRAFT inbound orders can be posted';
 const RETURN_STATE_CONFLICT_MESSAGE = 'RETURN_STATE_CONFLICT: shipment is not READY for return';
@@ -439,12 +439,12 @@ const OUTBOUND_STATE_CONFLICT_MESSAGE =
 const INSUFFICIENT_STOCK_MESSAGE = 'INSUFFICIENT_STOCK: insufficient stock for outbound';
 const STOCK_BATCH_NOT_FOUND_MESSAGE =
   'STOCK_BATCH_NOT_FOUND: no stock of the specified batch in the warehouse';
-// ck-09a：销售单业务信号（路由层映射为对应错误码）。
+// 销售单业务信号（路由层映射为对应错误码）。
 const SALES_STATE_CONFLICT_MESSAGE =
   'SALES_STATE_CONFLICT: sales order is not in the expected state';
 const SALES_LINE_INVALID_MESSAGE = 'SALES_LINE_INVALID: sales order line is invalid';
 
-/** 单据编号 §8.4：SH-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号）。 */
+/** 单据编号 ：SH-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号）。 */
 function shipmentNoDate(now: Date): string {
   return now.toISOString().slice(0, 10).replace(/-/g, '');
 }
@@ -874,7 +874,7 @@ class MemoryShipmentRepository implements ShipmentRepository {
     return { ...cloneReview(nextReview), items: this.reviewItemsFor(id) };
   }
 
-  /** 内部状态流转：入库/退货仓储复用，直接覆盖发货单状态（ck-07）。 */
+  /** 内部状态流转：入库/退货仓储复用，直接覆盖发货单状态。 */
   transitionTo(id: string, status: ShipmentRecord['status']): void {
     const shipment = this.rows.get(id);
     if (!shipment) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
@@ -917,7 +917,7 @@ function cloneReview(row: DiscrepancyReviewRecord): DiscrepancyReviewRecord {
   };
 }
 
-// ── ck-07 内存实现：确认入库 + 发货退货。 ────────────────────────────────────
+// ── 内存实现：确认入库 + 发货退货。 ────────────────────────────────────
 
 /** 供测试断言用的内存批次快照。 */
 export interface MemoryBatchRecord {
@@ -960,7 +960,7 @@ export interface MemoryStockMovementRecord {
 }
 
 /**
- * 共享内存台账（ck-08a）：batches / stock / movements 三个 Map 供入库、
+ * 共享内存台账：batches / stock / movements 三个 Map 供入库、
  * 出库、库存查询三个仓储共用，保证测试/联调时数据一致。
  */
 class MemoryStockLedger {
@@ -1606,7 +1606,7 @@ class MemoryReturnRepository implements ReturnRepository {
     return cloneReturn(next);
   }
 
-  // ── ck-09b：零售售后退货（source_type=SALES）────────────────────────────────
+  // ── 零售售后退货（source_type=SALES）────────────────────────────────
   async createFromSales(input: CreateSalesReturnRepoInput): Promise<ReturnOrderRecord> {
     const order = await this.salesRepo.findById(input.salesOrderId);
     if (!order) throw new Error('SALES_NOT_FOUND: sales order does not exist');
@@ -1897,7 +1897,7 @@ class MemoryReturnRepository implements ReturnRepository {
   }
 }
 
-// ── ck-08a 内存实现：手动出入库 + 库存台账。 ──────────────────────────────────
+// ── 内存实现：手动出入库 + 库存台账。 ──────────────────────────────────
 
 class MemoryOutboundRepository implements OutboundRepository {
   private rows = new Map<string, OutboundOrderRecord>();
@@ -1985,7 +1985,7 @@ class MemoryOutboundRepository implements OutboundRepository {
 
     const now = new Date();
     const allocated: OutboundOrderItemRecord[] = [];
-    // ck-08b：报损（type=LOSS）→ OUTBOUND_LOSS 流水；手工出库 → OUTBOUND_NORMAL。
+    // 报损（type=LOSS）→ OUTBOUND_LOSS 流水；手工出库 → OUTBOUND_NORMAL。
     const movementType = existing.type === 'LOSS' ? 'OUTBOUND_LOSS' : 'OUTBOUND_NORMAL';
     for (const line of this.items.get(id) ?? []) {
       const qty = Number(line.qty);
@@ -2165,7 +2165,7 @@ class MemoryStockRepository implements StockRepository {
   }
 }
 
-// ── ck-08b 内存实现：零售价 + 站内通知。 ──────────────────────────────────────
+// ── 内存实现：零售价 + 站内通知。 ──────────────────────────────────────
 
 /** 内存零售价仓储：持有当前价 + 历史；unit_cost 只读（从台账加权平均计算）。 */
 class MemoryRetailPriceRepository implements RetailPriceRepository {
@@ -2264,7 +2264,7 @@ class MemoryRetailPriceRepository implements RetailPriceRepository {
   }
 }
 
-/** 内存站内通知仓储（ck-08b 只写；ck-10 通知中心使用）。 */
+/** 内存站内通知仓储（只写； 通知中心使用）。 */
 class MemoryNotificationRepository implements NotificationRepository {
   private rows: NotificationRecord[] = [];
 
@@ -2343,7 +2343,7 @@ class MemoryNotificationRepository implements NotificationRepository {
   }
 }
 
-/** 内存邮件日志仓储（ck-10 §8.8）。 */
+/** 内存邮件日志仓储。 */
 class MemoryEmailLogRepository implements EmailLogRepository {
   private rows = new Map<string, EmailLogRecord>();
 
@@ -2382,7 +2382,7 @@ class MemoryEmailLogRepository implements EmailLogRepository {
   }
 }
 
-/** 内存审计日志仓储（ck-10 审计）。 */
+/** 内存审计日志仓储（审计）。 */
 class MemoryAuditLogRepository implements AuditLogRepository {
   private rows: AuditLogRecord[] = [];
 
@@ -2449,7 +2449,7 @@ function clonePayment(row: PaymentRecord): PaymentRecord {
 }
 
 /**
- * 内存销售单仓储（ck-09a）：价格快照来自零售价（retailRepo），
+ * 内存销售单仓储：价格快照来自零售价（retailRepo），
  * 发送/取消复用共享台账（ledger.applyOutbound / 直接回补），与 SQL 实现行为对齐。
  */
 class MemorySalesRepository implements SalesRepository {

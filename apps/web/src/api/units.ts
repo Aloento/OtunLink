@@ -2,7 +2,7 @@ import type { UnitType } from '@otunlink/shared';
 
 import { apiGet } from './http';
 
-// 业务单元 API 客户端（ck-05）：GET /units（登录用户可见单元，受 scope 约束）。
+// 业务单元 API 客户端：GET /units（登录用户可见单元，受 scope 约束）。
 
 export interface UnitDto {
   id: string;

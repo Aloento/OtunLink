@@ -30,7 +30,7 @@ import { useSession } from '../../auth/SessionProvider';
 import { ImageUpload } from '../../components/ImageUpload';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
-// 销售单详情（ck-09a §5.5 状态机）：草稿可编辑/发送（FEFO 预览可覆盖），
+// 销售单详情（状态机）：草稿可编辑/发送（FEFO 预览可覆盖），
 // 已发送后可取消（回补）、零售方上传支付并确认收货。
 export function SalesDetailPage() {
   const { t } = useTranslation();
@@ -284,7 +284,7 @@ export function SalesDetailPage() {
   );
 }
 
-/** 售后面板（ck-09b）：展示该销售单的售后记录；零售方可在已发送/已上传支付/已确认后发起退货。 */
+/** 售后面板：展示该销售单的售后记录；零售方可在已发送/已上传支付/已确认后发起退货。 */
 function AfterSaleSection({ order }: { order: SalesOrderDetailDto }) {
   const { t } = useTranslation();
   const { me } = useSession();

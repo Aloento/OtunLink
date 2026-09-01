@@ -61,7 +61,7 @@ function parsePrefill(raw: string | null): ItemLine[] {
   }
 }
 
-// 手工出库单新建（ck-08a §4.3）：普通出库 + 报损出库（ck-08b §5.4，原因/附图/每行批次必填）。
+// 手工出库单新建：普通出库 + 报损出库（原因/附图/每行批次必填）。
 export function OutboundFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();

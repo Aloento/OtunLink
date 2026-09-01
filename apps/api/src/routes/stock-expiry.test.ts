@@ -130,7 +130,7 @@ async function seedStock(
   return payload.data.items[0].batchId;
 }
 
-describe('ck-08b 效期视图', () => {
+describe(' 效期视图', () => {
   it('GET /stock/batches：返回 remainingDays/isExpired，按到期日升序；无到期日为 null 且排在最后', async () => {
     const { app } = makeApp({ users: [collector, warehouse], units, items });
     await seedStock(app, { batchNo: 'B-EXPIRED', qty: '3', expiryDate: isoDay(-2) });

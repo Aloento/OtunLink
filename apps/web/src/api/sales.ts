@@ -11,7 +11,7 @@ import type {
 
 import { apiGet, apiPatch, apiPost } from './http';
 
-// 销售单 API 客户端（ck-09a §4.2/§5.5）：门店请货 + 仓库主动送货，
+// 销售单 API 客户端：门店请货 + 仓库主动送货，
 // 发送时 FEFO（或手工指定批次）分配并扣减库存，零售方上传支付凭证并确认收货。
 
 export interface SalesOrderListQuery {

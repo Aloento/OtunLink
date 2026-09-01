@@ -1,6 +1,6 @@
-// 认证与 RBAC 常量：岗位、数据范围、权限矩阵（design.md §3.2 + 附录 C）。
+// 认证与 RBAC 常量：岗位、数据范围、权限矩阵。
 // 放 shared 便于 api / web 共用同一套语义；db 包中的 pgEnum 保持独立（数据库层枚举）。
-// 2026-08-31 评审：RETAILER 为外部商铺买家——不可见发货单/物流、不可管理物品，零售价只读。
+// RETAILER 为外部商铺买家——不可见发货单/物流、不可管理物品，零售价只读。
 
 export const USER_ROLES = ['ADMIN', 'COLLECTOR', 'WAREHOUSE', 'RETAILER'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
@@ -12,8 +12,8 @@ export const UNIT_TYPES = ['COLLECTOR', 'WAREHOUSE', 'RETAILER'] as const;
 export type UnitType = (typeof UNIT_TYPES)[number];
 
 /**
- * 权限常量（能力）——与 design.md §3.2 权限矩阵逐行对应。
- * 后续 checkpoint 的模块中间件统一使用这些常量，避免魔法字符串。
+ * 权限常量（能力）——与权限矩阵逐行对应。
+ * 各模块中间件统一使用这些常量，避免魔法字符串。
  */
 export const Permissions = {
   ITEMS_READ: 'items:read',
@@ -49,7 +49,7 @@ export const Permissions = {
 export type Permission = (typeof Permissions)[keyof typeof Permissions];
 
 /**
- * 岗位 → 能力映射（design.md §3.2 权限矩阵）。
+ * 岗位 → 能力映射（权限矩阵）。
  * ADMIN 拥有全部能力；其余岗位按矩阵逐项授予。
  */
 export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {

@@ -52,7 +52,7 @@ const EMPTY_FORM: FormState = {
   status: 'ACTIVE',
 };
 
-// 物品新建/编辑表单（ck-04 §6.2）。图片经 ImageUpload 先压缩上传，新建时随物品提交，
+// 物品新建/编辑表单。图片经 ImageUpload 先压缩上传，新建时随物品提交，
 // 编辑时在保存后补挂新增图片。
 export function ItemFormPage() {
   const { t } = useTranslation();

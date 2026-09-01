@@ -6,7 +6,7 @@ import { adminUserDto } from '../lib/dto';
 import { dbUnavailable, notFound, ok, validationError } from '../lib/http';
 import type { AppEnv } from '../types';
 
-// 管理端用户路由（design.md §6.2）：分配岗位与数据范围。
+// 管理端用户路由：分配岗位与数据范围。
 export function adminUsersRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 

@@ -213,7 +213,7 @@ async function getOrder(app: Awaited<ReturnType<typeof makeApp>>['app'], id: str
   return body.data;
 }
 
-describe('ck-09a 销售单（请货/发货/FEFO 分配）', () => {
+describe(' 销售单（请货/发货/FEFO 分配）', () => {
   it('创建：卖方/买方类型校验；缺零售价且无行改价 → 400 SALES_LINE_INVALID', async () => {
     const { app } = makeApp();
     await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100');

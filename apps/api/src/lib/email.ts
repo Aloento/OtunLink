@@ -1,6 +1,6 @@
 import type { Env, Repos } from '../types';
 
-// 邮件（design.md §8.8）：EmailProvider 抽象 + SMTP 直连适配器 + 带日志的投递。
+// 邮件：EmailProvider 抽象 + SMTP 直连适配器 + 带日志的投递。
 // 未配置 SMTP 时 createMailer 返回 null → 业务降级为仅站内通知（email_logs 不写）。
 
 export interface EmailMessage {
@@ -33,7 +33,7 @@ function createApiProvider(_env: Env): EmailProvider {
 }
 
 /**
- * SMTP 直连适配器（design.md §8.8）：经 Cloudflare Workers `connect()`（TCP socket）直连外部 SMTP。
+ * SMTP 直连适配器：经 Cloudflare Workers `connect()`（TCP socket）直连外部 SMTP。
  * 依赖 worker-mailer（内部用 cloudflare:sockets），支持：
  * - 端口 465（隐式 TLS）：`secure: true`（SMTP_SECURE=true），connect secureTransport=on。
  * - 端口 587（STARTTLS）：`secure: false, startTls: true`（默认）。

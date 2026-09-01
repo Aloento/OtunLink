@@ -2,7 +2,7 @@ import type { FileDto, ItemDto, ItemImageDto, Paged, SpecUnit, ItemStatus } from
 
 import { apiGet, apiPatch, apiPost, apiRequest } from './http';
 
-// 物品目录 API 客户端（ck-04）：/items 与 /files。
+// 物品目录 API 客户端：/items 与 /files。
 
 export interface ItemDetail extends ItemDto {
   images: ItemImageDto[];

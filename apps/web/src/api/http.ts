@@ -2,7 +2,7 @@ import { ErrorCodes } from '@otunlink/shared';
 
 import { apiBaseUrl } from './client';
 
-// 请求层封装（ck-03）：
+// 请求层封装：
 // - 自动附带 Bearer token（由 SessionProvider 注入 MSAL acquireTokenSilent）
 // - 解析 API 统一响应信封 { data } / { error: { code, message, details } }
 // - 错误码 → i18n 文案键映射（errors.*）

@@ -1,4 +1,4 @@
-// 库存台账相关的类型与常量（design.md §4.3 / §5.6）。
+// 库存台账相关的类型与常量。
 // 与 packages/db 的 stock_movement_type 枚举保持语义一致。
 
 export const STOCK_MOVEMENT_TYPES = [
@@ -26,14 +26,14 @@ export interface StockRowDto {
   expiryDate: string | null;
   qty: string;
   avgCost: string;
-  /** 可用量 = 库存数量（ck-08a 无预留/占用概念，销售单在 ck-09a 引入批次分配）。 */
+  /** 可用量 = 库存数量（无预留/占用概念，销售单引入批次分配）。 */
   availableQty: string;
   version: number;
   updatedAt: string;
 }
 
 /**
- * 剩余天数（UTC 当日为基准，design.md §11.7 时间统一按 UTC 存储）：
+ * 剩余天数（UTC 当日为基准， 时间统一按 UTC 存储）：
  * 正数 = 距到期天数，0 = 今日到期，负数 = 已过期，null = 无到期日/格式不识别。
  */
 export function expiryRemainingDays(

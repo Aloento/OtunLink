@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 
 import { decodeFrameNative, decodeFrameZxing, supportsNativeBarcodeDetector } from '../lib/barcode';
 
-// 相机扫码对话框（ck-04 §8.7）：
+// 相机扫码对话框：
 // - 原生 BarcodeDetector（https/本地）优先，否则回退 @zxing/browser；
 // - 关闭/成功时 stop 所有 media track 释放相机；
 // - 始终提供手动输入条码作为兜底路径。

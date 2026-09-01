@@ -34,7 +34,7 @@ import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/Re
 
 const CURRENCIES = ['CNY', 'USD', 'EUR'] as const;
 
-// 零售价管理（ck-08b §4.2）：仓库 × 物品当前价 + 历史留痕；unit_cost 仅只读展示。
+// 零售价管理：仓库 × 物品当前价 + 历史留痕；unit_cost 仅只读展示。
 export function RetailPricesPage() {
   const { t } = useTranslation();
   const { me } = useSession();

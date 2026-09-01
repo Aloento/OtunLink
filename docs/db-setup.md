@@ -1,8 +1,8 @@
 # OtunLink 数据库设置（PG / Hyperdrive）
 
-> ck-01 产物。记录私有 PostgreSQL 的连通方式、迁移执行方式与本次验证结论。
+> 记录私有 PostgreSQL 的连通方式、迁移执行方式与验证结论。
 
-## 1. 当前验证结论（✅ 已连通，ck-02）
+## 1. 当前验证结论（✅ 已连通）
 
 - 连接串已配置在 `apps/api/.dev.vars`（gitignored）：`postgresql://<user>:<pwd>@164.30.21.203:5432/otunlink`
 - `pnpm --filter db db:migrate` 已应用（`schema_migrations` 有记录、业务表存在）
@@ -64,7 +64,7 @@ DATABASE_URL='postgres://...' pnpm --filter db db:migrate
 DATABASE_URL='postgres://...' pnpm --filter db seed
 ```
 
-### 3.3b 本地开发注意事项（ck-02 实测）
+### 3.3b 本地开发注意事项
 
 1. **Miniflare 的 Hyperdrive 本地模拟不可用**（wrangler 4.127.x + miniflare 5 alpha）：
    报 `proxy request failed, cannot connect to the specified address`——即使目标是本机 relay

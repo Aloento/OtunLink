@@ -11,7 +11,7 @@ import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/Re
 
 const PAGE_SIZE = 20;
 
-// 入库单列表（ck-07 §6.1）：确认收货自动建档的 DRAFT / POSTED。
+// 入库单列表：确认收货自动建档的 DRAFT / POSTED。
 export function InboundListPage() {
   const { t } = useTranslation();
 

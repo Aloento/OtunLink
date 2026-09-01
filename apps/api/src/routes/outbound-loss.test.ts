@@ -124,7 +124,7 @@ async function seedStock(
   return { batchId: payload.data.items[0].batchId, qty: payload.data.items[0].qty };
 }
 
-describe('ck-08b 报损单（type=LOSS）', () => {
+describe(' 报损单（type=LOSS）', () => {
   it('创建校验：缺原因 / 缺附图 / 行缺批次 → 400 VALIDATION_ERROR', async () => {
     const { app } = makeApp({ users: [collector, warehouse], units, items });
     const { batchId } = await seedStock(app, {

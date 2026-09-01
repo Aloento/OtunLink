@@ -39,7 +39,7 @@ import {
   userStatusEnum,
 } from './enums';
 
-// ── 公共列构造（design.md §7：TIMESTAMPTZ UTC、金额 NUMERIC(12,2)、主键 uuid）────
+// ── 公共列构造（TIMESTAMPTZ UTC、金额 NUMERIC(12,2)、主键 uuid）────
 
 const pk = () => uuid('id').primaryKey().defaultRandom();
 
@@ -125,7 +125,7 @@ export const items = pgTable(
   (table) => [
     index('items_name_idx').on(table.name),
     index('items_category_idx').on(table.category),
-    // 条码在 ACTIVE 内唯一（design.md §7：items 条码部分唯一）
+    // 条码在 ACTIVE 内唯一（items 条码部分唯一）
     uniqueIndex('items_barcode_active_unique')
       .on(table.barcode)
       .where(sql`${table.status} = 'ACTIVE' AND ${table.barcode} IS NOT NULL`),
@@ -171,7 +171,7 @@ export const shipments = pgTable(
     remark: text('remark'),
     sentAt: timestamp('sent_at', { withTimezone: true, mode: 'date' }),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
-    // 点货草稿并发控制：前端保存携带版本号，服务端 CAS 更新（design.md §8.2 / ck-06）。
+    // 点货草稿并发控制：前端保存携带版本号，服务端 CAS 更新。
     countVersion: integer('count_version').notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -272,7 +272,7 @@ export const discrepancyReviews = pgTable(
     updatedAt: updatedAt(),
   },
   (table) => [
-    // 同一发货单同时仅一个 PENDING（design.md §4.2）
+    // 同一发货单同时仅一个 PENDING
     uniqueIndex('discrepancy_reviews_one_pending_unique')
       .on(table.shipmentId)
       .where(sql`${table.status} = 'PENDING'`),
@@ -660,7 +660,7 @@ export const retailPriceHistory = pgTable(
   (table) => [index('retail_price_history_unit_item_idx').on(table.unitId, table.itemId)],
 );
 
-// ── 仓库-零售签约 retail_partnerships（design.md §4.2）────────────────────────
+// ── 仓库-零售签约 retail_partnerships────────────────────────
 // 签约只能由仓库主动发起（把零售加入「可售客户」）；解约即删除行，无状态字段。
 
 export const retailPartnerships = pgTable(

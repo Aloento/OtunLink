@@ -17,7 +17,7 @@ import { recordAudit } from '../lib/audit';
 import { notify } from '../lib/notify';
 import type { AppEnv, Repos, ReturnOrderRecord } from '../types';
 
-// 退货单（design.md §5.2 SHIPMENT 分支 + §5.5 SALES 售后分支）：
+// 退货单（SHIPMENT 分支 + SALES 售后分支）：
 // - 读 = SHIPMENT_RETURNS_CREATE（仓库）/ SHIPMENT_RETURNS_HANDLE（集货/管理员）
 //   / AFTER_SALE_CREATE（零售）/ AFTER_SALE_RECEIVE（仓库）；
 // - SHIPMENT 处理（accept/reject）= SHIPMENT_RETURNS_HANDLE；
@@ -177,7 +177,7 @@ export function returnOrdersRouter(): Hono<AppEnv> {
     }
   });
 
-  // ── ck-09b：零售售后退货（source_type=SALES）────────────────────────────────
+  // ── 零售售后退货（source_type=SALES）────────────────────────────────
   router.post('/:id/approve', saleHandle, async (c) => {
     const repos = c.get('repos');
     if (!repos) return dbUnavailable(c);

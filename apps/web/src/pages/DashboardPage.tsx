@@ -1,4 +1,4 @@
-﻿import { Body1, Spinner, Text, Title1 } from '@fluentui/react-components';
+import { Body1, Spinner, Text, Title1 } from '@fluentui/react-components';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -7,7 +7,7 @@ import type { DashboardTodoItem } from '@otunlink/shared';
 
 import { getDashboardTodos } from '../api/notifications';
 
-// 工作台（ck-10 §8.5）：按角色 + scope 聚合待办（GET /dashboard/todos）。
+// 工作台：按角色 + scope 聚合待办（GET /dashboard/todos）。
 // 后端已按岗位计算（集货/仓库/零售/管理员），前端只负责展示与状态处理。
 export function DashboardPage() {
   const { t } = useTranslation();

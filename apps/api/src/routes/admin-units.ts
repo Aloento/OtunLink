@@ -6,7 +6,7 @@ import { unitDto } from '../lib/dto';
 import { dbUnavailable, notFound, ok, validationError } from '../lib/http';
 import type { AppEnv } from '../types';
 
-// 管理端业务单元 CRUD（design.md §6.2）。
+// 管理端业务单元 CRUD。
 export function adminUnitsRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 

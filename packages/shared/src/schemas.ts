@@ -5,7 +5,7 @@ import { ITEM_STATUSES, SPEC_UNITS } from './items';
 import { OUTBOUND_TYPES } from './outbound';
 import { DELIVERY_METHODS, SALES_SOURCES } from './sales';
 
-// 认证/岗位/业务单元相关的请求校验（ck-02 范围）。
+// 认证/岗位/业务单元相关的请求校验。
 // 放在 shared 供 api 使用；api 包不直接依赖 zod，通过 shared 复用。
 
 const uuid = () => z.uuid();
@@ -108,7 +108,7 @@ export const itemPatchSchema = z.object({
   status: itemStatus().optional(),
 });
 
-// ── 发货单（ck-05）────────────────────────────────────────────────────────
+// ── 发货单────────────────────────────────────────────────────────
 
 const dateOnly = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -174,7 +174,7 @@ export const shipmentCreateSchema = z.object({
 /** 更新发货单（PATCH /shipments/:id）：仅 DRAFT；字段整体替换语义。 */
 export const shipmentPatchSchema = shipmentCreateSchema.partial();
 
-// ── 收货点货与差异协商（ck-06）─────────────────────────────────────────────────
+// ── 收货点货与差异协商─────────────────────────────────────────────────
 
 /** 点货单行：仅提交实收数量（应收/快照只读）。 */
 export const shipmentCountLineSchema = z.object({
@@ -206,7 +206,7 @@ export const reviewRejectSchema = z.object({
   reason: z.string().trim().min(1).max(4096),
 });
 
-// ── 库存台账与手动出入库（ck-08a）────────────────────────────────────────────
+// ── 库存台账与手动出入库────────────────────────────────────────────
 
 /** 手动入库单行：物品 + 数量 + 成本单价（可选）+ 批次信息（可选，缺省自动生成）。 */
 export const inboundManualLineSchema = z.object({
@@ -237,7 +237,7 @@ export const outboundLineSchema = z.object({
 
 /**
  * 新建出库单（POST /outbound-orders）：type=NORMAL 手工出库；
- * type=LOSS 报损（ck-08b §5.4）：报损原因必填、至少 1 张附图、每行必须指定批次。
+ * type=LOSS 报损：报损原因必填、至少 1 张附图、每行必须指定批次。
  */
 export const outboundCreateSchema = z
   .object({
@@ -284,7 +284,7 @@ export const retailPricePutSchema = z.object({
   currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional(),
 });
 
-// ── 确认入库与发货退货（ck-07）─────────────────────────────────────────────────
+// ── 确认入库与发货退货─────────────────────────────────────────────────
 
 /** 确认收货（POST /shipments/:id/confirm-receipt）行级批次号（可选，缺省自动生成）。 */
 export const confirmReceiptLineSchema = z.object({
@@ -326,7 +326,7 @@ export const returnRejectSchema = z.object({
   note: z.string().trim().min(1).max(4096),
 });
 
-// ── 零售售后退货（ck-09b）────────────────────────────────────────────────────
+// ── 零售售后退货────────────────────────────────────────────────────
 
 /** 零售售后退货行（POST /sales-orders/:id/returns）：销售单行 + 退货数量 + 原因。 */
 export const salesReturnCreateItemSchema = z.object({
@@ -355,7 +355,7 @@ export const salesReturnReceiveSchema = z.object({
   note: z.string().trim().max(4096).optional().nullable(),
 });
 
-// ── 销售单（ck-09a）──────────────────────────────────────────────────────────
+// ── 销售单──────────────────────────────────────────────────────────
 
 const discountPercent = z
   .union([

@@ -41,10 +41,10 @@ import type {
   UpdateShipmentInput,
 } from '../types';
 
-// 发货单（design.md §4.2 / §5.1 / §8.4 / 附录 B）。
+// 发货单。
 // - 创建：绑定集货方(COLLECTOR) → 收货方(WAREHOUSE)；多物流单号；清单复用物品并
 //   写入名称/规格快照；is_perishable 物品逐行必填生产日期+到期日（多批拆行）。
-// - 转交：DRAFT → SENT（转交后行/价格锁定，后续点货由 ck-06 处理）。
+// - 转交：DRAFT → SENT（转交后行/价格锁定，后续点货处理）。
 // - 权限：读 = SHIPMENTS_READ；写 = SHIPMENTS_CREATE；转交 = SHIPMENTS_TRANSFER；
 //   scope_unit_id 非空时数据范围收敛到本单元（发货方或收货方命中即放行读）。
 export function shipmentsRouter(): Hono<AppEnv> {
@@ -236,7 +236,7 @@ export function shipmentsRouter(): Hono<AppEnv> {
     }
   });
 
-  // ── 收货点货与差异协商（ck-06）───────────────────────────────────────────────
+  // ── 收货点货与差异协商───────────────────────────────────────────────
   // 点货/提交差异：仅收货方仓库（COUNTING_WRITE / REVIEWS_SUBMIT），
   // scope_unit_id 非空时必须等于 receiver_unit_id。
 
@@ -311,7 +311,7 @@ export function shipmentsRouter(): Hono<AppEnv> {
     }
   });
 
-  // ── 确认收货 → 入库建档（ck-07）───────────────────────────────────────────────
+  // ── 确认收货 → 入库建档───────────────────────────────────────────────
   // 仅收货方仓库；READY → 自动建 DRAFT 入库单 + 发货单 INBOUNDED。
 
   const inboundConfirm = requirePermission(Permissions.INBOUND_CONFIRM);
@@ -362,7 +362,7 @@ export function shipmentsRouter(): Hono<AppEnv> {
     }
   });
 
-  // ── 发货退货（拒收）发起（ck-07）──────────────────────────────────────────────
+  // ── 发货退货（拒收）发起──────────────────────────────────────────────
   // 仅收货方仓库；READY → 创建 PENDING 退货单 + 发货单 RETURN_PENDING。
 
   const returnCreate = requirePermission(Permissions.SHIPMENT_RETURNS_CREATE);

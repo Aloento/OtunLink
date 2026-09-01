@@ -1,4 +1,4 @@
-// 相机扫码（ck-04 §8.7）：
+// 相机扫码：
 // - 优先使用原生 BarcodeDetector（仅 https/本地环境可用）；
 // - 失败或不可用时回退 @zxing/browser（纯 JS 解码）。
 // 仅提供「单帧解码」原语，相机流由 ScannerDialog 统一管理（track.stop 释放）。

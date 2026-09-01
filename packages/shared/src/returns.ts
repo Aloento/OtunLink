@@ -1,4 +1,4 @@
-// 退货单相关的类型与常量（design.md §4.2 / §5.2）。
+// 退货单相关的类型与常量。
 // 与 packages/db 的 return_status / return_source_type 枚举保持语义一致。
 
 export const RETURN_STATUSES = [

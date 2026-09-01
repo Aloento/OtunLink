@@ -1,4 +1,4 @@
-// 销售单（ck-09a）：来源、送货方式、状态、DTO。
+// 销售单：来源、送货方式、状态、DTO。
 // 与 packages/db/src/enums.ts 的 pgEnum 保持一致（数据库层枚举）。
 
 export const SALES_SOURCES = ['RETAILER_REQUEST', 'WAREHOUSE_INITIATED'] as const;

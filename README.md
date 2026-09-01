@@ -1,25 +1,23 @@
 # OtunLink 仓储库存 ERP
 
 连接「中国集货 → 欧洲仓库 → 零售门店」的一体化仓储库存系统（私域 1688）。
+覆盖集货发货单、收货点货与差异协商、入库建档、库存台账（手动出入库/报损/效期预警）、
+零售价管理、销售单（请货/FEFO/折扣/支付/确认收货）、售后退货闭环、通知中心与审计日志。
 
-- **设计文档**：[docs/design.md](docs/design.md)（v1.1，含架构/领域模型/状态机/API/数据库/关键技术/阶段计划）
-- **实施计划**：[docs/checkpoints/README.md](docs/checkpoints/README.md)（13 个串行 checkpoint）
+## 技术栈
 
-## 开发方式：每轮一个 checkpoint，串行实现
+- **前端**：Vite + React + TypeScript + Fluent UI v9 + Tailwind + react-i18next + MSAL + TanStack Query
+- **后端**：Hono（Cloudflare Workers）+ Drizzle ORM + Hyperdrive（私有 PostgreSQL）+ S3 兼容 OBS（图片）+ KV（JWKS 缓存）
+- **部署**：Cloudflare Pages（前端）/ Workers（API）；CI：GitHub Actions（typecheck + test + build）
 
-为避免一次性实现大计划导致上下文丢失，本仓库按如下方式推进：
+## 目录结构
 
-1. 计划与设计固化在 `docs/design.md`。
-2. 实施拆分为 `docs/checkpoints/ck-*.md`，**每个 checkpoint 由一个独立 agent（全新上下文）负责一轮**，一次只实现一个。
-3. 每轮开始前读取对应 checkpoint 文档与 design.md 相关章节；结束后必跑验证（typecheck / test / build，涉及 UI 补冒烟）。
-4. 每轮完成即提交（conventional commit，附 Co-authored-by trailer），由主对话验收通过后再启动下一轮，**严格串行**。
-5. 模块与目录结构见 design.md §6.3；API 与页面见 §6；阶段清单见 §10。
-
-## 技术栈（详见 design.md §2）
-
-- 前端：Vite + React + TypeScript + Fluent UI v9 + Tailwind + react-i18next + MSAL + TanStack Query
-- 后端：Hono（Cloudflare Workers）+ Drizzle ORM + Hyperdrive（私有 PostgreSQL）+ S3 兼容 OBS（图片）+ KV（JWKS 缓存）
-- 部署：Cloudflare Pages（前端）/ Workers（API）；CI：GitHub Actions
+```
+apps/api          Hono API（Cloudflare Worker）
+apps/web          前端 SPA（Vite + React）
+packages/db       Drizzle schema、迁移、迁移 CLI（migrate/seed/ping）
+packages/shared   API 与前端的共享类型、常量、校验 schema、RBAC 常量
+```
 
 ## 快速开始
 
@@ -38,19 +36,20 @@ pnpm dev:web
 
 # API（Wrangler dev，默认 http://localhost:8787）
 pnpm dev:api
-# 健康检查
 curl http://localhost:8787/api/v1/health   # => {"ok":true}
 ```
 
-环境变量模板见 `.env.example`（根级）与 `.dev.vars.example`（复制为
+环境变量模板见 `.env.example`（前端）与 `.dev.vars.example`（复制为
 `apps/api/.dev.vars`，wrangler dev 自动读取，已被 git 忽略）。
 
-## 站内通知与邮件（design.md §8.5、§8.8）
+数据库需要私有 PostgreSQL：本地直连见 `docs/db-setup.md`（migrate/seed/ping）；
+生产经 Cloudflare Hyperdrive，连接配置见 `docs/deploy.md`。
 
-- **站内通知**：无需配置。关键业务动作（待点货、差异 review、发货/售后退货、
-  销售发送/支付/确认、入库/出库过账、效期预警等）会写入 `notifications`，
-  登录后在导航铃铛（未读徽标）与 `/notifications` 页查看；工作台 `/` 按角色
-  聚合待办（`GET /dashboard/todos`）。
+## 功能说明
+
+- **站内通知**：关键业务动作（待点货、差异 review、发货/售后退货、销售发送/支付/确认、
+  入库/出库过账、效期预警等）写入 `notifications`，登录后在导航铃铛与
+  `/notifications` 页查看；工作台 `/` 按角色聚合待办（`GET /dashboard/todos`）。
 - **邮件（可选）**：`SMTP_HOST`/`MAIL_FROM` 等非敏感配置已在 `wrangler.toml [vars]`
   （飞书 Lark：`smtp.larksuite.com`、发信人 `otun@musi.land`）；再配置
   `SMTP_USER` / `SMTP_PASS`（生产经 GitHub secret + `wrangler secret put`，
@@ -60,7 +59,9 @@ curl http://localhost:8787/api/v1/health   # => {"ok":true}
 - **审计日志**：`audit_logs` 记录关键写操作的 actor/entity/before/after，
   管理员经 `GET /admin/audit-logs` 分页筛选查询。
 
-## 上线
+## 部署与上线
 
-部署（Pages / Workers / Hyperdrive / 域名 CNAME / 迁移与回滚）见
-`docs/deploy.md`；上线前分阶段检查见 `docs/go-live-checklist.md`。
+- 部署（Pages / Workers / Hyperdrive / 域名 CNAME / 迁移与回滚）：[docs/deploy.md](docs/deploy.md)
+- 上线前分阶段检查：[docs/go-live-checklist.md](docs/go-live-checklist.md)
+- 云资源配置（OBS、KV、Hyperdrive）：[docs/cloud-config.md](docs/cloud-config.md)
+- Entra ID 应用注册：[docs/auth-setup.md](docs/auth-setup.md)

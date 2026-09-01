@@ -14,7 +14,7 @@ import { PendingPage } from '../pages/PendingPage';
 import { canAccessPermissions } from './access';
 import { LOGIN_PATH } from './routes';
 
-// 路由守卫（ck-03）：
+// 路由守卫：
 // RequireAuth：未登录 → /login。
 // RequireActive：已登录但非 ACTIVE（PENDING/DISABLED）→ 引导页。
 // RequirePermission：ACTIVE 但岗位能力不满足 → 403 占位页。

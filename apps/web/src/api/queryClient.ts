@@ -2,11 +2,11 @@ import { QueryClient } from '@tanstack/react-query';
 import { persistQueryClient, type Persister } from '@tanstack/react-query-persist-client';
 import { createStore, del, get, set } from 'idb-keyval';
 
-// TanStack Query 客户端 + IndexedDB 持久化（design.md §8.9）。
+// TanStack Query 客户端 + IndexedDB 持久化。
 // 白名单（前缀匹配）：items / units / dict / notifications / dashboard。
 // TTL：24h（maxAge）；buster 用于升级缓存结构时整体失效。
 
-const CACHE_BUSTER = 'ck-08';
+const CACHE_BUSTER = 'v1';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const WHITELIST_PREFIXES = ['items', 'units', 'dict', 'notifications', 'dashboard'];
 

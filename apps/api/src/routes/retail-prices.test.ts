@@ -121,7 +121,7 @@ async function seedStock(app: Awaited<ReturnType<typeof makeApp>>['app']) {
   return payload.data.items[0].batchId;
 }
 
-describe('ck-08b 零售价', () => {
+describe(' 零售价', () => {
   it('PUT 设置零售价：返回 unitCost 只读参考（入库加权原价），不可被输入覆盖', async () => {
     const { app } = makeApp({ users: [collector, warehouse], units, items });
     await seedStock(app);

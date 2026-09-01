@@ -1,9 +1,9 @@
 import type { Repos } from '../types';
 
-// 每日效期预警扫描（ck-08b 附录 B / §4.2）：
+// 每日效期预警扫描：
 // 1) 未来 7 天内到期（remainingDays ∈ [0, 7]）→ 通知对应仓库；
 // 2) 已过期（remainingDays < 0）→ 通知对应仓库（提示生成报损单）。
-// 通知只写 notifications 表，发送端由 ck-10 通知中心负责。
+// 通知只写 notifications 表，发送端由通知中心负责。
 const EXPIRING_WINDOW_DAYS = 7;
 
 export interface ExpiryAlert {
@@ -22,7 +22,7 @@ export interface ExpiryScanResult {
   expiringCount: number;
   /** 已过期的批次行数。 */
   expiredCount: number;
-  /** 本次扫描的预警摘要（供 §8.8 邮件叠加发送）。 */
+  /** 本次扫描的预警摘要（供邮件叠加发送）。 */
   alerts: ExpiryAlert[];
 }
 

@@ -11,7 +11,7 @@ import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/Re
 
 const PAGE_SIZE = 20;
 
-// 销售单列表（ck-09a §4.2）：门店请货 + 仓库主动送货，按状态筛选。
+// 销售单列表：门店请货 + 仓库主动送货，按状态筛选。
 export function SalesListPage() {
   const { t } = useTranslation();
 

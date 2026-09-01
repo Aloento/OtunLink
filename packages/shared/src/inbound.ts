@@ -1,4 +1,4 @@
-// 入库单相关的类型与常量（design.md §4.2 / §5.3）。
+// 入库单相关的类型与常量。
 // 与 packages/db 的 inbound_status / inbound_source_type 枚举保持语义一致。
 
 export const INBOUND_STATUSES = ['DRAFT', 'POSTED'] as const;

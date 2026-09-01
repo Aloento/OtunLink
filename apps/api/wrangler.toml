@@ -37,6 +37,6 @@ SMTP_SECURE = "true"
 SMTP_STARTTLS = "false"
 SMTP_AUTH = "plain"
 
-# ── 每日效期预警（ck-08b）：UTC 00:00 扫描 7 天内到期与已过期批次 ──────────────
+# ── 每日效期预警：UTC 00:00 扫描 7 天内到期与已过期批次 ──────────────
 [triggers]
 crons = ["0 0 * * *"]

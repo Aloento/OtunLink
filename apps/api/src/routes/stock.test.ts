@@ -136,7 +136,7 @@ async function inboundPost(
   return { batchId: payload.data.items[0].batchId };
 }
 
-describe('ck-08a 库存台账', () => {
+describe(' 库存台账', () => {
   it('台账列表：仓库/物品/批次字段 + 筛选 + 分页；流水最新在前', async () => {
     const { app } = makeApp({ users: [warehouse, collector], units, items });
     await inboundPost(app, {

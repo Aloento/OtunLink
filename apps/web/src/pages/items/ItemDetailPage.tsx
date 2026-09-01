@@ -9,7 +9,7 @@ import { getItem } from '../../api/items';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
 
-// 物品详情（ck-04 §6.1）：字段 + 图片（预签名 URL 展示）。
+// 物品详情：字段 + 图片（预签名 URL 展示）。
 export function ItemDetailPage() {
   const { t } = useTranslation();
   const params = useParams<{ id: string }>();

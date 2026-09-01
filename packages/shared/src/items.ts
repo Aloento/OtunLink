@@ -1,4 +1,4 @@
-// 物品目录相关的类型与常量（design.md §4.2）。
+// 物品目录相关的类型与常量。
 // 与 packages/db 的 spec_unit/item_status 枚举保持语义一致；shared 只放前端/后端共用的
 // 类型与判定逻辑，数据库层枚举在 packages/db/src/enums.ts 独立维护。
 

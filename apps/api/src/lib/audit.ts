@@ -1,6 +1,6 @@
 import type { Repos } from '../types';
 
-// 审计日志（ck-10 §6.2）：关键写操作入闸记录 actor/entity/before/after 摘要。
+// 审计日志：关键写操作入闸记录 actor/entity/before/after 摘要。
 // 审计失败只 console.error（审计表 500 不应阻断业务），但业务路由应尽量先写后返回。
 
 export interface AuditInput {

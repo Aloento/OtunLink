@@ -12,7 +12,7 @@ import type {
 
 import { apiGet, apiPatch, apiPost } from './http';
 
-// 发货单 API 客户端（ck-05 / ck-06）：/shipments、/reviews。
+// 发货单 API 客户端：/shipments、/reviews。
 
 export interface ShipmentListQuery {
   status?: ShipmentStatus;
@@ -62,7 +62,7 @@ export function sendShipment(id: string): Promise<ShipmentDetailDto> {
   return apiPost<ShipmentDetailDto>(`/api/v1/shipments/${id}/send`);
 }
 
-// ── 收货点货与差异协商（ck-06）────────────────────────────────────────────────
+// ── 收货点货与差异协商────────────────────────────────────────────────
 
 export interface ShipmentCountLineInput {
   shipmentItemId: string;
@@ -115,7 +115,7 @@ export function rejectReview(id: string, reason: string): Promise<DiscrepancyRev
   return apiPost<DiscrepancyReviewDto>(`/api/v1/reviews/${id}/reject`, { reason });
 }
 
-// ── 确认收货与发货退货（ck-07）────────────────────────────────────────────────
+// ── 确认收货与发货退货────────────────────────────────────────────────
 
 export interface ConfirmReceiptLineInput {
   shipmentItemId: string;

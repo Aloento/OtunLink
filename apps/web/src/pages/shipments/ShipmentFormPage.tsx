@@ -75,7 +75,7 @@ function emptyItem(item?: ItemDto): ItemLine {
   };
 }
 
-// 发货单新建/编辑（ck-05 §6.1）：多物流单号、箱数、清单复用（搜索物品 + 效期上报）。
+// 发货单新建/编辑：多物流单号、箱数、清单复用（搜索物品 + 效期上报）。
 export function ShipmentFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();

@@ -20,7 +20,7 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import { confirmReceipt } from '../../api/shipments';
 import { ImageUpload } from '../ImageUpload';
 
-// 确认收货面板（ck-07 §6.1）：READY 发货单 → 确认收货（备注/照片/逐行批次号），
+// 确认收货面板：READY 发货单 → 确认收货（备注/照片/逐行批次号），
 // 服务端自动建档 DRAFT 入库单并置发货单为 INBOUNDED。
 export function ConfirmReceiptPanel({
   shipment,

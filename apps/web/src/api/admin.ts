@@ -2,7 +2,7 @@ import type { Paged, UnitType, UserRole, UserStatus } from '@otunlink/shared';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from './http';
 
-// 管理端 API 客户端（design.md §6.2）：用户 / 业务单元 / 审计日志 / 邮件连通性。
+// 管理端 API 客户端：用户 / 业务单元 / 审计日志 / 邮件连通性。
 // 所有端点均在服务端以 requirePermission / requireRole('ADMIN') 保护。
 
 export interface AdminUserDto {

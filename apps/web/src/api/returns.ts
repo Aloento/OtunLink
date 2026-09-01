@@ -8,13 +8,13 @@ import type {
 
 import { apiGet, apiPost } from './http';
 
-// 退货单 API 客户端：ck-07 发货退货（拒收）+ ck-09b 零售售后退货（SALES）。
+// 退货单 API 客户端：发货退货（拒收）+ 零售售后退货（SALES）。
 
 export interface ReturnListQuery {
   status?: ReturnStatus;
-  /** ck-09b：按来源过滤（SHIPMENT 发货退货 / SALES 零售售后）。 */
+  /** ：按来源过滤（SHIPMENT 发货退货 / SALES 零售售后）。 */
   sourceType?: ReturnSourceType;
-  /** ck-09b：按销售单过滤（SALES 来源）。 */
+  /** ：按销售单过滤（SALES 来源）。 */
   salesOrderId?: string;
   page?: number;
   size?: number;
@@ -49,7 +49,7 @@ export function rejectReturn(id: string, note: string): Promise<ReturnOrderDetai
   return apiPost<ReturnOrderDetailDto>(`/api/v1/return-orders/${id}/reject`, { note });
 }
 
-// ── ck-09b 零售售后退货（SALES）────────────────────────────────────────────────
+// ── 零售售后退货（SALES）────────────────────────────────────────────────
 
 export interface SalesReturnCreateItemInput {
   salesOrderItemId: string;

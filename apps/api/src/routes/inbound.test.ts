@@ -93,7 +93,7 @@ function json(token: string) {
   return { ...auth(token), 'Content-Type': 'application/json' };
 }
 
-describe('ck-07 确认收货 → 入库建档', () => {
+describe(' 确认收货 → 入库建档', () => {
   async function readyShipment(app: Awaited<ReturnType<typeof makeApp>>['app']) {
     const created = await app.request('/api/v1/shipments', {
       method: 'POST',
@@ -327,7 +327,7 @@ describe('ck-07 确认收货 → 入库建档', () => {
   });
 });
 
-describe('ck-08a 手动入库单', () => {
+describe(' 手动入库单', () => {
   it('手动入库创建：DRAFT + sourceType=MANUAL + 行字段；再 POST 建档批次/库存/流水', async () => {
     const { app, repos } = makeApp({ users: [collector, warehouse], units, items });
 

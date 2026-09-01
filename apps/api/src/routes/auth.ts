@@ -4,7 +4,7 @@ import { publicUserDto } from '../lib/dto';
 import { dbUnavailable, ok } from '../lib/http';
 import type { AppEnv } from '../types';
 
-// GET /auth/me：自动开户入口（design.md §3.1）。
+// GET /auth/me：自动开户入口。
 // 已由 authenticate 中间件校验 JWT 并装载 repos；此处按 sub 查 users，
 // 无记录则创建 PENDING 用户（role 待管理员分配）。
 export function authRouter(): Hono<AppEnv> {

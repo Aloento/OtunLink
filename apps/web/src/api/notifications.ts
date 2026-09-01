@@ -2,7 +2,7 @@ import type { DashboardTodoItem, NotificationDto, NotificationListQuery, Paged }
 
 import { apiGet, apiPost } from './http';
 
-// 通知中心 / 工作台待办 API 客户端（ck-10 §8.5）。
+// 通知中心 / 工作台待办 API 客户端。
 
 function toQuery(params: NotificationListQuery): string {
   const search = new URLSearchParams();

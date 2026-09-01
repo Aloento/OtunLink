@@ -8,7 +8,7 @@ import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '
 import { notify } from '../lib/notify';
 import type { AppEnv } from '../types';
 
-// 差异修订审批（design.md §3.2 / §5.1 / 附录 A）。
+// 差异修订审批。
 // - 审批（approve）：仓库提交的 PENDING → 集货方同意 → 应收 := 实收（审计）→ 发货单 READY。
 // - 拒绝（reject）：PENDING → 附理由 → 发货单 DISCREPANCY（仓库可修改后重提）。
 // - 权限：REVIEWS_APPROVE（COLLECTOR/ADMIN）；scope_unit_id 非空时发货方必须等于本单元。

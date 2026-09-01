@@ -1,4 +1,4 @@
-// 图片压缩工具（ck-04 §8.1）：
+// 图片压缩工具：
 // - 纯函数（computeTargetDimensions / suggestJpegQuality）不依赖 DOM，可单测；
 // - DOM 部分（compressImageFile / makeThumbnailBlob）在浏览器中用 Canvas 压缩，
 //   最长边 ≤ maxEdge，JPEG 质量自适应到 ≤ maxBytes，缩略图固定 320px。

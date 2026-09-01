@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { FullPageSpinner } from '../components/FullPageSpinner';
 
-// 登录初始化（ck-02/ck-07 修复）：
+// 登录初始化：
 // 之前直接渲染 MsalProvider，由其内部执行 initialize() + handleRedirectPromise()。但默认
 // navigateToLoginRequestUrl=true 时，MSAL 会在 /auth/callback 拿到 code 后整页跳回起始页 /，
 // 期望起始页再次 handleRedirectPromise 兑换；若 code 未能被成功兑换/清理（残留 interaction 状态），

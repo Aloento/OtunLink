@@ -6,7 +6,7 @@ import { notificationDto } from '../lib/dto';
 import { dbUnavailable, ok, validationError } from '../lib/http';
 import type { AppEnv } from '../types';
 
-// 站内通知中心（ck-10 §8.5）：登录用户读取本人/本单元通知 + 未读数 + 批量已读。
+// 站内通知中心：登录用户读取本人/本单元通知 + 未读数 + 批量已读。
 // 数据范围：user_id = 本人 或 unit_id = 本人 scope（scope 为空 = 全部单元通知）。
 export function notificationsRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();

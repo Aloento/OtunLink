@@ -119,11 +119,11 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.use('/api/v1/admin/units/*', requireToken);
   app.route('/api/v1/admin/units', adminUnitsRouter());
 
-  // 通知中心（ck-10 §8.5）：本人 + 所属 scope 可见
+  // 通知中心：本人 + 所属 scope 可见
   app.use('/api/v1/notifications/*', requireToken);
   app.route('/api/v1/notifications', notificationsRouter());
 
-  // 工作台待办聚合（ck-10 §8.5）
+  // 工作台待办聚合
   app.use('/api/v1/dashboard/*', requireToken);
   app.route('/api/v1/dashboard', dashboardRouter());
 
@@ -160,7 +160,7 @@ export const defaultApp = createApp({
 export default defaultApp;
 
 /**
- * 每日效期预警 cron（ck-08b）：扫描 7 天内到期 + 已过期批次，写 notifications 表。
+ * 每日效期预警 cron：扫描 7 天内到期 + 已过期批次，写 notifications 表。
  * 失败仅记录日志，不影响 Worker 调度。
  */
 export async function scheduled(
@@ -180,7 +180,7 @@ export async function scheduled(
       `[scheduled] expiry scan done: created=${result.createdCount} expiring=${result.expiringCount} expired=${result.expiredCount}`,
     );
 
-    // §8.8：配置了 SMTP 时，将效期预警邮件发给对应仓库的活跃用户（未配置则跳过）。
+    // 配置了 SMTP 时，将效期预警邮件发给对应仓库的活跃用户（未配置则跳过）。
     const mailer = createMailer(env as unknown as AppEnv);
     if (mailer && result.alerts.length > 0) {
       const users = await repos.users.list();

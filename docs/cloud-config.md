@@ -60,7 +60,7 @@
 - `wrangler dev` 自动读取 `apps/api/.dev.vars`
 - 前端：`apps/web/.env.local`（gitignored）保存 `VITE_*`（如 API 基址、MSAL 配置）
 
-## 6. 生产部署（后续部署 checkpoint 使用）
+## 6. 生产部署
 
 ```powershell
 # 设置 CF API token（wrangler 读取 CLOUDFLARE_API_TOKEN）

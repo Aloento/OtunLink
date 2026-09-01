@@ -22,7 +22,7 @@ import { ReturnCreatePanel } from '../../components/shipments/ReturnCreatePanel'
 import { ShipmentCountPanel } from '../../components/shipments/ShipmentCountPanel';
 import { ShipmentReviewsSection } from '../../components/shipments/ShipmentReviewsSection';
 
-// 发货单详情（ck-05 §6.1 + ck-06 §5.1）：字段 + 物流单号 + 清单（效期列 + 实收/差异高亮）
+// 发货单详情：字段 + 物流单号 + 清单（效期列 + 实收/差异高亮）
 // + 转交/编辑按钮 + 点货面板 + 差异修订审批。
 export function ShipmentDetailPage() {
   const { t } = useTranslation();

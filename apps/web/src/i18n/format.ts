@@ -1,6 +1,6 @@
 import type { AppLocale } from '@otunlink/shared';
 
-// 日期/金额/数字格式化（design.md §4.4、§8.3）。
+// 日期/金额/数字格式化。
 // 时间存储为 UTC ISO；渲染时按业务单元时区（unit.timezone）换算。
 // 金额不做汇率换算，仅按单元本位币（unit.baseCurrency，CNY/EUR/USD）格式化。
 

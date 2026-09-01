@@ -33,7 +33,7 @@ const REQUIRED_TABLES = [
 ] as const;
 
 describe('@otunlink/db schema', () => {
-  it('exports every table required by design.md §7', () => {
+  it('exports every table required by', () => {
     const tables = schema as unknown as Record<string, unknown>;
     for (const name of REQUIRED_TABLES) {
       expect(tables[name], `missing table: ${name}`).toBeDefined();

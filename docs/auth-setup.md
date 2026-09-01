@@ -1,6 +1,6 @@
 # Entra ID（Azure AD 免费版）单租户 App Registration 配置指南
 
-> 对应 design.md §3。本文指导在 Azure Entra ID（原 Azure AD）免费版中创建**单租户**应用注册，
+> 本文指导在 Azure Entra ID（原 Azure AD）免费版中创建**单租户**应用注册，
 > 使 OtunLink 前端（MSAL，auth code + PKCE）与后端（Hono Worker，jose 校验 JWT）能够完成
 > 登录、自动开户与 RBAC 鉴权。
 
@@ -15,7 +15,7 @@
 5. 点击**注册**。
 
 > 免费版即可满足需求：安全默认值（Security Defaults，含 MFA/条件访问）保持开启即可，
-> 本 checkpoint 不自行实现条件访问/MFA 策略。
+> 本应用不自行实现条件访问/MFA 策略。
 
 ## 2. 暴露 API 范围（后端 audience）
 
@@ -36,7 +36,7 @@
 | --- | --- | --- |
 | `TENANT_ID` | **目录（租户）ID** | 是 |
 | `CLIENT_ID` | **应用程序（客户端）ID** | 是 |
-| `CLIENT_SECRET` | **证书和密码 → 客户端密码**（仅服务端机器到机器场景使用；本 checkpoint 前端用 PKCE，服务端仅验签，**可不填**） | 否 |
+| `CLIENT_SECRET` | **证书和密码 → 客户端密码**（仅服务端机器到机器场景使用；本应用前端用 PKCE，服务端仅验签，**可不填**） | 否 |
 
 ## 4. 写入环境变量
 
@@ -49,7 +49,7 @@ ENTRA_CLIENT_ID=<CLIENT_ID>
 # ENTRA_ISSUER=https://login.microsoftonline.com/<TENANT_ID>/v2.0
 # 可选：显式 audience；留空时默认接受 CLIENT_ID
 # ENTRA_AUDIENCE=api://<CLIENT_ID>/OtunLink.API
-# 可选：客户端密码（本 checkpoint 服务端不校验机密客户端，可不填）
+# 可选：客户端密码（本应用服务端不校验机密客户端，可不填）
 # ENTRA_CLIENT_SECRET=
 ```
 

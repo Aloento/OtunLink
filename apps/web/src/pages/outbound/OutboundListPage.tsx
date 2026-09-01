@@ -17,7 +17,7 @@ import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/Re
 
 const PAGE_SIZE = 20;
 
-// 出库单列表（ck-08a §4.3）：手工出库（NORMAL），草稿可过账。
+// 出库单列表：手工出库（NORMAL），草稿可过账。
 export function OutboundListPage() {
   const { t } = useTranslation();
 
