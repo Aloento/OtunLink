@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 
 import { requireRole } from '../auth/middleware';
-import { createMailer, mailerStatus } from '../lib/email';
+import { createMailer, mailerStatus, resolveConfiguredSender } from '../lib/email';
 import { emailParagraph, renderEmailHtml } from '../lib/email-template';
 import { dbUnavailable, ok } from '../lib/http';
 import type { AppEnv } from '../types';
@@ -27,12 +27,12 @@ export function testEmailRouter(): Hono<AppEnv> {
       return ok(c, { ok: false, provider: status.provider, reason: '未配置 SMTP' });
     }
 
-    const from = c.env.MAIL_FROM?.trim() ?? c.env.SMTP_USER?.trim();
+    const from = resolveConfiguredSender(c.env);
     if (!from) {
       return ok(c, {
         ok: false,
         provider: status.provider,
-        reason: '未配置 MAIL_FROM / SMTP_USER',
+        reason: '未配置有效的 MAIL_FROM / SMTP_USER（需为真实邮箱地址）',
       });
     }
     try {

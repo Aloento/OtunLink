@@ -22,6 +22,26 @@ export interface EmailDeliveryResult {
   error: string | null;
 }
 
+const EMAIL_RE = /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)*$/i;
+const PLACEHOLDER_RE = /(your-|placeholder|mail_from|smtp_|your_)/i;
+
+export function normalizeEmailAddress(value: string | null | undefined): string | null {
+  const raw = value?.trim() ?? '';
+  if (!raw) return null;
+
+  const candidate = raw.replace(/^<+|>+$/g, '').trim();
+  if (!candidate || /\s/.test(candidate) || /[<>]/.test(candidate)) return null;
+  if (candidate.length > 254) return null;
+  if (PLACEHOLDER_RE.test(candidate)) return null;
+  if (!EMAIL_RE.test(candidate)) return null;
+  return candidate;
+}
+
+export function resolveConfiguredSender(env: Env | undefined): string | null {
+  const cfg = env ?? ({} as Env);
+  return normalizeEmailAddress(cfg.MAIL_FROM) ?? normalizeEmailAddress(cfg.SMTP_USER);
+}
+
 /** 内部 API 发送器（预留）：未配置，调用即抛错（正常路径不会走到）。 */
 function createApiProvider(_env: Env): EmailProvider {
   return {
@@ -44,7 +64,10 @@ function createSmtpProvider(env: Env): EmailProvider {
   const port = Number(env.SMTP_PORT ?? 465);
   const user = env.SMTP_USER?.trim() ?? '';
   const pass = env.SMTP_PASS ?? '';
-  const from = env.MAIL_FROM?.trim() || user;
+  const from = resolveConfiguredSender(env) ?? user;
+  if (!normalizeEmailAddress(from)) {
+    throw new Error('MAIL_FROM / SMTP_USER 不是有效的邮箱地址，需为实际发件人邮箱');
+  }
   const secure = env.SMTP_SECURE?.trim() === 'true' || port === 465;
   const startTls = env.SMTP_STARTTLS?.trim() !== 'false' && !secure;
   const authType = (env.SMTP_AUTH?.trim() as 'plain' | 'login' | undefined) ?? 'plain';
@@ -79,6 +102,7 @@ export function createMailer(env: Env | undefined): EmailProvider | null {
   const provider = (cfg.MAIL_PROVIDER ?? 'smtp').trim().toLowerCase();
   if (provider === 'api') return createApiProvider(cfg);
   if (!cfg.SMTP_HOST?.trim() || !cfg.SMTP_USER?.trim()) return null;
+  if (!resolveConfiguredSender(cfg)) return null;
   return createSmtpProvider(cfg);
 }
 
@@ -97,6 +121,13 @@ export function mailerStatus(env: Env | undefined): { enabled: boolean; provider
   }
   if (!cfg.SMTP_PASS) {
     return { enabled: false, provider: 'smtp', reason: '未配置 SMTP_PASS' };
+  }
+  if (!resolveConfiguredSender(cfg)) {
+    return {
+      enabled: false,
+      provider: 'smtp',
+      reason: 'MAIL_FROM / SMTP_USER 不是有效的邮箱地址（需为真实发件邮箱）',
+    };
   }
   return { enabled: true, provider: 'smtp', reason: null };
 }

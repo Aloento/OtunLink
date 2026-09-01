@@ -105,7 +105,11 @@ jobs:
 
       - name: Deploy Worker
         run: |
-          sed -i "s#<your-hyperdrive-id>#$HYPERDRIVE_ID#g; s#<your-kv-id>#$KV_NAMESPACE_ID#g" wrangler.toml
+          test -n "$MAIL_FROM" || { echo "::error::Missing MAIL_FROM value (set GitHub Actions secret SMTP_USER)"; exit 1; }
+          test -n "$SMTP_HOST" || { echo "::error::Missing SMTP_HOST value (set GitHub Actions secret SMTP_HOST)"; exit 1; }
+          test -n "$HYPERDRIVE_ID" || { echo "::error::Missing HYPERDRIVE_ID secret (Cloudflare Console > Hyperdrive)"; exit 1; }
+          test -n "$KV_NAMESPACE_ID" || { echo "::error::Missing KV_NAMESPACE_ID secret (Cloudflare Console > KV)"; exit 1; }
+          sed -i "s#<your-mail-from>#$MAIL_FROM#g; s#<your-smtp-host>#$SMTP_HOST#g; s#<your-hyperdrive-id>#$HYPERDRIVE_ID#g; s#<your-kv-id>#$KV_NAMESPACE_ID#g" wrangler.toml
           npx wrangler deploy
         working-directory: apps/api
         env:
@@ -113,3 +117,5 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           HYPERDRIVE_ID: ${{ secrets.HYPERDRIVE_ID }}
           KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
+          MAIL_FROM: ${{ secrets.SMTP_USER }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
