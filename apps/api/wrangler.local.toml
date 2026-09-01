@@ -13,7 +13,7 @@ workers_dev = true
 
 [[kv_namespaces]]
 binding = "JWKS_CACHE"
-id = "<your-kv-id>"  # 部署前回填真实 id
+id = "<your-kv-id>"  # 本地开发时手动回填真实 id（见 CF 控制台 KV 页面）
 
 [vars]
 S3_ENDPOINT = "<your-obs-endpoint>"  # 部署前回填完整 URL（含 https://）

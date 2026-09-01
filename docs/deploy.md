@@ -126,11 +126,16 @@ curl -X POST https://api.otun.musi.land/api/v1/admin/migrate -H "X-Admin-Secret:
 CI（`.github/workflows/deploy.yml` 的 deploy-api job）会执行
 `npx wrangler secret put SMTP_USER / SMTP_PASS / S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY`，
 读取 GitHub 仓库 Secrets（`SMTP_HOST`/`MAIL_FROM`/`SMTP_PORT`/S3 endpoint/region/bucket 等
-非敏感项已在 `wrangler.toml [vars]`，无需作为 secret）。需在 GitHub 仓库
-**Settings → Secrets and variables → Actions** 配置：
+非敏感项已在 `wrangler.toml [vars]`，无需作为 secret）。
+
+`wrangler.toml` 中 `HYPERDRIVE`/`JWKS_CACHE` 绑定的 id 以 `<your-hyperdrive-id>`/`<your-kv-id>`
+占位符提交，CI 的 Deploy step 先执行 `sed` 将占位符替换为下面的 Secrets 值再 `wrangler deploy`
+（本地开发 `wrangler dev` 需手动回填）。需在 GitHub 仓库 **Settings → Secrets and variables → Actions** 配置：
 
 | Secret                  | 说明                                     | 示例             |
 | ----------------------- | ---------------------------------------- | ---------------- |
+| `HYPERDRIVE_ID`         | Hyperdrive 实例 id（**必填**，CF 控制台 Hyperdrive 页面） | `<HYPERDRIVE_ID>` |
+| `KV_NAMESPACE_ID`       | KV 命名空间 id（**必填**，CF 控制台 KV 页面，`JWKS_CACHE` 绑定） | `<KV_NAMESPACE_ID>` |
 | `SMTP_USER`             | 邮件账号（必填才会发信）                 | `<SMTP_USER>` |
 | `SMTP_PASS`             | 邮箱授权码/密码                          | —                |
 | `S3_ACCESS_KEY_ID`      | 华为云 OBS AccessKey（图片上传）         | `xxxxxxxx...`        |
@@ -138,7 +143,8 @@ CI（`.github/workflows/deploy.yml` 的 deploy-api job）会执行
 | `CLOUDFLARE_API_TOKEN`  | CF API Token（部署）                     | —                |
 | `CLOUDFLARE_ACCOUNT_ID` | CF 账号 ID（`wrangler secret put` 需要） | `xxxxxxxx`       |
 
-未配置的项 CI 会跳过对应 secret 写入；SMTP 未配置时 API 降级为仅站内通知。
+`HYPERDRIVE_ID`/`KV_NAMESPACE_ID` 未配置时 deploy-api 会直接失败（Check 步骤给出明确错误）；
+其余未配置的项 CI 会跳过对应 secret 写入；SMTP 未配置时 API 降级为仅站内通知。
 
 ## 6. 上线前自检
 

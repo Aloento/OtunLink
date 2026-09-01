@@ -95,9 +95,21 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
 
+      - name: Check resource ID secrets
+        run: |
+          test -n "$HYPERDRIVE_ID" || { echo "::error::Missing HYPERDRIVE_ID secret (Cloudflare Console > Hyperdrive)"; exit 1; }
+          test -n "$KV_NAMESPACE_ID" || { echo "::error::Missing KV_NAMESPACE_ID secret (Cloudflare Console > KV)"; exit 1; }
+        env:
+          HYPERDRIVE_ID: ${{ secrets.HYPERDRIVE_ID }}
+          KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
+
       - name: Deploy Worker
-        run: npx wrangler deploy
+        run: |
+          sed -i "s#<your-hyperdrive-id>#$HYPERDRIVE_ID#g; s#<your-kv-id>#$KV_NAMESPACE_ID#g" wrangler.toml
+          npx wrangler deploy
         working-directory: apps/api
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HYPERDRIVE_ID: ${{ secrets.HYPERDRIVE_ID }}
+          KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}

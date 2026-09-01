@@ -9,14 +9,15 @@ routes = [
   { pattern = "api.otun.musi.land", custom_domain = true },
 ]
 
-# ── Cloudflare 资源绑定（真实值由用户回传，见 docs/cloud-config.md）────────
+# ── Cloudflare 资源绑定（占位符由 CI 部署时替换为 GitHub Secrets 中的真实 id；
+#    本地开发需手动回填，见 docs/cloud-config.md §1）──────────────────────
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "<your-hyperdrive-id>"  # 部署前回填真实 id（见 docs/cloud-config.md）
+id = "<your-hyperdrive-id>"  # 真实 id 见 Cloudflare 控制台 Hyperdrive 页面
 
 [[kv_namespaces]]
 binding = "JWKS_CACHE"
-id = "<your-kv-id>"  # 部署前回填真实 id（见 docs/cloud-config.md）
+id = "<your-kv-id>"  # 真实 id 见 Cloudflare 控制台 KV 页面
 
 # ── 图片存储：S3 兼容对象存储（华为云 OBS，不用 R2）──────────────────────
 # Workers 无原生 S3 绑定，运行时经 aws4fetch（SigV4 签名）访问；

@@ -17,8 +17,8 @@
 
 | 绑定         | 资源                                                            | 用途                                   |
 | ------------ | --------------------------------------------------------------- | -------------------------------------- |
-| `HYPERDRIVE` | id `<HYPERDRIVE_ID>`                           | 私有 PostgreSQL 连接池（生产 DB 访问） |
-| `JWKS_CACHE` | KV 命名空间 `otunlink`（id `<KV_NAMESPACE_ID>`） | Entra JWKS 24h 缓存                    |
+| `HYPERDRIVE` | id `<HYPERDRIVE_ID>`（wrangler.toml 以 `<your-hyperdrive-id>` 占位符提交，CI 部署时经 Secrets 自动替换，本地需手动回填） | 私有 PostgreSQL 连接池（生产 DB 访问） |
+| `JWKS_CACHE` | KV 命名空间 `otunlink`（id `<KV_NAMESPACE_ID>`，替换方式同上） | Entra JWKS 24h 缓存                    |
 
 ## 2. 数据库（私有 PostgreSQL，经 Hyperdrive）
 
