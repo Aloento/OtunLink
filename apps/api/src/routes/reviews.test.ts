@@ -9,6 +9,7 @@ const now = new Date('2025-01-01T00:00:00.000Z');
 const COLLECTOR_UNIT = '00000000-0000-4000-8000-000000000001';
 const WAREHOUSE_UNIT = '00000000-0000-4000-8000-000000000002';
 const OTHER_COLLECTOR = '00000000-0000-4000-8000-000000000003';
+const RETAIL_UNIT = '00000000-0000-4000-8000-000000000005';
 const ITEM_A = '00000000-0000-4000-8000-000000000011';
 
 function user(partial: Partial<UserRecord> & { entraSub: string }): UserRecord {
@@ -61,7 +62,7 @@ function item(partial: Partial<ItemRecord> & { id: string }): ItemRecord {
   };
 }
 
-const collector = user({ entraSub: 'collector', role: 'COLLECTOR' });
+const collector = user({ entraSub: 'collector', role: 'COLLECTOR', scopeUnitId: COLLECTOR_UNIT });
 const collectorScoped = user({
   entraSub: 'collector-scoped',
   role: 'COLLECTOR',
@@ -72,8 +73,8 @@ const collectorOtherScoped = user({
   role: 'COLLECTOR',
   scopeUnitId: OTHER_COLLECTOR,
 });
-const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE' });
-const retailer = user({ entraSub: 'retailer', role: 'RETAILER' });
+const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT });
+const retailer = user({ entraSub: 'retailer', role: 'RETAILER', scopeUnitId: RETAIL_UNIT });
 
 const units = [
   unit({ id: COLLECTOR_UNIT, type: 'COLLECTOR', name: '上海集货部' }),

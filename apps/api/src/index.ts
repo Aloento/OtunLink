@@ -20,6 +20,7 @@ import { inboundOrdersRouter } from './routes/inbound-orders';
 import { itemsRouter } from './routes/items';
 import { notificationsRouter } from './routes/notifications';
 import { outboundOrdersRouter } from './routes/outbound-orders';
+import { partnershipsRouter } from './routes/partnerships';
 import { retailPricesRouter } from './routes/retail-prices';
 import { returnOrdersRouter } from './routes/return-orders';
 import { reviewsRouter } from './routes/reviews';
@@ -103,6 +104,10 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // 销售单（请货/主动送货，RBAC 见各路由）
   app.use('/api/v1/sales-orders/*', requireToken);
   app.route('/api/v1/sales-orders', salesOrdersRouter());
+
+  // 仓库-零售签约（可售客户维护，RBAC 见各路由）
+  app.use('/api/v1/partnerships/*', requireToken);
+  app.route('/api/v1/partnerships', partnershipsRouter());
 
   // 图片上传 / 预签名 URL（登录用户，RBAC 见各路由）
   app.use('/api/v1/files/*', requireToken);

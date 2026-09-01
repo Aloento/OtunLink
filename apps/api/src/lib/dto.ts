@@ -11,6 +11,7 @@ import type {
   NotificationRecord,
   OutboundOrderItemRecord,
   OutboundOrderRecord,
+  PartnershipRecord,
   ReturnOrderItemRecord,
   ReturnOrderRecord,
   RetailPriceHistoryRecord,
@@ -72,6 +73,18 @@ export function unitDto(unit: UnitRecord) {
     isActive: unit.isActive,
     createdAt: unit.createdAt.toISOString(),
     updatedAt: unit.updatedAt.toISOString(),
+  };
+}
+
+export function partnershipDto(partnership: PartnershipRecord) {
+  return {
+    id: partnership.id,
+    warehouseUnitId: partnership.warehouseUnitId,
+    warehouseUnitName: partnership.warehouseUnitName,
+    retailerUnitId: partnership.retailerUnitId,
+    retailerUnitName: partnership.retailerUnitName,
+    createdBy: partnership.createdBy,
+    createdAt: partnership.createdAt.toISOString(),
   };
 }
 

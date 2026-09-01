@@ -8,6 +8,7 @@ const now = new Date('2025-01-01T00:00:00.000Z');
 
 const COLLECTOR_UNIT = '00000000-0000-4000-8000-000000000001';
 const WAREHOUSE_UNIT = '00000000-0000-4000-8000-000000000002';
+const RETAIL_UNIT = '00000000-0000-4000-8000-000000000004';
 const ITEM_A = '00000000-0000-4000-8000-000000000011';
 
 /** 相对「今天（UTC）」偏移 N 天的日期字符串（避免测试对绝对日期敏感）。 */
@@ -69,8 +70,8 @@ function item(partial: Partial<ItemRecord> & { id: string }): ItemRecord {
 }
 
 const collector = user({ entraSub: 'collector', role: 'COLLECTOR' });
-const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE' });
-const retailer = user({ entraSub: 'retailer', role: 'RETAILER' });
+const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT });
+const retailer = user({ entraSub: 'retailer', role: 'RETAILER', scopeUnitId: RETAIL_UNIT });
 const admin = user({ entraSub: 'admin', role: 'ADMIN' });
 
 const units = [

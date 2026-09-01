@@ -1,7 +1,7 @@
 import { ErrorCodes, Permissions, reviewRejectSchema } from '@otunlink/shared';
 import { Hono } from 'hono';
 
-import { requirePermission } from '../auth/middleware';
+import { requirePermission, requireUnitScopeAssigned } from '../auth/middleware';
 import { createMailer } from '../lib/email';
 import { discrepancyReviewDto } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
@@ -16,6 +16,9 @@ export function reviewsRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 
   const approve = requirePermission(Permissions.REVIEWS_APPROVE);
+
+  // 非 ADMIN 必须绑定业务单元才能访问业务数据（ADMIN 空 scope = 全量）。
+  router.use('*', requireUnitScopeAssigned());
 
   router.post('/:id/approve', approve, async (c) => {
     const repos = c.get('repos');

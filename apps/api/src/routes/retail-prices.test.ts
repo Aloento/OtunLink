@@ -9,6 +9,7 @@ const now = new Date('2025-01-01T00:00:00.000Z');
 const COLLECTOR_UNIT = '00000000-0000-4000-8000-000000000001';
 const WAREHOUSE_UNIT = '00000000-0000-4000-8000-000000000002';
 const WAREHOUSE_UNIT_2 = '00000000-0000-4000-8000-000000000003';
+const RETAIL_UNIT = '00000000-0000-4000-8000-000000000004';
 const ITEM_A = '00000000-0000-4000-8000-000000000011';
 
 function user(partial: Partial<UserRecord> & { entraSub: string }): UserRecord {
@@ -62,8 +63,9 @@ function item(partial: Partial<ItemRecord> & { id: string }): ItemRecord {
 }
 
 const collector = user({ entraSub: 'collector', role: 'COLLECTOR' });
-const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE', name: '仓库管理员' });
-const retailer = user({ entraSub: 'retailer', role: 'RETAILER' });
+const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT, name: '仓库管理员' });
+const retailer = user({ entraSub: 'retailer', role: 'RETAILER', scopeUnitId: RETAIL_UNIT });
+const admin = user({ entraSub: 'admin', role: 'ADMIN' });
 
 const units = [
   unit({ id: COLLECTOR_UNIT, type: 'COLLECTOR', name: '上海集货部' }),
@@ -207,11 +209,11 @@ describe('ck-08b 零售价', () => {
       role: 'WAREHOUSE',
       scopeUnitId: WAREHOUSE_UNIT_2,
     });
-    const { app } = makeApp({ users: [collector, warehouse, retailer, scoped], units, items });
+    const { app } = makeApp({ users: [collector, warehouse, retailer, scoped, admin], units, items });
 
     const badUnit = await app.request('/api/v1/retail-prices', {
       method: 'PUT',
-      headers: json('warehouse'),
+      headers: json('admin'),
       body: JSON.stringify({ unitId: COLLECTOR_UNIT, itemId: ITEM_A, price: '10.00' }),
     });
     expect(badUnit.status).toBe(400);

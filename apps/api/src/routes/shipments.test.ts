@@ -10,6 +10,7 @@ const COLLECTOR_UNIT = '00000000-0000-4000-8000-000000000001';
 const WAREHOUSE_UNIT = '00000000-0000-4000-8000-000000000002';
 const OTHER_COLLECTOR = '00000000-0000-4000-8000-000000000003';
 const OTHER_WAREHOUSE = '00000000-0000-4000-8000-000000000004';
+const RETAIL_UNIT = '00000000-0000-4000-8000-000000000005';
 const ITEM_A = '00000000-0000-4000-8000-000000000011';
 const ITEM_B = '00000000-0000-4000-8000-000000000012';
 
@@ -63,14 +64,19 @@ function item(partial: Partial<ItemRecord> & { id: string }): ItemRecord {
   };
 }
 
-const collector = user({ entraSub: 'collector', role: 'COLLECTOR' });
+const collector = user({ entraSub: 'collector', role: 'COLLECTOR', scopeUnitId: COLLECTOR_UNIT });
 const collectorScoped = user({
   entraSub: 'collector-scoped',
   role: 'COLLECTOR',
   scopeUnitId: COLLECTOR_UNIT,
 });
-const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE' });
-const retailer = user({ entraSub: 'retailer', role: 'RETAILER' });
+const collectorOtherScoped = user({
+  entraSub: 'collector-other',
+  role: 'COLLECTOR',
+  scopeUnitId: OTHER_COLLECTOR,
+});
+const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT });
+const retailer = user({ entraSub: 'retailer', role: 'RETAILER', scopeUnitId: RETAIL_UNIT });
 
 function makeApp(
   seed: {
@@ -129,6 +135,14 @@ describe('shipments 发货单 API', () => {
     const { app } = makeApp({});
     const res = await app.request('/api/v1/shipments');
     expect(res.status).toBe(401);
+  });
+
+  it('非 ADMIN 空 scope 访问 /shipments 返回 403', async () => {
+    const warehouseNoScope = user({ entraSub: 'warehouse-noscope', role: 'WAREHOUSE' });
+    const { app } = makeApp({ users: [warehouseNoScope], units, items });
+    const res = await app.request('/api/v1/shipments', { headers: auth('warehouse-noscope') });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
   });
 
   it('创建发货单：多物流单号、快照与编号', async () => {
@@ -362,11 +376,11 @@ describe('shipments 发货单 API', () => {
   });
 
   it('数据范围：scope 非空时创建越界 403，列表仅可见本单元', async () => {
-    const { app } = makeApp({ users: [collector, collectorScoped], units, items });
+    const { app } = makeApp({ users: [collector, collectorScoped, collectorOtherScoped], units, items });
 
     await app.request('/api/v1/shipments', {
       method: 'POST',
-      headers: json('collector'),
+      headers: json('collector-other'),
       body: JSON.stringify(body({ shipperUnitId: OTHER_COLLECTOR })),
     });
 

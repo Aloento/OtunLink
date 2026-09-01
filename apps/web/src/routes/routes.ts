@@ -44,6 +44,11 @@ export const ROUTES = {
     navKey: 'sales',
     permissions: [Permissions.SALES_CREATE, Permissions.SALES_REQUEST],
   },
+  partnerships: {
+    path: '/partnerships',
+    navKey: 'partnerships',
+    permissions: [Permissions.SALES_SEND],
+  },
   inventory: {
     path: '/inventory',
     navKey: 'inventory',
@@ -88,6 +93,7 @@ export const NAV_MAIN: RouteKey[] = [
   'outbound',
   'returns',
   'sales',
+  'partnerships',
   'inventory',
   'notifications',
 ];

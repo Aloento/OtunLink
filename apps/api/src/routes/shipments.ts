@@ -13,7 +13,7 @@ import {
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 
-import { requirePermission, unitScopeFilter } from '../auth/middleware';
+import { requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { createMailer } from '../lib/email';
 import {
   discrepancyReviewDto,
@@ -53,6 +53,9 @@ export function shipmentsRouter(): Hono<AppEnv> {
   const read = requirePermission(Permissions.SHIPMENTS_READ);
   const write = requirePermission(Permissions.SHIPMENTS_CREATE);
   const transfer = requirePermission(Permissions.SHIPMENTS_TRANSFER);
+
+  // 非 ADMIN 必须绑定业务单元才能访问业务数据（ADMIN 空 scope = 全量）。
+  router.use('*', requireUnitScopeAssigned());
 
   router.get('/', read, async (c) => {
     const repos = c.get('repos');
@@ -515,17 +518,17 @@ async function readJson(c: Context<AppEnv>): Promise<unknown | undefined> {
   }
 }
 
-// 写路径数据范围：scope 非空时发货方必须等于本单元。
+// 写路径数据范围：ADMIN 全量（scope 为 null）；非 ADMIN（经 requireUnitScopeAssigned 保证 scope 非空）发货方必须等于本单元。
 function scopeAllowsWrite(scopeUnitId: string | null, shipperUnitId: string): boolean {
   return !scopeUnitId || shipperUnitId === scopeUnitId;
 }
 
-// 点货/差异提交写路径数据范围：scope 非空时收货方必须等于本单元。
+// 点货/差异提交写路径数据范围：ADMIN 全量（scope 为 null）；非 ADMIN 收货方必须等于本单元。
 function scopeAllowsReceiver(scopeUnitId: string | null, shipment: ShipmentRecord): boolean {
   return !scopeUnitId || shipment.receiverUnitId === scopeUnitId;
 }
 
-// 读路径数据范围：scope 非空时，发货方或收货方命中即放行。
+// 读路径数据范围：ADMIN 全量（scope 为 null）；非 ADMIN 发货方或收货方命中即放行。
 function scopeAllowsRead(scopeUnitId: string | null, shipment: ShipmentRecord): boolean {
   if (!scopeUnitId) return true;
   return shipment.shipperUnitId === scopeUnitId || shipment.receiverUnitId === scopeUnitId;

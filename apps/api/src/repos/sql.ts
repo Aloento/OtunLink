@@ -1,4 +1,4 @@
-import { expiryRemainingDays } from '@otunlink/shared';
+import { expiryRemainingDays, type UnitType } from '@otunlink/shared';
 import type { SqlExecutor } from '@otunlink/db';
 
 import type {
@@ -11,6 +11,7 @@ import type {
   CreateInboundManualRepoInput,
   CreateItemInput,
   CreateOutboundRepoInput,
+  CreatePartnershipInput,
   CreateReturnRepoInput,
   CreateReviewInput,
   CreateSalesRepoInput,
@@ -39,6 +40,9 @@ import type {
   OutboundListResult,
   OutboundOrderItemRecord,
   OutboundOrderRecord,
+  PartnershipListQuery,
+  PartnershipRecord,
+  PartnershipRepository,
   PatchSalesInput,
   PaymentRecord,
   Repos,
@@ -102,6 +106,10 @@ const jsonb = (value: unknown): unknown => {
   if (value === undefined || value === null) return null;
   return JSON.stringify(value);
 };
+
+/** `column IN (...)` 子句；空集合时恒 false（不泄露任何行）。 */
+const inClause = (column: string, values: string[]): string =>
+  values.length > 0 ? `${column} IN (${values.map((v) => quote(v)).join(', ')})` : 'FALSE';
 
 const col = (name: string, value: unknown): string => `${name} = ${quote(value)}`;
 
@@ -434,6 +442,18 @@ function attachExpiry(row: StockRowRecord): StockBatchRecord {
   return { ...row, remainingDays, isExpired: remainingDays !== null && remainingDays < 0 };
 }
 
+function mapPartnership(row: Record<string, unknown>): PartnershipRecord {
+  return {
+    id: String(row.id),
+    warehouseUnitId: String(row.warehouse_unit_id),
+    warehouseUnitName: row.warehouse_unit_name ? String(row.warehouse_unit_name) : null,
+    retailerUnitId: String(row.retailer_unit_id),
+    retailerUnitName: row.retailer_unit_name ? String(row.retailer_unit_name) : null,
+    createdBy: row.created_by ? String(row.created_by) : null,
+    createdAt: new Date(String(row.created_at)),
+  };
+}
+
 function mapStockMovement(row: Record<string, unknown>): StockMovementRecord {
   return {
     id: String(row.id),
@@ -741,10 +761,13 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       const { rows } = await exec.query(`SELECT * FROM business_units WHERE id = ${quote(id)} LIMIT 1`);
       return rows[0] ? mapUnit(rows[0]) : null;
     },
-    async list(opts: { includeInactive?: boolean; scopeUnitId?: string } = {}): Promise<UnitRecord[]> {
+    async list(
+      opts: { includeInactive?: boolean; scopeUnitId?: string; type?: UnitType } = {},
+    ): Promise<UnitRecord[]> {
       const where: string[] = [];
       if (!opts.includeInactive) where.push('is_active = TRUE');
       if (opts.scopeUnitId) where.push(`id = ${quote(opts.scopeUnitId)}`);
+      if (opts.type) where.push(`type = ${quote(opts.type)}`);
       const clause = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
       const { rows } = await exec.query(`SELECT * FROM business_units${clause} ORDER BY code ASC`);
       return rows.map(mapUnit);
@@ -2369,6 +2392,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       const where = (alias: string): string => {
         const parts: string[] = [`${alias}qty > 0`];
         if (query.unitId) parts.push(`${alias}unit_id = ${quote(query.unitId)}`);
+        else if (query.unitIds) parts.push(inClause(`${alias}unit_id`, query.unitIds));
         if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
         if (query.batchId) parts.push(`${alias}batch_id = ${quote(query.batchId)}`);
         return ` WHERE ${parts.join(' AND ')}`;
@@ -2399,6 +2423,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       const where = (alias: string): string => {
         const parts: string[] = [];
         if (query.unitId) parts.push(`${alias}unit_id = ${quote(query.unitId)}`);
+        else if (query.unitIds) parts.push(inClause(`${alias}unit_id`, query.unitIds));
         if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
         if (query.batchId) parts.push(`${alias}batch_id = ${quote(query.batchId)}`);
         return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
@@ -2427,6 +2452,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       const where = (alias: string): string => {
         const parts: string[] = [`${alias}qty > 0`];
         if (query.unitId) parts.push(`${alias}unit_id = ${quote(query.unitId)}`);
+        else if (query.unitIds) parts.push(inClause(`${alias}unit_id`, query.unitIds));
         if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
         return ` WHERE ${parts.join(' AND ')}`;
       };
@@ -2449,6 +2475,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
           `b.expiry_date IS NOT NULL AND b.expiry_date < CURRENT_DATE`,
         ];
         if (query.unitId) parts.push(`${alias}unit_id = ${quote(query.unitId)}`);
+        else if (query.unitIds) parts.push(inClause(`${alias}unit_id`, query.unitIds));
         if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
         return ` WHERE ${parts.join(' AND ')}`;
       };
@@ -2473,6 +2500,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       const where = (alias: string): string => {
         const parts: string[] = [];
         if (query.unitId) parts.push(`${alias}unit_id = ${quote(query.unitId)}`);
+        else if (query.unitIds) parts.push(inClause(`${alias}unit_id`, query.unitIds));
         if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
         return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
       };
@@ -2735,6 +2763,12 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         if (query.status) parts.push(`${alias}status = ${quote(query.status)}`);
         if (query.unitId) {
           parts.push(`(${alias}seller_unit_id = ${quote(query.unitId)} OR ${alias}buyer_unit_id = ${quote(query.unitId)})`);
+        }
+        if (query.buyerUnitId) {
+          parts.push(`${alias}buyer_unit_id = ${quote(query.buyerUnitId)}`);
+        }
+        if (query.sellerUnitIds) {
+          parts.push(inClause(`${alias}seller_unit_id`, query.sellerUnitIds));
         }
         return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
       };
@@ -3162,7 +3196,74 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
   };
 
-  return { users, units, items, files, shipments, inbounds, returns, outbounds, stock, retailPrices, sales, notifications, emailLogs, auditLogs };
+  // ── ck-??：仓库-零售签约（retail_partnerships）────────────────────────────────
+
+  const partnerships: PartnershipRepository = {
+    async list(query: PartnershipListQuery = {}): Promise<PartnershipRecord[]> {
+      const parts: string[] = [];
+      if (query.warehouseUnitId) parts.push(`p.warehouse_unit_id = ${quote(query.warehouseUnitId)}`);
+      if (query.retailerUnitId) parts.push(`p.retailer_unit_id = ${quote(query.retailerUnitId)}`);
+      const where = parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
+      const { rows } = await exec.query(
+        `SELECT p.*, wh.name AS warehouse_unit_name, rt.name AS retailer_unit_name
+         FROM retail_partnerships p
+         JOIN business_units wh ON wh.id = p.warehouse_unit_id
+         JOIN business_units rt ON rt.id = p.retailer_unit_id
+         ${where}
+         ORDER BY p.created_at DESC, p.id ASC`,
+      );
+      return rows.map(mapPartnership);
+    },
+    async listWarehouseIds(retailerUnitId: string): Promise<string[]> {
+      const { rows } = await exec.query(
+        `SELECT warehouse_unit_id FROM retail_partnerships
+         WHERE retailer_unit_id = ${quote(retailerUnitId)}`,
+      );
+      return rows.map((row) => String(row.warehouse_unit_id));
+    },
+    async findById(id: string): Promise<PartnershipRecord | null> {
+      const { rows } = await exec.query(
+        `SELECT p.*, wh.name AS warehouse_unit_name, rt.name AS retailer_unit_name
+         FROM retail_partnerships p
+         JOIN business_units wh ON wh.id = p.warehouse_unit_id
+         JOIN business_units rt ON rt.id = p.retailer_unit_id
+         WHERE p.id = ${quote(id)}`,
+      );
+      return rows[0] ? mapPartnership(rows[0]) : null;
+    },
+    async findByPair(
+      warehouseUnitId: string,
+      retailerUnitId: string,
+    ): Promise<PartnershipRecord | null> {
+      const { rows } = await exec.query(
+        `SELECT p.*, wh.name AS warehouse_unit_name, rt.name AS retailer_unit_name
+         FROM retail_partnerships p
+         JOIN business_units wh ON wh.id = p.warehouse_unit_id
+         JOIN business_units rt ON rt.id = p.retailer_unit_id
+         WHERE p.warehouse_unit_id = ${quote(warehouseUnitId)}
+           AND p.retailer_unit_id = ${quote(retailerUnitId)}`,
+      );
+      return rows[0] ? mapPartnership(rows[0]) : null;
+    },
+    async create(input: CreatePartnershipInput): Promise<PartnershipRecord> {
+      await exec.query(
+        `INSERT INTO retail_partnerships (warehouse_unit_id, retailer_unit_id, created_by)
+         VALUES (${quote(input.warehouseUnitId)}, ${quote(input.retailerUnitId)}, ${quote(input.createdBy)})
+         ON CONFLICT (warehouse_unit_id, retailer_unit_id) DO NOTHING`,
+      );
+      const record = await partnerships.findByPair(input.warehouseUnitId, input.retailerUnitId);
+      if (!record) throw new Error('PARTNERSHIP_CREATE_FAILED: partnership insert produced no row');
+      return record;
+    },
+    async delete(id: string): Promise<boolean> {
+      const { rows } = await exec.query(
+        `DELETE FROM retail_partnerships WHERE id = ${quote(id)} RETURNING id`,
+      );
+      return rows.length > 0;
+    },
+  };
+
+  return { users, units, items, files, shipments, inbounds, returns, outbounds, stock, retailPrices, sales, partnerships, notifications, emailLogs, auditLogs };
 }
 
 // 将 undefined/空字符串归一化为 null（写入 DB 的 NULL）。

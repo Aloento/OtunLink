@@ -1,8 +1,9 @@
 import type { DashboardTodoItem } from '@otunlink/shared';
 import { Hono } from 'hono';
 
-import { requireActive } from '../auth/middleware';
+import { requireActive, requireUnitScopeAssigned } from '../auth/middleware';
 import { dbUnavailable, ok } from '../lib/http';
+import { loadPartnerWarehouseIds } from '../lib/partnerships';
 import type { AppEnv, Repos } from '../types';
 
 // 工作台待办聚合（ck-10 §8.5）：按岗位 + 数据范围返回待办列表（供 `/` 首页）。
@@ -14,6 +15,8 @@ export function dashboardRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 
   router.use('*', requireActive());
+  // 非 ADMIN 必须绑定业务单元才能访问业务数据（ADMIN 空 scope = 全量）。
+  router.use('*', requireUnitScopeAssigned());
 
   router.get('/todos', async (c) => {
     const repos = c.get('repos');
@@ -50,9 +53,10 @@ async function collectTodos(
   }
 
   if (role === 'RETAILER') {
+    const partnerIds = await loadPartnerWarehouseIds(repos, unit!);
     const [toPay, toReceive, toReturn] = await Promise.all([
-      repos.sales.list({ page: 1, size: 1, status: 'SENT', unitId: unit }),
-      repos.sales.list({ page: 1, size: 1, status: 'PAYMENT_UPLOADED', unitId: unit }),
+      repos.sales.list({ page: 1, size: 1, status: 'SENT', buyerUnitId: unit, sellerUnitIds: partnerIds }),
+      repos.sales.list({ page: 1, size: 1, status: 'PAYMENT_UPLOADED', buyerUnitId: unit, sellerUnitIds: partnerIds }),
       repos.returns.list({ page: 1, size: 1, status: 'REQUESTED', sourceType: 'SALES', scopeUnitId: unit }),
     ]);
     return [

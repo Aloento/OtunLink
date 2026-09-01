@@ -431,6 +431,15 @@ export const notificationReadSchema = z.object({
   ids: z.array(z.uuid()).min(1).max(200),
 });
 
+/**
+ * 新建仓库-零售签约（POST /partnerships）：签约只由仓库侧发起。
+ * WAREHOUSE 传 { retailerUnitId }（仓库=自身归属单元）；ADMIN 可传 { warehouseUnitId, retailerUnitId }。
+ */
+export const partnershipCreateSchema = z.object({
+  warehouseUnitId: z.uuid().optional(),
+  retailerUnitId: z.uuid(),
+});
+
 export type UserSelfPatchInput = z.infer<typeof userSelfPatchSchema>;
 export type AdminUserCreateInput = z.infer<typeof adminUserCreateSchema>;
 export type AdminUserPatchInput = z.infer<typeof adminUserPatchSchema>;
@@ -471,3 +480,4 @@ export type SalesOrderSendInput = z.infer<typeof salesOrderSendSchema>;
 export type SalesPaymentInput = z.infer<typeof salesPaymentSchema>;
 export type SalesConfirmReceiptInput = z.infer<typeof salesConfirmReceiptSchema>;
 export type NotificationReadInput = z.infer<typeof notificationReadSchema>;
+export type PartnershipCreateInput = z.infer<typeof partnershipCreateSchema>;

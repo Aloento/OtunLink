@@ -147,7 +147,10 @@ describe('auth / RBAC（ck-02 抽样）', () => {
 
   it('管理员可修改用户岗位（立即生效于重新鉴权）', async () => {
     const { app } = makeApp({
-      users: [user({ entraSub: 'admin', role: 'ADMIN' }), user({ entraSub: 'u1', role: 'RETAILER' })],
+      users: [
+        user({ entraSub: 'admin', role: 'ADMIN' }),
+        user({ entraSub: 'u1', role: 'RETAILER', scopeUnitId: 'ua' }),
+      ],
     });
     const patch = await app.request('/api/v1/admin/users/id-u1', {
       method: 'PATCH',

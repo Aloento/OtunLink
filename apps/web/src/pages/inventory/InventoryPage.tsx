@@ -14,6 +14,7 @@ import {
 } from '@otunlink/shared';
 
 import { listItems } from '../../api/items';
+import { listPartnerships } from '../../api/partnerships';
 import { listExpiredBatches, listStock, listStockMovements } from '../../api/stock';
 import { listRetailPrices } from '../../api/retail-prices';
 import { listUnits } from '../../api/units';
@@ -40,6 +41,9 @@ export function InventoryPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  // 零售角色只读视图：库存 + 零售价（无成本字段）。
+  const isRetailer = me?.role === 'RETAILER';
+
   const initialView: View = searchParams.get('tab') === 'expired' ? 'expired' : 'stock';
   const [view, setView] = useState<View>(initialView);
   const [unitId, setUnitId] = useState('');
@@ -60,6 +64,22 @@ export function InventoryPage() {
   const warehouses = useMemo(
     () => (units ?? []).filter((u) => u.type === 'WAREHOUSE' && u.isActive),
     [units],
+  );
+
+  // 零售：已签约仓库列表（用于仓库筛选与「已签约仓库」展示；服务端已按签约过滤数据）。
+  const partnershipsQuery = useQuery({
+    queryKey: ['partnerships', 'list'],
+    queryFn: () => listPartnerships(),
+    enabled: isRetailer,
+    staleTime: 60_000,
+  });
+  const signedWarehouses = useMemo(
+    () =>
+      (partnershipsQuery.data?.items ?? []).map((p) => ({
+        id: p.warehouseUnitId,
+        name: p.warehouseUnitName ?? p.warehouseUnitId,
+      })),
+    [partnershipsQuery.data],
   );
 
   const query = {
@@ -83,7 +103,9 @@ export function InventoryPage() {
   });
 
   // 已过期批次视图（GET /stock/expired 必须指定仓库：优先筛选值，其次账号 scope，再退首个仓库）。
-  const effectiveUnitId = unitId || me?.scopeUnitId || warehouses[0]?.id || '';
+  // 零售账号的 scope 是门店而非仓库，故退首个已签约仓库。
+  const effectiveUnitId =
+    unitId || (isRetailer ? signedWarehouses[0]?.id : me?.scopeUnitId) || warehouses[0]?.id || '';
   const expiredQuery = useQuery({
     queryKey: ['stock', 'expired', effectiveUnitId, itemId],
     queryFn: () => listExpiredBatches({ unitId: effectiveUnitId, itemId: itemId || undefined }),
@@ -91,8 +113,6 @@ export function InventoryPage() {
     placeholderData: keepPreviousData,
   });
 
-  // 零售角色只读视图：库存 + 零售价（无成本字段）。
-  const isRetailer = me?.role === 'RETAILER';
   const retailPriceQuery = useQuery({
     queryKey: ['retail-prices', 'list', unitId || undefined],
     queryFn: () => listRetailPrices({ unitId: unitId || undefined }),
@@ -195,7 +215,7 @@ export function InventoryPage() {
           aria-label={t('inventory.unit')}
         >
           <option value="">{t('inventory.allUnits')}</option>
-          {warehouses.map((u) => (
+          {(isRetailer ? signedWarehouses : warehouses).map((u) => (
             <option key={u.id} value={u.id}>
               {u.name}
             </option>
@@ -217,6 +237,15 @@ export function InventoryPage() {
           ))}
         </Select>
       </div>
+
+      {isRetailer && (
+        <Text size={200} className="text-neutral-500">
+          {t('inventory.signedWarehouses')}:{' '}
+          {signedWarehouses.length > 0
+            ? signedWarehouses.map((w) => w.name).join('、')
+            : t('inventory.noSignedWarehouses')}
+        </Text>
+      )}
 
       {activeQuery.isLoading ? (
         <Spinner label={t('common.loading')} />

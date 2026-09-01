@@ -9,7 +9,7 @@ import {
 } from '@otunlink/shared';
 import { Hono } from 'hono';
 
-import { requireAnyPermission, requirePermission, unitScopeFilter } from '../auth/middleware';
+import { requireAnyPermission, requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { createMailer } from '../lib/email';
 import { returnDto, returnItemDto } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
@@ -37,6 +37,9 @@ export function returnOrdersRouter(): Hono<AppEnv> {
     Permissions.SHIPMENT_RETURNS_HANDLE,
     Permissions.AFTER_SALE_RECEIVE,
   );
+
+  // 非 ADMIN 必须绑定业务单元才能访问业务数据（ADMIN 空 scope = 全量）。
+  router.use('*', requireUnitScopeAssigned());
 
   router.get('/', read, async (c) => {
     const repos = c.get('repos');

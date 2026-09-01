@@ -9,6 +9,7 @@ const now = new Date('2025-01-01T00:00:00.000Z');
 const COLLECTOR_UNIT = '00000000-0000-4000-8000-000000000001';
 const WAREHOUSE_UNIT = '00000000-0000-4000-8000-000000000002';
 const WAREHOUSE_UNIT_2 = '00000000-0000-4000-8000-000000000003';
+const RETAIL_UNIT = '00000000-0000-4000-8000-000000000004';
 const ITEM_A = '00000000-0000-4000-8000-000000000011';
 const ITEM_B = '00000000-0000-4000-8000-000000000012';
 
@@ -62,9 +63,10 @@ function item(partial: Partial<ItemRecord> & { id: string }): ItemRecord {
   };
 }
 
-const collector = user({ entraSub: 'collector', role: 'COLLECTOR' });
-const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE' });
-const retailer = user({ entraSub: 'retailer', role: 'RETAILER' });
+const collector = user({ entraSub: 'collector', role: 'COLLECTOR', scopeUnitId: COLLECTOR_UNIT });
+const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT });
+const warehouse2 = user({ entraSub: 'warehouse2', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT_2 });
+const retailer = user({ entraSub: 'retailer', role: 'RETAILER', scopeUnitId: RETAIL_UNIT });
 const admin = user({ entraSub: 'admin', role: 'ADMIN' });
 
 const units = [
@@ -104,11 +106,13 @@ async function seedStock(
     unitCost: string;
     batchNo: string;
     expiryDate: string;
+    as?: string;
   },
 ) {
+  const token = opts.as ?? 'warehouse';
   const created = await app.request('/api/v1/inbound-orders', {
     method: 'POST',
-    headers: json('warehouse'),
+    headers: json(token),
     body: JSON.stringify({
       warehouseUnitId: opts.warehouseUnitId,
       counterpartyUnitId: COLLECTOR_UNIT,
@@ -127,7 +131,7 @@ async function seedStock(
   const inboundId = ((await created.json()) as { data: { id: string } }).data.id;
   const posted = await app.request(`/api/v1/inbound-orders/${inboundId}/post`, {
     method: 'POST',
-    headers: json('warehouse'),
+    headers: json(token),
   });
   expect(posted.status).toBe(200);
   const payload = (await posted.json()) as {
@@ -143,7 +147,7 @@ describe('ck-08a 手动出库单', () => {
       role: 'WAREHOUSE',
       scopeUnitId: WAREHOUSE_UNIT_2,
     });
-    const { app } = makeApp({ users: [collector, warehouse, scoped], units, items });
+    const { app } = makeApp({ users: [collector, warehouse, scoped, admin], units, items });
     const valid = {
       warehouseUnitId: WAREHOUSE_UNIT,
       lines: [{ itemId: ITEM_A, qty: '1' }],
@@ -151,7 +155,7 @@ describe('ck-08a 手动出库单', () => {
 
     const badUnit = await app.request('/api/v1/outbound-orders', {
       method: 'POST',
-      headers: json('warehouse'),
+      headers: json('admin'),
       body: JSON.stringify({
         warehouseUnitId: COLLECTOR_UNIT,
         lines: [{ itemId: ITEM_A, qty: '1' }],
@@ -293,7 +297,7 @@ describe('ck-08a 手动出库单', () => {
   });
 
   it('指定批次无库存/跨仓库批次 → 409 STOCK_BATCH_NOT_FOUND；二次过账 → 409 OUTBOUND_STATE_CONFLICT', async () => {
-    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const { app } = makeApp({ users: [collector, warehouse, warehouse2], units, items });
     const { batchId } = await seedStock(app, {
       warehouseUnitId: WAREHOUSE_UNIT_2,
       itemId: ITEM_A,
@@ -301,6 +305,7 @@ describe('ck-08a 手动出库单', () => {
       unitCost: '1.00',
       batchNo: 'B-OTHER',
       expiryDate: '2025-12-31',
+      as: 'warehouse2',
     });
 
     const created = await app.request('/api/v1/outbound-orders', {
@@ -322,7 +327,7 @@ describe('ck-08a 手动出库单', () => {
     // 先正常过账一个，再二次过账 → 状态冲突。
     const ok = await app.request('/api/v1/outbound-orders', {
       method: 'POST',
-      headers: json('warehouse'),
+      headers: json('warehouse2'),
       body: JSON.stringify({
         warehouseUnitId: WAREHOUSE_UNIT_2,
         lines: [{ itemId: ITEM_A, qty: '1', batchId }],
@@ -331,12 +336,12 @@ describe('ck-08a 手动出库单', () => {
     const okId = ((await ok.json()) as { data: { id: string } }).data.id;
     const posted = await app.request(`/api/v1/outbound-orders/${okId}/post`, {
       method: 'POST',
-      headers: json('warehouse'),
+      headers: json('warehouse2'),
     });
     expect(posted.status).toBe(200);
     const again = await app.request(`/api/v1/outbound-orders/${okId}/post`, {
       method: 'POST',
-      headers: json('warehouse'),
+      headers: json('warehouse2'),
     });
     expect(again.status).toBe(409);
     expect(await again.json()).toMatchObject({ error: { code: 'OUTBOUND_STATE_CONFLICT' } });

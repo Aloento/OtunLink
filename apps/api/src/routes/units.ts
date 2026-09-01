@@ -1,7 +1,7 @@
 import { Permissions } from '@otunlink/shared';
 import { Hono } from 'hono';
 
-import { requirePermission, unitScopeFilter } from '../auth/middleware';
+import { requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { unitDto } from '../lib/dto';
 import { dbUnavailable, ok } from '../lib/http';
 import type { AppEnv } from '../types';
@@ -11,6 +11,8 @@ export function unitsRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 
   router.use('*', requirePermission(Permissions.UNITS_READ));
+  // 非 ADMIN 必须绑定业务单元才能访问业务数据（ADMIN 空 scope = 全量）。
+  router.use('*', requireUnitScopeAssigned());
 
   router.get('/', async (c) => {
     const repos = c.get('repos');

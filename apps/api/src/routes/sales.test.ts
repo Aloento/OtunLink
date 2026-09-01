@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../index';
 import { createMemoryRepos } from '../repos/memory';
-import type { ItemRecord, TokenClaims, UnitRecord, UserRecord } from '../types';
+import type { ItemRecord, PartnershipRecord, TokenClaims, UnitRecord, UserRecord } from '../types';
 
 const now = new Date('2025-01-01T00:00:00.000Z');
 
@@ -69,7 +69,7 @@ const warehouse = user({ entraSub: 'wh', role: 'WAREHOUSE', scopeUnitId: WAREHOU
 const warehouse2 = user({ entraSub: 'wh2', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT_2 });
 const retailer = user({ entraSub: 'rt', role: 'RETAILER', scopeUnitId: RETAIL_UNIT });
 const retailer2 = user({ entraSub: 'rt2', role: 'RETAILER', scopeUnitId: RETAIL_UNIT_2 });
-const retailerGlobal = user({ entraSub: 'rtg', role: 'RETAILER' });
+const retailerGlobal = user({ entraSub: 'rtg', role: 'RETAILER', scopeUnitId: RETAIL_UNIT });
 
 const units = [
   unit({ id: COLLECTOR_UNIT, type: 'COLLECTOR', name: '上海集货部' }),
@@ -84,8 +84,26 @@ const items = [
   item({ id: ITEM_C, name: '橙子', specUnit: 'PIECE' }),
 ];
 
-function makeApp() {
-  const repos = createMemoryRepos({ users: [warehouse, warehouse2, retailer, retailer2, retailerGlobal], units, items });
+function makeApp(extraPartnerships: PartnershipRecord[] = []) {
+  // 默认：仓库一与零售门店一（rt/rtg 均绑定 RETAIL_UNIT）已签约；仓库二未与任何零售签约。
+  const partnerships: PartnershipRecord[] = [
+    {
+      id: '00000000-0000-4000-8000-0000000000a1',
+      warehouseUnitId: WAREHOUSE_UNIT,
+      warehouseUnitName: null,
+      retailerUnitId: RETAIL_UNIT,
+      retailerUnitName: null,
+      createdBy: null,
+      createdAt: now,
+    },
+    ...extraPartnerships,
+  ];
+  const repos = createMemoryRepos({
+    users: [warehouse, warehouse2, retailer, retailer2, retailerGlobal],
+    units,
+    items,
+    partnerships,
+  });
   const app = createApp({
     verifyToken: async (_env, token): Promise<TokenClaims> => ({ sub: token }),
     getRepos: async () => repos,
@@ -488,6 +506,25 @@ describe('ck-09a 销售单（请货/发货/FEFO 分配）', () => {
 
     const whList = await app.request('/api/v1/sales-orders', { headers: auth('wh') });
     expect(((await whList.json()) as { data: { items: Array<{ id: string }> } }).data.items.map((i) => i.id)).toContain(data.id);
+  });
+
+  it('零售请货：未签约仓库 → 403；已签约仓库可创建', async () => {
+    const { app } = makeApp();
+    await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100');
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT, itemId: ITEM_A, qty: '10', unitCost: '8',
+      batchNo: 'B-1', expiryDate: '2025-03-01',
+    });
+
+    // 零售向未签约的仓库二请货 → 403。
+    const unsigned = await createOrder(app, 'rt', [{ itemId: ITEM_A, qty: '1' }], {
+      sellerUnitId: WAREHOUSE_UNIT_2,
+    });
+    expect(unsigned.status).toBe(403);
+
+    // 零售向已签约的仓库一请货 → 201。
+    const signed = await createOrder(app, 'rt', [{ itemId: ITEM_A, qty: '1' }]);
+    expect(signed.status).toBe(201);
   });
 
   it('零售只读：库存/零售价无成本字段：RETAILER 看不到 avgCost/unitCost', async () => {

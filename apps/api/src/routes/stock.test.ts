@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../index';
 import { createMemoryRepos } from '../repos/memory';
-import type { ItemRecord, TokenClaims, UnitRecord, UserRecord } from '../types';
+import type { ItemRecord, PartnershipRecord, TokenClaims, UnitRecord, UserRecord } from '../types';
 
 const now = new Date('2025-01-01T00:00:00.000Z');
 
 const COLLECTOR_UNIT = '00000000-0000-4000-8000-000000000001';
 const WAREHOUSE_UNIT = '00000000-0000-4000-8000-000000000002';
 const WAREHOUSE_UNIT_2 = '00000000-0000-4000-8000-000000000003';
+const RETAIL_UNIT = '00000000-0000-4000-8000-000000000005';
 const ITEM_A = '00000000-0000-4000-8000-000000000011';
 const ITEM_B = '00000000-0000-4000-8000-000000000012';
 
@@ -62,10 +63,11 @@ function item(partial: Partial<ItemRecord> & { id: string }): ItemRecord {
   };
 }
 
-const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE' });
+const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT });
 const warehouseB2 = user({ entraSub: 'warehouse-b2', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT_2 });
 const collector = user({ entraSub: 'collector', role: 'COLLECTOR' });
 const admin = user({ entraSub: 'admin', role: 'ADMIN' });
+const retailer = user({ entraSub: 'retailer', role: 'RETAILER', scopeUnitId: RETAIL_UNIT });
 
 const units = [
   unit({ id: COLLECTOR_UNIT, type: 'COLLECTOR', name: '上海集货部' }),
@@ -77,7 +79,14 @@ const items = [
   item({ id: ITEM_B, name: '香蕉', specUnit: 'BOX' }),
 ];
 
-function makeApp(seed: { users?: UserRecord[]; units?: UnitRecord[]; items?: ItemRecord[] } = {}) {
+function makeApp(
+  seed: {
+    users?: UserRecord[];
+    units?: UnitRecord[];
+    items?: ItemRecord[];
+    partnerships?: PartnershipRecord[];
+  } = {},
+) {
   const repos = createMemoryRepos(seed);
   const app = createApp({
     verifyToken: async (_env, token): Promise<TokenClaims> => ({ sub: token }),
@@ -278,5 +287,70 @@ describe('ck-08a 库存台账', () => {
 
     const forbiddenRole = await app.request('/api/v1/stock', { headers: auth('collector') });
     expect(forbiddenRole.status).toBe(403);
+  });
+
+  it('RETAILER 查库存仅返回已签约仓库（未签约仓库不可见、显式查询未签约仓库 404）', async () => {
+    const partnership: PartnershipRecord = {
+      id: '00000000-0000-4000-8000-0000000000a1',
+      warehouseUnitId: WAREHOUSE_UNIT,
+      warehouseUnitName: null,
+      retailerUnitId: RETAIL_UNIT,
+      retailerUnitName: null,
+      createdBy: null,
+      createdAt: now,
+    };
+    const { app } = makeApp({
+      users: [warehouse, warehouseB2, retailer],
+      units,
+      items,
+      partnerships: [partnership],
+    });
+    await inboundPost(
+      app,
+      {
+        warehouseUnitId: WAREHOUSE_UNIT,
+        itemId: ITEM_A,
+        qty: '5',
+        unitCost: '2.00',
+        batchNo: 'B-A1',
+        expiryDate: '2025-06-01',
+      },
+      'warehouse',
+    );
+    await inboundPost(
+      app,
+      {
+        warehouseUnitId: WAREHOUSE_UNIT_2,
+        itemId: ITEM_B,
+        qty: '2',
+        unitCost: '3.00',
+        batchNo: 'B-B2',
+        expiryDate: '2025-08-01',
+      },
+      'warehouse-b2',
+    );
+
+    const res = await app.request('/api/v1/stock', { headers: auth('retailer') });
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      data: { total: number; items: Array<{ unitId: string; avgCost?: unknown }> };
+    };
+    // 零售只看到已签约仓库（WAREHOUSE_UNIT）的库存，未签约的 WAREHOUSE_UNIT_2 不可见。
+    expect(payload.data.total).toBe(1);
+    expect(payload.data.items.map((r) => r.unitId)).toEqual([WAREHOUSE_UNIT]);
+    // 零售看不到成本字段。
+    expect(payload.data.items[0].avgCost).toBeUndefined();
+
+    // 显式查询未签约仓库 → 404（避免泄露存在性）。
+    const denied = await app.request(`/api/v1/stock?unitId=${WAREHOUSE_UNIT_2}`, {
+      headers: auth('retailer'),
+    });
+    expect(denied.status).toBe(404);
+
+    // 显式查询已签约仓库 → 正常返回。
+    const signed = await app.request(`/api/v1/stock?unitId=${WAREHOUSE_UNIT}`, {
+      headers: auth('retailer'),
+    });
+    expect(signed.status).toBe(200);
   });
 });

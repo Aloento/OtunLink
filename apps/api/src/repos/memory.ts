@@ -8,6 +8,7 @@ import type {
   CreateInboundManualRepoInput,
   CreateItemInput,
   CreateOutboundRepoInput,
+  CreatePartnershipInput,
   CreateReturnRepoInput,
   CreateReviewInput,
   CreateSalesRepoInput,
@@ -36,6 +37,9 @@ import type {
   OutboundOrderItemRecord,
   OutboundOrderRecord,
   OutboundRepository,
+  PartnershipListQuery,
+  PartnershipRecord,
+  PartnershipRepository,
   PatchSalesInput,
   PaymentRecord,
   Repos,
@@ -86,7 +90,7 @@ import type {
   UserRecord,
   UserRepository,
 } from '../types';
-import { expiryRemainingDays } from '@otunlink/shared';
+import { expiryRemainingDays, type UnitType } from '@otunlink/shared';
 import { mergeInboundLines, qtyEqual, type MergedInboundLine } from './inbound-lines';
 
 // 内存实现：供单元测试/本地无 DB 联调使用；生产必须走 Drizzle（见 repos/sql.ts 注释）。
@@ -170,10 +174,13 @@ class MemoryUnitRepository implements UnitRepository {
     return row ? cloneUnit(row) : null;
   }
 
-  async list(opts: { includeInactive?: boolean; scopeUnitId?: string } = {}): Promise<UnitRecord[]> {
+  async list(
+    opts: { includeInactive?: boolean; scopeUnitId?: string; type?: UnitType } = {},
+  ): Promise<UnitRecord[]> {
     return [...this.rows.values()]
       .filter((row) => (opts.includeInactive ? true : row.isActive))
       .filter((row) => (opts.scopeUnitId ? row.id === opts.scopeUnitId : true))
+      .filter((row) => (opts.type ? row.type === opts.type : true))
       .map(cloneUnit);
   }
 
@@ -2064,7 +2071,13 @@ class MemoryStockRepository implements StockRepository {
   async list(query: StockListQuery): Promise<StockListResult> {
     const rows = [...this.ledger.stock.values()]
       .filter((row) => row.qty > 0)
-      .filter((row) => (query.unitId ? row.unitId === query.unitId : true))
+      .filter((row) =>
+        query.unitId
+          ? row.unitId === query.unitId
+          : query.unitIds
+            ? query.unitIds.includes(row.unitId)
+            : true,
+      )
       .filter((row) => (query.itemId ? row.itemId === query.itemId : true))
       .filter((row) => (query.batchId ? row.batchId === query.batchId : true))
       .sort((a, b) =>
@@ -2083,7 +2096,13 @@ class MemoryStockRepository implements StockRepository {
   async listBatches(query: StockBatchListQuery): Promise<StockBatchRecord[]> {
     const rows = [...this.ledger.stock.values()]
       .filter((row) => row.qty > 0)
-      .filter((row) => (query.unitId ? row.unitId === query.unitId : true))
+      .filter((row) =>
+        query.unitId
+          ? row.unitId === query.unitId
+          : query.unitIds
+            ? query.unitIds.includes(row.unitId)
+            : true,
+      )
       .filter((row) => (query.itemId ? row.itemId === query.itemId : true))
       .sort((a, b) => {
         const ea = this.ledger.batches.get(a.batchId)?.expiryDate ?? '9999-12-31';
@@ -2100,7 +2119,13 @@ class MemoryStockRepository implements StockRepository {
 
   async listMovements(query: StockMovementListQuery): Promise<StockMovementListResult> {
     const filtered = this.ledger.movements
-      .filter((row) => (query.unitId ? row.unitId === query.unitId : true))
+      .filter((row) =>
+        query.unitId
+          ? row.unitId === query.unitId
+          : query.unitIds
+            ? query.unitIds.includes(row.unitId)
+            : true,
+      )
       .filter((row) => (query.itemId ? row.itemId === query.itemId : true))
       .filter((row) => (query.batchId ? row.batchId === query.batchId : true))
       .reverse();
@@ -2171,7 +2196,13 @@ class MemoryRetailPriceRepository implements RetailPriceRepository {
 
   async list(query: RetailPriceListQuery): Promise<RetailPriceRecord[]> {
     const rows = [...this.prices.values()]
-      .filter((row) => (query.unitId ? row.unitId === query.unitId : true))
+      .filter((row) =>
+        query.unitId
+          ? row.unitId === query.unitId
+          : query.unitIds
+            ? query.unitIds.includes(row.unitId)
+            : true,
+      )
       .filter((row) => (query.itemId ? row.itemId === query.itemId : true))
       .sort((a, b) =>
         `${a.unitName ?? ''}|${a.itemName ?? ''}|${a.itemId}`.localeCompare(
@@ -2497,6 +2528,8 @@ class MemorySalesRepository implements SalesRepository {
       .filter((row) =>
         query.unitId ? row.sellerUnitId === query.unitId || row.buyerUnitId === query.unitId : true,
       )
+      .filter((row) => (query.buyerUnitId ? row.buyerUnitId === query.buyerUnitId : true))
+      .filter((row) => (query.sellerUnitIds ? query.sellerUnitIds.includes(row.sellerUnitId) : true))
       .sort(
         (a, b) =>
           b.createdAt.getTime() - a.createdAt.getTime() || a.id.localeCompare(b.id),
@@ -2839,6 +2872,84 @@ class MemorySalesRepository implements SalesRepository {
   }
 }
 
+// ── ck-??：仓库-零售签约（内存实现，与 SQL 实现语义一致）。 ────────────────────
+class MemoryPartnershipRepository implements PartnershipRepository {
+  private rows = new Map<string, PartnershipRecord>();
+
+  constructor(
+    private readonly unitRepo: MemoryUnitRepository,
+    seed: PartnershipRecord[] = [],
+  ) {
+    for (const row of seed) this.rows.set(row.id, { ...row });
+  }
+
+  private async hydrate(row: PartnershipRecord): Promise<PartnershipRecord> {
+    const [warehouse, retailer] = await Promise.all([
+      this.unitRepo.findById(row.warehouseUnitId),
+      this.unitRepo.findById(row.retailerUnitId),
+    ]);
+    return {
+      ...row,
+      warehouseUnitName: warehouse?.name ?? row.warehouseUnitName ?? null,
+      retailerUnitName: retailer?.name ?? row.retailerUnitName ?? null,
+    };
+  }
+
+  async list(query: PartnershipListQuery = {}): Promise<PartnershipRecord[]> {
+    const hydrated: PartnershipRecord[] = [];
+    const rows = [...this.rows.values()].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
+    for (const row of rows) {
+      if (query.warehouseUnitId && row.warehouseUnitId !== query.warehouseUnitId) continue;
+      if (query.retailerUnitId && row.retailerUnitId !== query.retailerUnitId) continue;
+      hydrated.push(await this.hydrate(row));
+    }
+    return hydrated;
+  }
+
+  async listWarehouseIds(retailerUnitId: string): Promise<string[]> {
+    return [...this.rows.values()]
+      .filter((row) => row.retailerUnitId === retailerUnitId)
+      .map((row) => row.warehouseUnitId);
+  }
+
+  async findById(id: string): Promise<PartnershipRecord | null> {
+    const row = this.rows.get(id);
+    return row ? this.hydrate(row) : null;
+  }
+
+  async findByPair(
+    warehouseUnitId: string,
+    retailerUnitId: string,
+  ): Promise<PartnershipRecord | null> {
+    const row = [...this.rows.values()].find(
+      (r) => r.warehouseUnitId === warehouseUnitId && r.retailerUnitId === retailerUnitId,
+    );
+    return row ? this.hydrate(row) : null;
+  }
+
+  async create(input: CreatePartnershipInput): Promise<PartnershipRecord> {
+    const existing = await this.findByPair(input.warehouseUnitId, input.retailerUnitId);
+    if (existing) return existing;
+    const row: PartnershipRecord = {
+      id: uuid(),
+      warehouseUnitId: input.warehouseUnitId,
+      warehouseUnitName: null,
+      retailerUnitId: input.retailerUnitId,
+      retailerUnitName: null,
+      createdBy: input.createdBy,
+      createdAt: new Date(),
+    };
+    this.rows.set(row.id, { ...row });
+    return this.hydrate(row);
+  }
+
+  async delete(id: string): Promise<boolean> {
+    return this.rows.delete(id);
+  }
+}
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -2869,6 +2980,7 @@ export function createMemoryRepos(seed?: {
   salesItems?: SalesOrderItemRecord[];
   salesAllocations?: SalesBatchAllocationRecord[];
   payments?: PaymentRecord[];
+  partnerships?: PartnershipRecord[];
 }): Repos {
   const stockLedger = new MemoryStockLedger();
   const shipmentRepo = new MemoryShipmentRepository({
@@ -2910,6 +3022,7 @@ export function createMemoryRepos(seed?: {
     stock: new MemoryStockRepository(stockLedger, unitRepo, itemRepo),
     retailPrices: retailPriceRepo,
     sales: salesRepo,
+    partnerships: new MemoryPartnershipRepository(unitRepo, seed?.partnerships),
     notifications: new MemoryNotificationRepository(),
     emailLogs: new MemoryEmailLogRepository(),
     auditLogs: new MemoryAuditLogRepository(),

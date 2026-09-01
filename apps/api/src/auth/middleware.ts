@@ -141,6 +141,25 @@ export function unitScopeFilter(auth: AuthState): { unitId: string } | null {
 }
 
 /**
+ * 数据范围赋值校验中间件：非 ADMIN 账号必须已绑定业务单元（scope_unit_id 非空），
+ * 否则 403（「scope 空 = 全量」仅对 ADMIN 成立）；ADMIN 空 scope 放行 = 全量。
+ * 应挂在所有按 scope 过滤的业务路由之前，确保 helper 只见到「ADMIN null」或「非 ADMIN 非空」两种输入。
+ */
+export function requireUnitScopeAssigned(): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const user = c.get('auth').user;
+    if (!user) return notProvisioned(c);
+    if (user.status !== 'ACTIVE') {
+      return forbidden(c, '账号未激活，请联系管理员分配岗位');
+    }
+    if (user.role !== 'ADMIN' && !user.scopeUnitId) {
+      return forbidden(c, '账号未绑定业务单元，无法访问业务数据');
+    }
+    await next();
+  };
+}
+
+/**
  * 数据范围校验中间件：当用户 scope_unit_id 非空时，目标单元必须等于其范围单元。
  * 用于后续业务路由（单据/库存等），本 checkpoint 先落地并被单测覆盖。
  */

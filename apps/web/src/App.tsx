@@ -7,6 +7,7 @@ import { CallbackPage } from './pages/CallbackPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { NotificationsPage } from './pages/NotificationsPage';
+import { PartnershipsPage } from './pages/partnerships/PartnershipsPage';
 import { ItemDetailPage } from './pages/items/ItemDetailPage';
 import { ItemFormPage } from './pages/items/ItemFormPage';
 import { ItemsPage } from './pages/items/ItemsPage';
@@ -176,6 +177,14 @@ export default function App() {
           element={
             <RequirePermission permissions={ROUTES.outbound.permissions}>
               <OutboundDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path={ROUTES.partnerships.path}
+          element={
+            <RequirePermission permissions={ROUTES.partnerships.permissions}>
+              <PartnershipsPage />
             </RequirePermission>
           }
         />

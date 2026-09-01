@@ -1,5 +1,6 @@
 // 认证与 RBAC 常量：岗位、数据范围、权限矩阵（design.md §3.2 + 附录 C）。
 // 放 shared 便于 api / web 共用同一套语义；db 包中的 pgEnum 保持独立（数据库层枚举）。
+// 2026-08-31 评审：RETAILER 为外部商铺买家——不可见发货单/物流、不可管理物品，零售价只读。
 
 export const USER_ROLES = ['ADMIN', 'COLLECTOR', 'WAREHOUSE', 'RETAILER'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
@@ -85,9 +86,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
   ],
   RETAILER: [
     Permissions.ITEMS_READ,
-    Permissions.ITEMS_WRITE,
-    Permissions.SHIPMENTS_READ,
-    Permissions.TRACKINGS_MANAGE,
     Permissions.STOCK_READ,
     Permissions.RETAIL_PRICES_READ,
     Permissions.SALES_REQUEST,

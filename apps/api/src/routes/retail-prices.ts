@@ -1,11 +1,12 @@
-import { Permissions, retailPricePutSchema } from '@otunlink/shared';
+import { Permissions, retailPricePutSchema, type UserRole } from '@otunlink/shared';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 
-import { requirePermission, unitScopeFilter } from '../auth/middleware';
+import { requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { retailPriceDto, retailPriceHistoryDto } from '../lib/dto';
 import { dbUnavailable, forbidden, notFound, ok, validationError } from '../lib/http';
 import { recordAudit } from '../lib/audit';
+import { resolvePartnerWarehouseScope } from '../lib/partnerships';
 import type { AppEnv } from '../types';
 
 // 零售价管理（design.md §4.2 retail_prices）：仓库 × 物品当前价 + 历史。
@@ -17,16 +18,23 @@ export function retailPricesRouter(): Hono<AppEnv> {
   const read = requirePermission(Permissions.RETAIL_PRICES_READ);
   const write = requirePermission(Permissions.RETAIL_PRICES_WRITE);
 
+  // 非 ADMIN 必须绑定业务单元才能访问业务数据（ADMIN 空 scope = 全量）。
+  router.use('*', requireUnitScopeAssigned());
+
   router.get('/', read, async (c) => {
     const repos = c.get('repos');
     if (!repos) return dbUnavailable(c);
 
     const unitId = c.req.query('unitId')?.trim() ?? undefined;
     const itemId = c.req.query('itemId')?.trim() ?? undefined;
-    const scope = unitScopeFilter(c.get('auth'));
+
+    // RETAILER 仅可见已签约仓库；其它角色按 scope 收敛。
+    const scope = await resolvePartnerWarehouseScope(c, repos, unitId);
+    if (scope.denied) return notFound(c, '仓库不存在或未与您的门店签约');
 
     const items = await repos.retailPrices.list({
-      unitId: unitId || scope?.unitId,
+      unitId: scope.unitId,
+      unitIds: scope.unitIds,
       itemId: itemId || undefined,
     });
     const hideCost = c.get('auth').user?.role === 'RETAILER';
@@ -44,7 +52,7 @@ export function retailPricesRouter(): Hono<AppEnv> {
     if (!parsed.success) return validationError(c, '参数不合法', parsed.error.flatten());
     const input = parsed.data;
 
-    if (!scopeAllows(c.get('auth').user?.scopeUnitId ?? null, input.unitId)) {
+    if (!writeScopeAllows(c.get('auth').user?.role ?? null, c.get('auth').user?.scopeUnitId ?? null, input.unitId)) {
       return forbidden(c, '数据范围越界（scope_unit_id 不匹配）');
     }
 
@@ -86,7 +94,12 @@ export function retailPricesRouter(): Hono<AppEnv> {
 
     const unitId = c.req.param('unitId');
     const itemId = c.req.param('itemId');
-    if (!scopeAllows(c.get('auth').user?.scopeUnitId ?? null, unitId)) {
+    const user = c.get('auth').user!;
+    if (user.role === 'RETAILER') {
+      // RETAILER 仅可见已签约仓库的改价历史（design.md §3.2.1）。
+      const partnerIds = await resolvePartnerWarehouseScope(c, repos, unitId);
+      if (partnerIds.denied) return notFound(c, '仓库不存在或未与您的门店签约');
+    } else if (!readScopeAllows(user.role ?? null, user.scopeUnitId ?? null, unitId)) {
       return forbidden(c, '数据范围越界（scope_unit_id 不匹配）');
     }
 
@@ -97,8 +110,16 @@ export function retailPricesRouter(): Hono<AppEnv> {
   return router;
 }
 
-function scopeAllows(scope: string | null, unitId: string): boolean {
-  return !scope || scope === unitId;
+// 写路径（改价）：ADMIN 全量；WAREHOUSE 仅本仓（空 scope 拒绝）。
+function writeScopeAllows(role: UserRole | null, scope: string | null, unitId: string): boolean {
+  if (role === 'ADMIN') return true;
+  return !!scope && scope === unitId;
+}
+
+// 读路径（列表/历史）：ADMIN/RETAILER 全量（仓库维度）；WAREHOUSE 仅本仓（空 scope 拒绝）。
+function readScopeAllows(role: UserRole | null, scope: string | null, unitId: string): boolean {
+  if (role === 'ADMIN' || role === 'RETAILER') return true;
+  return !!scope && scope === unitId;
 }
 
 async function readJson(c: Context<AppEnv>): Promise<unknown | undefined> {

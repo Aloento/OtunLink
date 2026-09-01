@@ -11,7 +11,7 @@ describe('canAccessPermissions', () => {
 
   it('uses OR semantics: any single matching permission grants access', () => {
     expect(canAccessPermissions('COLLECTOR', [Permissions.SHIPMENTS_READ])).toBe(true);
-    expect(canAccessPermissions('RETAILER', [Permissions.SHIPMENTS_READ])).toBe(true);
+    expect(canAccessPermissions('RETAILER', [Permissions.SHIPMENTS_READ])).toBe(false);
     expect(
       canAccessPermissions('RETAILER', [Permissions.INBOUND_CONFIRM, Permissions.SALES_REQUEST]),
     ).toBe(true);

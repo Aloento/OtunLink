@@ -9,6 +9,7 @@ const now = new Date('2025-01-01T00:00:00.000Z');
 const COLLECTOR_UNIT = '00000000-0000-4000-8000-000000000001';
 const WAREHOUSE_UNIT = '00000000-0000-4000-8000-000000000002';
 const WAREHOUSE_UNIT_2 = '00000000-0000-4000-8000-000000000003';
+const RETAIL_UNIT = '00000000-0000-4000-8000-000000000004';
 const ITEM_A = '00000000-0000-4000-8000-000000000011';
 const PHOTO_1 = '00000000-0000-4000-8000-000000000099';
 
@@ -62,9 +63,9 @@ function item(partial: Partial<ItemRecord> & { id: string }): ItemRecord {
   };
 }
 
-const collector = user({ entraSub: 'collector', role: 'COLLECTOR' });
-const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE' });
-const retailer = user({ entraSub: 'retailer', role: 'RETAILER' });
+const collector = user({ entraSub: 'collector', role: 'COLLECTOR', scopeUnitId: COLLECTOR_UNIT });
+const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT });
+const retailer = user({ entraSub: 'retailer', role: 'RETAILER', scopeUnitId: RETAIL_UNIT });
 
 const units = [
   unit({ id: COLLECTOR_UNIT, type: 'COLLECTOR', name: '上海集货部' }),

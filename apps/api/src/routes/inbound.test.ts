@@ -66,8 +66,9 @@ function item(partial: Partial<ItemRecord> & { id: string }): ItemRecord {
   };
 }
 
-const collector = user({ entraSub: 'collector', role: 'COLLECTOR' });
-const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE' });
+const collector = user({ entraSub: 'collector', role: 'COLLECTOR', scopeUnitId: COLLECTOR_UNIT });
+const warehouse = user({ entraSub: 'warehouse', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT });
+const admin = user({ entraSub: 'admin', role: 'ADMIN' });
 
 const units = [
   unit({ id: COLLECTOR_UNIT, type: 'COLLECTOR', name: '上海集货部' }),
@@ -396,11 +397,11 @@ describe('ck-08a 手动入库单', () => {
   });
 
   it('手动入库校验：非仓库目标 → 400；物品不存在 → 400；非法 JSON → 400', async () => {
-    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const { app } = makeApp({ users: [collector, warehouse, admin], units, items });
 
     const badUnit = await app.request('/api/v1/inbound-orders', {
       method: 'POST',
-      headers: json('warehouse'),
+      headers: json('admin'),
       body: JSON.stringify({
         warehouseUnitId: COLLECTOR_UNIT,
         lines: [{ itemId: ITEM_A, qty: '1', unitCost: '1.00' }],

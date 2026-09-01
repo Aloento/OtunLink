@@ -11,7 +11,7 @@ import {
 } from '@otunlink/shared';
 import { Hono } from 'hono';
 
-import { requireAnyPermission, requirePermission, unitScopeFilter } from '../auth/middleware';
+import { requireAnyPermission, requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { createMailer } from '../lib/email';
 import {
   returnDto,
@@ -24,6 +24,7 @@ import {
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
 import { recordAudit } from '../lib/audit';
 import { notify } from '../lib/notify';
+import { loadPartnerWarehouseIds } from '../lib/partnerships';
 import type { AppEnv, ReturnOrderRecord, SalesOrderRecord, Repos } from '../types';
 
 // 销售单（design.md §4.2/§5.5）：DRAFT → SENT（FEFO/手工分配）→ PAYMENT_UPLOADED → CONFIRMED；
@@ -32,6 +33,9 @@ export function salesOrdersRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
   const view = requireAnyPermission(Permissions.SALES_REQUEST, Permissions.SALES_SEND);
   const createPermission = requirePermission(Permissions.SALES_CREATE);
+
+  // 非 ADMIN 必须绑定业务单元才能访问业务数据（ADMIN 空 scope = 全量）。
+  router.use('*', requireUnitScopeAssigned());
 
   router.get('/', view, async (c) => {
     const repos = c.get('repos');
@@ -44,8 +48,19 @@ export function salesOrdersRouter(): Hono<AppEnv> {
     const page = parsePositiveInt(c.req.query('page'), 1);
     const size = parsePositiveInt(c.req.query('size'), 20, 50);
     const scope = unitScopeFilter(c.get('auth'));
+    const user = c.get('auth').user!;
 
-    const result = await repos.sales.list({ page, size, status, unitId: scope?.unitId });
+    // RETAILER 仅可见「自身为买方且卖方 ∈ 已签约仓库」的订单；其它角色按 scope 收敛。
+    const result =
+      user.role === 'RETAILER'
+        ? await repos.sales.list({
+            page,
+            size,
+            status,
+            buyerUnitId: user.scopeUnitId!,
+            sellerUnitIds: await loadPartnerWarehouseIds(repos, user.scopeUnitId!),
+          })
+        : await repos.sales.list({ page, size, status, unitId: scope?.unitId });
     const items = await hydrateList(repos, result.items);
     return ok(c, { ...result, items });
   });
@@ -79,6 +94,14 @@ export function salesOrdersRouter(): Hono<AppEnv> {
       }
       if (user.role === 'RETAILER' && input.buyerUnitId !== scope) {
         return forbidden(c, '数据范围越界（scope_unit_id 不匹配）');
+      }
+    }
+
+    // RETAILER 请货：卖方仓库必须 ∈ 已签约仓库（design.md §3.2.1）。
+    if (user.role === 'RETAILER') {
+      const partnerIds = await loadPartnerWarehouseIds(repos, scope!);
+      if (!partnerIds.includes(input.sellerUnitId)) {
+        return forbidden(c, '未与该仓库签约，无法请货');
       }
     }
 

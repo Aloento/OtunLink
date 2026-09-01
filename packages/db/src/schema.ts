@@ -658,6 +658,28 @@ export const retailPriceHistory = pgTable(
   (table) => [index('retail_price_history_unit_item_idx').on(table.unitId, table.itemId)],
 );
 
+// ── 仓库-零售签约 retail_partnerships（design.md §4.2）────────────────────────
+// 签约只能由仓库主动发起（把零售加入「可售客户」）；解约即删除行，无状态字段。
+
+export const retailPartnerships = pgTable(
+  'retail_partnerships',
+  {
+    id: pk(),
+    warehouseUnitId: uuid('warehouse_unit_id')
+      .notNull()
+      .references(() => businessUnits.id, { onDelete: 'cascade' }),
+    retailerUnitId: uuid('retailer_unit_id')
+      .notNull()
+      .references(() => businessUnits.id, { onDelete: 'cascade' }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('retail_partnerships_pair_unique').on(table.warehouseUnitId, table.retailerUnitId),
+    index('retail_partnerships_retailer_idx').on(table.retailerUnitId),
+  ],
+);
+
 // ── 通知 notifications ────────────────────────────────────────────────────────
 
 export const notifications = pgTable(
@@ -751,6 +773,7 @@ export const schema = {
   stockMovements,
   retailPrices,
   retailPriceHistory,
+  retailPartnerships,
   notifications,
   auditLogs,
   emailLogs,

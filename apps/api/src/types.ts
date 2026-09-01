@@ -235,7 +235,7 @@ export interface UserRepository {
 
 export interface UnitRepository {
   findById(id: string): Promise<UnitRecord | null>;
-  list(opts?: { includeInactive?: boolean; scopeUnitId?: string }): Promise<UnitRecord[]>;
+  list(opts?: { includeInactive?: boolean; scopeUnitId?: string; type?: UnitType }): Promise<UnitRecord[]>;
   create(input: CreateUnitInput): Promise<UnitRecord>;
   update(id: string, patch: UpdateUnitInput): Promise<UnitRecord | null>;
 }
@@ -814,6 +814,8 @@ export interface StockListQuery {
   page?: number;
   size?: number;
   unitId?: string;
+  /** 多仓库过滤（零售按已签约仓库集合查询；与 unitId 互斥，unitId 优先）。 */
+  unitIds?: string[];
   itemId?: string;
   batchId?: string;
 }
@@ -829,6 +831,8 @@ export interface StockMovementListQuery {
   page?: number;
   size?: number;
   unitId?: string;
+  /** 多仓库过滤（零售按已签约仓库集合查询；与 unitId 互斥，unitId 优先）。 */
+  unitIds?: string[];
   itemId?: string;
   batchId?: string;
 }
@@ -850,6 +854,8 @@ export interface StockBatchRecord extends StockRowRecord {
 
 export interface StockBatchListQuery {
   unitId?: string;
+  /** 多仓库过滤（零售按已签约仓库集合查询；与 unitId 互斥，unitId 优先）。 */
+  unitIds?: string[];
   itemId?: string;
 }
 
@@ -895,6 +901,8 @@ export interface RetailPriceHistoryRecord {
 
 export interface RetailPriceListQuery {
   unitId?: string;
+  /** 多仓库过滤（零售按已签约仓库集合查询；与 unitId 互斥，unitId 优先）。 */
+  unitIds?: string[];
   itemId?: string;
 }
 
@@ -978,6 +986,10 @@ export interface SalesListQuery {
   status?: SalesStatus;
   /** 数据范围：买方或卖方单元（任一方匹配）。 */
   unitId?: string;
+  /** 零售查询：仅买方 = 自身且卖方 ∈ 已签约仓库集合。 */
+  buyerUnitId?: string;
+  /** 卖方仓库集合过滤（零售按已签约仓库查询）。 */
+  sellerUnitIds?: string[];
 }
 
 export interface SalesListResult {
@@ -1190,6 +1202,43 @@ export interface AuditLogRepository {
   list(query?: AuditLogListQuery): Promise<AuditLogListResult>;
 }
 
+/** 仓库-零售签约行（retail_partnerships JOIN business_units，design.md §4.2）。 */
+export interface PartnershipRecord {
+  id: string;
+  warehouseUnitId: string;
+  warehouseUnitName: string | null;
+  retailerUnitId: string;
+  retailerUnitName: string | null;
+  createdBy: string | null;
+  createdAt: Date;
+}
+
+export interface PartnershipListQuery {
+  /** 按仓库过滤（WAREHOUSE 查看自己归属仓库的客户列表）。 */
+  warehouseUnitId?: string;
+  /** 按零售过滤（RETAILER 查看已签约仓库列表）。 */
+  retailerUnitId?: string;
+}
+
+export interface CreatePartnershipInput {
+  warehouseUnitId: string;
+  retailerUnitId: string;
+  createdBy: string;
+}
+
+/** 仓库-零售签约仓储：签约只有「存在/不存在」，零售无需同意，无状态字段。 */
+export interface PartnershipRepository {
+  list(query?: PartnershipListQuery): Promise<PartnershipRecord[]>;
+  /** 某零售门店已签约的仓库 unit id 集合（业务过滤辅助）。 */
+  listWarehouseIds(retailerUnitId: string): Promise<string[]>;
+  findById(id: string): Promise<PartnershipRecord | null>;
+  findByPair(warehouseUnitId: string, retailerUnitId: string): Promise<PartnershipRecord | null>;
+  /** 幂等创建：已存在时返回现有记录。 */
+  create(input: CreatePartnershipInput): Promise<PartnershipRecord>;
+  /** 删除指定 id 的签约；返回是否实际删除。 */
+  delete(id: string): Promise<boolean>;
+}
+
 export interface Repos {
   users: UserRepository;
   units: UnitRepository;
@@ -1202,6 +1251,7 @@ export interface Repos {
   stock: StockRepository;
   retailPrices: RetailPriceRepository;
   sales: SalesRepository;
+  partnerships: PartnershipRepository;
   notifications: NotificationRepository;
   emailLogs: EmailLogRepository;
   auditLogs: AuditLogRepository;

@@ -1,7 +1,7 @@
 import { ErrorCodes, Permissions, inboundManualCreateSchema, type InboundStatus } from '@otunlink/shared';
 import { Hono } from 'hono';
 
-import { requirePermission, unitScopeFilter } from '../auth/middleware';
+import { requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { inboundDto, inboundItemDto } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
 import { recordAudit } from '../lib/audit';
@@ -14,6 +14,9 @@ export function inboundOrdersRouter(): Hono<AppEnv> {
 
   const read = requirePermission(Permissions.STOCK_READ);
   const post = requirePermission(Permissions.INBOUND_CONFIRM);
+
+  // 非 ADMIN 必须绑定业务单元才能访问业务数据（ADMIN 空 scope = 全量）。
+  router.use('*', requireUnitScopeAssigned());
 
   router.get('/', read, async (c) => {
     const repos = c.get('repos');

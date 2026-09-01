@@ -36,6 +36,15 @@ describe('RBAC role → permission matrix', () => {
     expect(hasPermission('RETAILER', Permissions.REVIEWS_SUBMIT)).toBe(false);
   });
 
+  it('matches matrix: RETAILER 可浏览物品、查库存/零售价，但不可写物品、见发货单、管物流', () => {
+    expect(hasPermission('RETAILER', Permissions.ITEMS_READ)).toBe(true);
+    expect(hasPermission('RETAILER', Permissions.STOCK_READ)).toBe(true);
+    expect(hasPermission('RETAILER', Permissions.RETAIL_PRICES_READ)).toBe(true);
+    expect(hasPermission('RETAILER', Permissions.ITEMS_WRITE)).toBe(false);
+    expect(hasPermission('RETAILER', Permissions.SHIPMENTS_READ)).toBe(false);
+    expect(hasPermission('RETAILER', Permissions.TRACKINGS_MANAGE)).toBe(false);
+  });
+
   it('matches matrix: 发起售后退货 仅 RETAILER 与 ADMIN', () => {
     expect(hasPermission('RETAILER', Permissions.AFTER_SALE_CREATE)).toBe(true);
     expect(hasPermission('WAREHOUSE', Permissions.AFTER_SALE_CREATE)).toBe(false);
