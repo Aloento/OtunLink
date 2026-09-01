@@ -17,11 +17,11 @@ jobs:
     name: Deploy Web (Pages)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -41,11 +41,11 @@ jobs:
     name: Deploy API (Workers)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -58,7 +58,7 @@ jobs:
       #    wrangler.toml [vars]；GitHub 仓库需配置以下 secrets：SMTP_USER / SMTP_PASS。
       #    未配置时跳过，API 降级为仅站内通知。
       - name: Set SMTP_USER secret
-        if: ${{ secrets.SMTP_USER != '' }}
+        if: ${{ env.SMTP_USER != '' }}
         run: echo "$SMTP_USER" | npx wrangler secret put SMTP_USER
         working-directory: apps/api
         env:
@@ -67,7 +67,7 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
 
       - name: Set SMTP_PASS secret
-        if: ${{ secrets.SMTP_PASS != '' }}
+        if: ${{ env.SMTP_PASS != '' }}
         run: echo "$SMTP_PASS" | npx wrangler secret put SMTP_PASS
         working-directory: apps/api
         env:
@@ -78,7 +78,7 @@ jobs:
       # ── 图片存储（华为云 OBS S3）：写入 Worker secrets（GitHub 仓库需配置
       #    S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY；endpoint/region/bucket 在 [vars]）。
       - name: Set S3_ACCESS_KEY_ID secret
-        if: ${{ secrets.S3_ACCESS_KEY_ID != '' }}
+        if: ${{ env.S3_ACCESS_KEY_ID != '' }}
         run: echo "$S3_ACCESS_KEY_ID" | npx wrangler secret put S3_ACCESS_KEY_ID
         working-directory: apps/api
         env:
@@ -87,7 +87,7 @@ jobs:
           S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
 
       - name: Set S3_SECRET_ACCESS_KEY secret
-        if: ${{ secrets.S3_SECRET_ACCESS_KEY != '' }}
+        if: ${{ env.S3_SECRET_ACCESS_KEY != '' }}
         run: echo "$S3_SECRET_ACCESS_KEY" | npx wrangler secret put S3_SECRET_ACCESS_KEY
         working-directory: apps/api
         env:
