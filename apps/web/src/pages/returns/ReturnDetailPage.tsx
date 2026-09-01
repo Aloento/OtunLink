@@ -344,6 +344,7 @@ function ReceivePanel({
     setError(null);
     try {
       await receiveSalesReturn(returnId, { items: lines });
+      setSaving(false);
       onReceived();
     } catch (cause) {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));

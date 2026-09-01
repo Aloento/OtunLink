@@ -426,6 +426,7 @@ function SalesReturnForm({
       setLines(Object.fromEntries(order.items.map((item) => [item.id, { qty: '', reason: '' }])));
       setReason('');
       setPhotos([]);
+      setSaving(false);
       onCreated();
     } catch (cause) {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));

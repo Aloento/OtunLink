@@ -2227,10 +2227,11 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
 
         // 按销售行分配记录确定原批次（按分配顺序依次回补，量不足则转待检批次）。
         const { rows: allocRows } = await exec.query(
-          `SELECT DISTINCT a.order_item_id, a.batch_id, a.qty
+          `SELECT a.order_item_id, a.batch_id, a.qty
            FROM sales_batch_allocations a
            JOIN sales_order_items oi ON oi.id = a.order_item_id
            WHERE oi.sales_order_id = ${quote(salesOrder.id)}
+           GROUP BY a.order_item_id, a.batch_id, a.qty, a.created_at, a.id
            ORDER BY a.order_item_id ASC, a.created_at ASC, a.id ASC`,
         );
         const allocByItem = new Map<string, { batchId: string; qty: number }[]>();
