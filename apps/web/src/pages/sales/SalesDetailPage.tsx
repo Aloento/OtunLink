@@ -7,7 +7,7 @@ import {
   Title1,
 } from '@fluentui/react-components';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -21,12 +21,13 @@ import {
   type SalesOrderItemDto,
 } from '@otunlink/shared';
 
-import { errorI18nKey, isApiError } from '../../api/http';
+import { errorI18nKey, extractSalesLineErrors, isApiError, type ExtractedSalesLineError } from '../../api/http';
 import { listItems } from '../../api/items';
 import { createSalesReturn, listReturns } from '../../api/returns';
 import { cancelSalesOrder, confirmSaleReceipt, deleteSalesOrder, getSalesOrder, sendSalesOrder, uploadSalePayment } from '../../api/sales';
 import { listStockBatches } from '../../api/stock';
 import { useSession } from '../../auth/SessionProvider';
+import { FileImage } from '../../components/FileImage';
 import { ImageUpload } from '../../components/ImageUpload';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
@@ -90,12 +91,15 @@ export function SalesDetailPage() {
   if (isLoading) return <Spinner label={t('common.loading')} />;
   if (isError || !order) return <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>;
 
-  const isWarehouse = me?.role === 'WAREHOUSE';
-  const isRetailer = me?.role === 'RETAILER';
-  const canSend = isWarehouse && order.status === 'DRAFT';
-  const canCancel = isWarehouse && (order.status === 'SENT' || order.status === 'PAYMENT_UPLOADED');
-  const canPay = isRetailer && (order.status === 'SENT' || order.status === 'PAYMENT_UPLOADED');
-  const canConfirm = isRetailer && order.status === 'PAYMENT_UPLOADED';
+  const canSend = hasPermission(me?.role, Permissions.SALES_SEND) && order.status === 'DRAFT';
+  const canCancel =
+    hasPermission(me?.role, Permissions.SALES_CANCEL) &&
+    (order.status === 'SENT' || order.status === 'PAYMENT_UPLOADED');
+  const canPay =
+    hasPermission(me?.role, Permissions.SALES_PAYMENT) &&
+    (order.status === 'SENT' || order.status === 'PAYMENT_UPLOADED');
+  const canConfirm =
+    hasPermission(me?.role, Permissions.SALES_CONFIRM_RECEIPT) && order.status === 'PAYMENT_UPLOADED';
 
   const itemColumns: ResponsiveTableColumn<SalesOrderItemDto>[] = [
     { key: 'itemName', header: t('sales.itemName'), render: (l) => l.itemName ?? l.itemId },
@@ -302,6 +306,16 @@ export function SalesDetailPage() {
                 {order.payment.refundNote}
               </div>
             )}
+            {order.payment.proofFileId && (
+              <div className="mt-2 flex items-center gap-3">
+                <span className="text-neutral-500">{t('sales.paymentProofImage')}：</span>
+                <FileImage
+                  fileId={order.payment.proofFileId}
+                  className="h-24 w-24 rounded object-cover"
+                  alt={t('sales.paymentProofImage')}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -473,10 +487,9 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [manual, setManual] = useState<Record<string, string>>({});
-  const [carrier, setCarrier] = useState('');
-  const [trackingNo, setTrackingNo] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lineErrors, setLineErrors] = useState<ExtractedSalesLineError[] | null>(null);
 
   const { data: batches, isLoading } = useQuery({
     queryKey: ['stock', 'batches', order.sellerUnitId],
@@ -537,16 +550,18 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
     }
     setSending(true);
     setError(null);
+    setLineErrors(null);
     try {
-      await sendSalesOrder(order.id, {
-        allocations,
-        carrier: carrier.trim() || null,
-        trackingNo: trackingNo.trim() || null,
-      });
+      await sendSalesOrder(order.id, { allocations });
       await queryClient.invalidateQueries({ queryKey: ['sales-orders', order.id] });
       onSent();
     } catch (cause) {
-      setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
+      const lines = extractSalesLineErrors(cause);
+      if (lines) {
+        setLineErrors(lines);
+      } else {
+        setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
+      }
       setSending(false);
     }
   };
@@ -559,22 +574,6 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
       <Text size={200} className="text-neutral-500">
         {t('sales.fefoHint')}
       </Text>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <Field label={t('sales.carrier')}>
-          <Input
-            value={carrier}
-            onChange={(_, d) => setCarrier(d.value)}
-            placeholder={t('sales.carrierPlaceholder')}
-          />
-        </Field>
-        <Field label={t('sales.trackingNo')}>
-          <Input
-            value={trackingNo}
-            onChange={(_, d) => setTrackingNo(d.value)}
-            placeholder={t('sales.trackingNoPlaceholder')}
-          />
-        </Field>
-      </div>
       {isLoading ? (
         <Spinner size="tiny" label={t('common.loading')} />
       ) : (
@@ -623,6 +622,15 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
         })
       )}
       {error && <Text className="text-red-600">{error}</Text>}
+      {lineErrors && lineErrors.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {lineErrors.map((e, i) => (
+            <div key={`${e.index}-${i}`} className="text-red-600">
+              {e.message}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <Button appearance="primary" disabled={sending} onClick={() => void send()}>
           {sending ? <Spinner size="tiny" /> : t('sales.send')}
@@ -646,6 +654,14 @@ function PaymentPanel({ order, onUploaded }: { order: SalesOrderDetailDto; onUpl
   const [proofs, setProofs] = useState<FileDto[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [justUploaded, setJustUploaded] = useState(false);
+  const justUploadedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (justUploadedTimer.current) clearTimeout(justUploadedTimer.current);
+    };
+  }, []);
 
   const upload = async () => {
     setSaving(true);
@@ -656,9 +672,13 @@ function PaymentPanel({ order, onUploaded }: { order: SalesOrderDetailDto; onUpl
         methodNote: methodNote.trim() || null,
         proofFileId: proofs[0]?.id ?? null,
       });
+      setJustUploaded(true);
+      if (justUploadedTimer.current) clearTimeout(justUploadedTimer.current);
+      justUploadedTimer.current = setTimeout(() => setJustUploaded(false), 5000);
       onUploaded();
     } catch (cause) {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
+    } finally {
       setSaving(false);
     }
   };
@@ -680,6 +700,9 @@ function PaymentPanel({ order, onUploaded }: { order: SalesOrderDetailDto; onUpl
         </Field>
       </div>
       {error && <Text className="text-red-600">{error}</Text>}
+      {justUploaded && (
+        <Text className="text-green-700">{t('sales.paymentUploadedHint')}</Text>
+      )}
       <div className="flex items-center gap-2">
         <Button appearance="primary" disabled={saving} onClick={() => void upload()}>
           {saving ? <Spinner size="tiny" /> : t('sales.uploadPayment')}

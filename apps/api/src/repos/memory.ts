@@ -507,6 +507,20 @@ const SALES_STATE_CONFLICT_MESSAGE =
   'SALES_STATE_CONFLICT: sales order is not in the expected state';
 const SALES_LINE_INVALID_MESSAGE = 'SALES_LINE_INVALID: sales order line is invalid';
 
+type SalesLineIssueReason = 'NO_LIST_PRICE' | 'NO_BATCH_STOCK' | 'QTY_EXCEEDS_STOCK';
+interface SalesLineIssue {
+  index: number;
+  itemId: string;
+  itemName: string | null;
+  reason: SalesLineIssueReason;
+  message: string;
+}
+function errorWithLineDetails(message: string, issues: SalesLineIssue[]): Error {
+  const err = new Error(message);
+  (err as { details?: unknown }).details = { lines: issues };
+  return err;
+}
+
 /** 单据编号 ：SH-YYYYMMDD-XXXX（UTC 日期 + 4 位当日序号）。 */
 function shipmentNoDate(now: Date): string {
   return now.toISOString().slice(0, 10).replace(/-/g, '');
@@ -2702,12 +2716,12 @@ class MemorySalesRepository implements SalesRepository {
     return `SO-${key}-${String(next).padStart(4, '0')}`;
   }
 
-  /** 价格快照：override ?? 当前零售价；二者皆无抛 SALES_LINE_INVALID。 */
+  /** 价格快照：override ?? 当前零售价；二者皆无则行价/小计置 null（发送时校验）。 */
   private async snapshotLines(
     sellerUnitId: string,
     lines: CreateSalesRepoInput['items'],
-  ): Promise<{ itemId: string; qty: string; listPrice: string; price: string; lineTotal: string }[]> {
-    const result: { itemId: string; qty: string; listPrice: string; price: string; lineTotal: string }[] = [];
+  ): Promise<{ itemId: string; qty: string; listPrice: string | null; price: string | null; lineTotal: string | null }[]> {
+    const result: { itemId: string; qty: string; listPrice: string | null; price: string | null; lineTotal: string | null }[] = [];
     for (const line of lines) {
       const override = line.unitPriceOverride ? String(line.unitPriceOverride) : null;
       let price = override;
@@ -2715,19 +2729,19 @@ class MemorySalesRepository implements SalesRepository {
         const rows = await this.retailRepo.list({ unitId: sellerUnitId, itemId: line.itemId });
         price = rows[0]?.price ?? null;
       }
-      if (price === null || price === '') throw new Error(SALES_LINE_INVALID_MESSAGE);
+      const listPrice = price === '' ? null : price;
       result.push({
         itemId: line.itemId,
         qty: line.qty,
-        listPrice: price,
-        price,
-        lineTotal: round2(Number(line.qty) * Number(price)).toFixed(2),
+        listPrice,
+        price: listPrice,
+        lineTotal: listPrice === null ? null : round2(Number(line.qty) * Number(listPrice)).toFixed(2),
       });
     }
     return result;
   }
 
-  private calcTotal(lines: { lineTotal: string }[], discountPercent: string, freight: string): string {
+  private calcTotal(lines: { lineTotal: string | null }[], discountPercent: string, freight: string): string {
     const subtotal = lines.reduce((sum, l) => sum + Number(l.lineTotal ?? 0), 0);
     return round2(subtotal * (1 - Number(discountPercent) / 100) + Number(freight)).toFixed(2);
   }
@@ -2804,6 +2818,8 @@ class MemorySalesRepository implements SalesRepository {
       source: input.source,
       deliveryMethod: input.deliveryMethod,
       deliveryAddress: normalizeEmpty(input.deliveryAddress),
+      carrier: normalizeEmpty(input.carrier),
+      trackingNo: normalizeEmpty(input.trackingNo),
       freight: input.freight,
       discountPercent: input.discountPercent,
       currency: input.currency,
@@ -2841,7 +2857,7 @@ class MemorySalesRepository implements SalesRepository {
     if (existing.status !== 'DRAFT') throw new Error(SALES_STATE_CONFLICT_MESSAGE);
 
     const now = new Date();
-    let lines: { lineTotal: string; itemId: string; qty: string; listPrice: string; price: string }[] | null = null;
+    let lines: { lineTotal: string | null; itemId: string; qty: string; listPrice: string | null; price: string | null }[] | null = null;
     if (input.items) {
       lines = await this.snapshotLines(existing.sellerUnitId, input.items);
       this.items.set(
@@ -2869,6 +2885,9 @@ class MemorySalesRepository implements SalesRepository {
       deliveryMethod: input.deliveryMethod ?? existing.deliveryMethod,
       deliveryAddress:
         input.deliveryAddress !== undefined ? normalizeEmpty(input.deliveryAddress) : existing.deliveryAddress,
+      carrier: input.carrier !== undefined ? normalizeEmpty(input.carrier) : existing.carrier,
+      trackingNo:
+        input.trackingNo !== undefined ? normalizeEmpty(input.trackingNo) : existing.trackingNo,
       freight,
       discountPercent,
       currency: input.currency ?? existing.currency,
@@ -2890,14 +2909,55 @@ class MemorySalesRepository implements SalesRepository {
     if (!existing) return null;
     if (existing.status !== 'DRAFT') throw new Error(SALES_STATE_CONFLICT_MESSAGE);
 
-    const lines = this.items.get(id) ?? [];
+    const rows = this.items.get(id) ?? [];
+    const lines = await Promise.all(
+      rows.map(async (line, index) => {
+        const item = line.itemName ? null : await this.itemRepo.findById(line.itemId);
+        return {
+          index: index + 1,
+          orderItemId: line.id,
+          itemId: line.itemId,
+          qty: Number(line.qty),
+          listPrice: line.listPrice,
+          price: line.price,
+          itemName: line.itemName ?? item?.name ?? null,
+        };
+      }),
+    );
     const lineByItem = new Map<string, { orderItemId: string; qty: number }>();
     for (const line of lines) {
-      lineByItem.set(line.itemId, { orderItemId: line.id, qty: Number(line.qty) });
+      lineByItem.set(line.itemId, { orderItemId: line.orderItemId, qty: line.qty });
     }
+
+    // 发送时逐行校验价格：无零售价且无行级改价 → 400（带行级明细）。
+    const noPriceLines = lines.filter((l) => l.price === null || l.price === '');
+    if (noPriceLines.length > 0) {
+      throw errorWithLineDetails(
+        SALES_LINE_INVALID_MESSAGE,
+        noPriceLines.map((l) => ({
+          index: l.index,
+          itemId: l.itemId,
+          itemName: l.itemName,
+          reason: 'NO_LIST_PRICE' as const,
+          message: `第${l.index}行（${l.itemName ?? '未知物品'}）：未设置零售价且未填写行级改价，无法发送`,
+        })),
+      );
+    }
+
+    const lineInfoOf = (itemId: string) => lines.find((l) => l.itemId === itemId) ?? null;
     const manualByItem = new Map<string, { batchId: string; qty: number }[]>();
     for (const allocLine of allocations) {
-      if (!lineByItem.has(allocLine.itemId)) throw new Error(SALES_LINE_INVALID_MESSAGE);
+      if (!lineByItem.has(allocLine.itemId)) {
+        throw errorWithLineDetails(SALES_LINE_INVALID_MESSAGE, [
+          {
+            index: 0,
+            itemId: allocLine.itemId,
+            itemName: null,
+            reason: 'NO_BATCH_STOCK',
+            message: `手工分配引用了订单中不存在的物品（${allocLine.itemId}）`,
+          },
+        ]);
+      }
       const list = manualByItem.get(allocLine.itemId) ?? [];
       list.push({ batchId: allocLine.batchId, qty: Number(allocLine.qty) });
       manualByItem.set(allocLine.itemId, list);
@@ -2905,19 +2965,76 @@ class MemorySalesRepository implements SalesRepository {
     for (const [itemId, list] of manualByItem) {
       const line = lineByItem.get(itemId)!;
       const total = list.reduce((sum, a) => sum + a.qty, 0);
-      if (Math.abs(total - line.qty) > 0.001) throw new Error(SALES_LINE_INVALID_MESSAGE);
+      if (Math.abs(total - line.qty) > 0.001) {
+        const info = lineInfoOf(itemId);
+        throw errorWithLineDetails(SALES_LINE_INVALID_MESSAGE, [
+          {
+            index: info?.index ?? 0,
+            itemId,
+            itemName: info?.itemName ?? null,
+            reason: 'QTY_EXCEEDS_STOCK',
+            message: `第${info?.index ?? '?'}行（${info?.itemName ?? '未知物品'}）：手工分配数量与行数量不一致`,
+          },
+        ]);
+      }
     }
 
     const now = new Date();
     for (const [itemId, line] of lineByItem) {
+      const info = lineInfoOf(itemId);
       const manual = manualByItem.get(itemId);
       if (manual) {
         for (const allocLine of manual) {
+          try {
+            const allocationsOf = this.ledger.applyOutbound({
+              unitId: existing.sellerUnitId,
+              itemId,
+              qty: allocLine.qty,
+              batchId: allocLine.batchId,
+              type: 'OUTBOUND_SALE',
+              orderType: 'sales',
+              orderId: existing.id,
+              refNo: existing.salesNo,
+              operatorId: sentBy,
+            });
+            for (const alloc of allocationsOf) {
+              this.allocRows.push(this.allocRow(line.orderItemId, itemId, alloc, now));
+            }
+          } catch (cause) {
+            if (cause instanceof Error) {
+              if (cause.message.includes('STOCK_BATCH_NOT_FOUND')) {
+                throw errorWithLineDetails(STOCK_BATCH_NOT_FOUND_MESSAGE, [
+                  {
+                    index: info?.index ?? 0,
+                    itemId,
+                    itemName: info?.itemName ?? null,
+                    reason: 'NO_BATCH_STOCK',
+                    message: `第${info?.index ?? '?'}行（${info?.itemName ?? '未知物品'}）：指定批次在当前仓库无库存`,
+                  },
+                ]);
+              }
+              if (cause.message.includes('INSUFFICIENT_STOCK')) {
+                throw errorWithLineDetails(INSUFFICIENT_STOCK_MESSAGE, [
+                  {
+                    index: info?.index ?? 0,
+                    itemId,
+                    itemName: info?.itemName ?? null,
+                    reason: 'QTY_EXCEEDS_STOCK',
+                    message: `第${info?.index ?? '?'}行（${info?.itemName ?? '未知物品'}）：库存不足，无法发送`,
+                  },
+                ]);
+              }
+            }
+            throw cause;
+          }
+        }
+      } else {
+        try {
           const allocationsOf = this.ledger.applyOutbound({
             unitId: existing.sellerUnitId,
             itemId,
-            qty: allocLine.qty,
-            batchId: allocLine.batchId,
+            qty: line.qty,
+            batchId: null,
             type: 'OUTBOUND_SALE',
             orderType: 'sales',
             orderId: existing.id,
@@ -2927,21 +3044,19 @@ class MemorySalesRepository implements SalesRepository {
           for (const alloc of allocationsOf) {
             this.allocRows.push(this.allocRow(line.orderItemId, itemId, alloc, now));
           }
-        }
-      } else {
-        const allocationsOf = this.ledger.applyOutbound({
-          unitId: existing.sellerUnitId,
-          itemId,
-          qty: line.qty,
-          batchId: null,
-          type: 'OUTBOUND_SALE',
-          orderType: 'sales',
-          orderId: existing.id,
-          refNo: existing.salesNo,
-          operatorId: sentBy,
-        });
-        for (const alloc of allocationsOf) {
-          this.allocRows.push(this.allocRow(line.orderItemId, itemId, alloc, now));
+        } catch (cause) {
+          if (cause instanceof Error && cause.message.includes('INSUFFICIENT_STOCK')) {
+            throw errorWithLineDetails(INSUFFICIENT_STOCK_MESSAGE, [
+              {
+                index: info?.index ?? 0,
+                itemId,
+                itemName: info?.itemName ?? null,
+                reason: 'QTY_EXCEEDS_STOCK',
+                message: `第${info?.index ?? '?'}行（${info?.itemName ?? '未知物品'}）：库存不足，无法发送`,
+              },
+            ]);
+          }
+          throw cause;
         }
       }
     }

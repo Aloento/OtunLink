@@ -29,6 +29,40 @@ export function isApiError(value: unknown): value is ApiError {
   return value instanceof ApiError;
 }
 
+/** 服务端 SALES_LINE_INVALID 等错误在 error.details 中携带的逐行信息。 */
+export interface SalesLineErrorDetail {
+  lines?: {
+    index?: number;
+    itemId?: string | null;
+    itemName?: string | null;
+    reason?: string;
+    message?: string;
+  }[];
+}
+
+export interface ExtractedSalesLineError {
+  index: number;
+  itemName: string | null;
+  message: string;
+}
+
+/**
+ * 从错误 cause 中提取逐行销售单错误（如 SALES_LINE_INVALID）。
+ * 服务端 message 已包含「第 N 行（物品）：原因」的完整文案，直接展示即可。
+ * 无法识别时返回 null，调用方回退到通用错误文案。
+ */
+export function extractSalesLineErrors(cause: unknown): ExtractedSalesLineError[] | null {
+  if (!isApiError(cause)) return null;
+  const details = cause.details as SalesLineErrorDetail | null | undefined;
+  const lines = details?.lines;
+  if (!Array.isArray(lines) || lines.length === 0) return null;
+  return lines.map((l) => ({
+    index: typeof l.index === 'number' ? l.index : -1,
+    itemName: l.itemName ?? null,
+    message: l.message ?? l.reason ?? '',
+  }));
+}
+
 interface ApiEnvelope<T> {
   data?: T;
   error?: { code?: string; message?: string; details?: unknown };

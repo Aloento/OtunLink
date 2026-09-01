@@ -80,7 +80,7 @@ const units = [
   unit({ id: RETAIL_UNIT_2, type: 'RETAILER', name: '零售门店二' }),
 ];
 const items = [
-  item({ id: ITEM_A, name: '苹果', specUnit: 'PIECE' }),
+  item({ id: ITEM_A, name: '苹果', specUnit: 'PIECE', isPerishable: true }),
   item({ id: ITEM_B, name: '香蕉', specUnit: 'BOX' }),
   item({ id: ITEM_C, name: '橙子', specUnit: 'PIECE' }),
 ];
@@ -214,7 +214,7 @@ async function getOrder(app: Awaited<ReturnType<typeof makeApp>>['app'], id: str
 }
 
 describe(' 销售单（请货/发货/FEFO 分配）', () => {
-  it('创建：卖方/买方类型校验；缺零售价且无行改价 → 400 SALES_LINE_INVALID', async () => {
+  it('创建：卖方/买方类型校验', async () => {
     const { app } = makeApp();
     await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100');
 
@@ -227,10 +227,62 @@ describe(' 销售单（请货/发货/FEFO 分配）', () => {
       buyerUnitId: WAREHOUSE_UNIT_2,
     });
     expect(badBuyer.status).toBe(400);
+  });
 
-    const noPrice = await createOrder(app, 'wh', [{ itemId: ITEM_C, qty: '1' }]);
-    expect(noPrice.status).toBe(400);
-    expect(await noPrice.json()).toMatchObject({ error: { code: 'SALES_LINE_INVALID' } });
+  it('创建：携带 carrier/trackingNo 保存，详情返回这两个值', async () => {
+    const { app } = makeApp();
+    await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100');
+
+    const res = await createOrder(app, 'wh', [{ itemId: ITEM_A, qty: '1' }], {
+      deliveryMethod: 'EXPRESS',
+      carrier: '顺丰速运',
+      trackingNo: 'SF9876543210',
+    });
+    expect(res.status).toBe(201);
+    const { id } = ((await res.json()) as { data: { id: string } }).data;
+
+    const order = await getOrder(app, id);
+    expect(order.carrier).toBe('顺丰速运');
+    expect(order.trackingNo).toBe('SF9876543210');
+  });
+
+  it('无零售价且无行改价：创建草稿成功（行价 null），发送时 400 带行级明细', async () => {
+    const { app } = makeApp();
+    await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100'); // ITEM_C 不设置零售价
+
+    const noPrice = await createOrder(app, 'wh', [{ itemId: ITEM_C, qty: '2' }]);
+    expect(noPrice.status).toBe(201);
+    const created = (await noPrice.json()) as {
+      data: {
+        id: string;
+        status: string;
+        totalAmount: string | null;
+        items: Array<{ itemId: string; price: string | null; lineTotal: string | null }>;
+      };
+    };
+    expect(created.data.status).toBe('DRAFT');
+    expect(created.data.totalAmount).toBe('0.00');
+    expect(created.data.items[0]).toMatchObject({ itemId: ITEM_C, price: null, lineTotal: null });
+
+    const sent = await app.request(`/api/v1/sales-orders/${created.data.id}/send`, {
+      method: 'POST', headers: json('wh'), body: '{}',
+    });
+    expect(sent.status).toBe(400);
+    const body = (await sent.json()) as {
+      error: {
+        code: string;
+        details?: { lines: Array<{ index: number; itemId: string; itemName: string; reason: string; message: string }> };
+      };
+    };
+    expect(body.error.code).toBe('SALES_LINE_INVALID');
+    expect(body.error.details?.lines).toHaveLength(1);
+    expect(body.error.details?.lines[0]).toMatchObject({
+      index: 1,
+      itemId: ITEM_C,
+      itemName: '橙子',
+      reason: 'NO_LIST_PRICE',
+    });
+    expect(body.error.details?.lines[0].message).toContain('第1行');
   });
 
   it('价格快照：行 list_price/price 取零售价或行改价；整单 total = (Σ行小计 × (1-折扣) + 运费)', async () => {
@@ -517,6 +569,14 @@ describe(' 销售单（请货/发货/FEFO 分配）', () => {
     });
     expect(cancelConfirmed.status).toBe(409);
     expect(await cancelConfirmed.json()).toMatchObject({ error: { code: 'SALES_STATE_CONFLICT' } });
+
+    // CONFIRMED 后再次上传支付 → 409（确认收款后不可再次上传）。
+    const repayAfterConfirm = await app.request(`/api/v1/sales-orders/${data.id}/payments`, {
+      method: 'POST', headers: json('rt'),
+      body: JSON.stringify({ amount: '100', methodNote: '重复上传' }),
+    });
+    expect(repayAfterConfirm.status).toBe(409);
+    expect(await repayAfterConfirm.json()).toMatchObject({ error: { code: 'SALES_STATE_CONFLICT' } });
 
     // 零售不能发送/取消。
     const res2 = await createOrder(app, 'rt', [{ itemId: ITEM_A, qty: '1' }]);

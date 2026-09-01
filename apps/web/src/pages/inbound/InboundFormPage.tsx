@@ -55,6 +55,7 @@ export function InboundFormPage() {
   const [counterpartyUnitId, setCounterpartyUnitId] = useState('');
   const [remark, setRemark] = useState('');
   const [lines, setLines] = useState<ItemLine[]>([emptyLine()]);
+  const [itemSearch, setItemSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,8 +66,8 @@ export function InboundFormPage() {
   });
 
   const { data: itemPage } = useQuery({
-    queryKey: ['items', 'picker', ''],
-    queryFn: () => listItems({ size: 100 }),
+    queryKey: ['items', 'picker', itemSearch],
+    queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
     staleTime: 30_000,
   });
 
@@ -193,17 +194,25 @@ export function InboundFormPage() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Text as="h2" weight="semibold" size={400}>
             {t('inbound.items')}
           </Text>
-          <Button
-            size="small"
-            appearance="secondary"
-            onClick={() => setLines((prev) => [...prev, emptyLine()])}
-          >
-            {t('inbound.addLine')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Input
+              value={itemSearch}
+              placeholder={t('items.itemSearchPlaceholder')}
+              onChange={(_, d) => setItemSearch(d.value)}
+              className="min-w-44"
+            />
+            <Button
+              size="small"
+              appearance="secondary"
+              onClick={() => setLines((prev) => [...prev, emptyLine()])}
+            >
+              {t('inbound.addLine')}
+            </Button>
+          </div>
         </div>
         {lines.map((line) => (
           <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">

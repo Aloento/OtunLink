@@ -22,10 +22,11 @@ import {
   type SalesSource,
 } from '@otunlink/shared';
 
-import { errorI18nKey, isApiError } from '../../api/http';
+import { errorI18nKey, extractSalesLineErrors, isApiError, type ExtractedSalesLineError } from '../../api/http';
 import { listItems } from '../../api/items';
 import { listPartnerships } from '../../api/partnerships';
 import { createSalesOrder, getSalesOrder, updateSalesOrder } from '../../api/sales';
+import { listStockBatches } from '../../api/stock';
 import { listUnits, type UnitDto } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
 
@@ -66,9 +67,13 @@ export function SalesFormPage() {
   const [freight, setFreight] = useState('0');
   const [discountPercent, setDiscountPercent] = useState('0');
   const [remark, setRemark] = useState('');
+  const [carrier, setCarrier] = useState('');
+  const [trackingNo, setTrackingNo] = useState('');
   const [lines, setLines] = useState<LineState[]>([emptyLine()]);
+  const [itemSearch, setItemSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lineErrors, setLineErrors] = useState<ExtractedSalesLineError[] | null>(null);
 
   const { data: units, isLoading: unitsLoading } = useQuery({
     queryKey: ['units', 'list'],
@@ -82,10 +87,26 @@ export function SalesFormPage() {
   });
 
   const { data: itemPage } = useQuery({
-    queryKey: ['items', 'picker', ''],
-    queryFn: () => listItems({ size: 100 }),
+    queryKey: ['items', 'picker', itemSearch],
+    queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
     staleTime: 30_000,
   });
+
+  const { data: stockBatches } = useQuery({
+    queryKey: ['stock', 'batches', sellerUnitId],
+    queryFn: () => listStockBatches({ unitId: sellerUnitId }),
+    enabled: Boolean(sellerUnitId),
+    staleTime: 30_000,
+  });
+
+  // 每个 itemId 在该仓库的可用库存合计（所有批次 qty 之和）。
+  const itemStock = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const batch of stockBatches?.items ?? []) {
+      map.set(batch.itemId, (map.get(batch.itemId) ?? 0) + Number(batch.qty));
+    }
+    return map;
+  }, [stockBatches]);
 
   const detailQuery = useQuery({
     queryKey: ['sales-orders', id],
@@ -123,6 +144,8 @@ export function SalesFormPage() {
       setFreight(order.freight ?? '0');
       setDiscountPercent(order.discountPercent);
       setRemark(order.remark ?? '');
+      setCarrier(order.carrier ?? '');
+      setTrackingNo(order.trackingNo ?? '');
       setLines(
         order.items.length > 0
           ? order.items.map((line) => ({
@@ -172,6 +195,7 @@ export function SalesFormPage() {
     }));
     setSaving(true);
     setError(null);
+    setLineErrors(null);
     try {
       if (isEdit) {
         const payload: SalesOrderPatchInput = {
@@ -180,6 +204,8 @@ export function SalesFormPage() {
           freight,
           discountPercent,
           remark: remark.trim() || null,
+          carrier: carrier.trim() || null,
+          trackingNo: trackingNo.trim() || null,
           lines: linePayload,
         };
         await updateSalesOrder(id!, payload);
@@ -193,6 +219,8 @@ export function SalesFormPage() {
           freight,
           discountPercent,
           remark: remark.trim() || null,
+          carrier: carrier.trim() || null,
+          trackingNo: trackingNo.trim() || null,
           lines: linePayload,
         };
         const created = await createSalesOrder(payload);
@@ -203,7 +231,12 @@ export function SalesFormPage() {
       void queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       navigate(`/sales/${id}`);
     } catch (cause) {
-      setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
+      const lines = extractSalesLineErrors(cause);
+      if (lines) {
+        setLineErrors(lines);
+      } else {
+        setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
+      }
       setSaving(false);
     }
   };
@@ -217,6 +250,15 @@ export function SalesFormPage() {
       <Title1 as="h1">{isEdit ? t('sales.editTitle') : t('sales.createTitle')}</Title1>
 
       {error && <Text className="text-red-600">{error}</Text>}
+      {lineErrors && lineErrors.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {lineErrors.map((e, i) => (
+            <div key={`${e.index}-${i}`} className="text-red-600">
+              {e.message}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label={t('sales.seller')} required>
@@ -248,7 +290,7 @@ export function SalesFormPage() {
           </Select>
         </Field>
         {!isEdit && (
-          <Field label={t('sales.source')}>
+          <Field label={t('sales.source')} hint={t('sales.sourceHint')}>
             <Select value={source} onChange={(_, d) => setSource(d.value as SalesSource)}>
               {SALES_SOURCES.map((s) => (
                 <option key={s} value={s}>
@@ -258,7 +300,7 @@ export function SalesFormPage() {
             </Select>
           </Field>
         )}
-        <Field label={t('sales.deliveryMethod')}>
+        <Field label={t('sales.deliveryMethod')} hint={t(`sales.deliveryMethodHints.${deliveryMethod}`)}>
           <Select
             value={deliveryMethod}
             onChange={(_, d) => setDeliveryMethod(d.value as DeliveryMethod)}
@@ -276,6 +318,24 @@ export function SalesFormPage() {
               value={deliveryAddress}
               onChange={(_, d) => setDeliveryAddress(d.value)}
               placeholder={t('sales.deliveryAddress')}
+            />
+          </Field>
+        )}
+        {deliveryMethod !== 'PICKUP' && (
+          <Field label={t('sales.carrier')}>
+            <Input
+              value={carrier}
+              onChange={(_, d) => setCarrier(d.value)}
+              placeholder={t('sales.carrierPlaceholder')}
+            />
+          </Field>
+        )}
+        {deliveryMethod !== 'PICKUP' && (
+          <Field label={t('sales.trackingNo')}>
+            <Input
+              value={trackingNo}
+              onChange={(_, d) => setTrackingNo(d.value)}
+              placeholder={t('sales.trackingNoPlaceholder')}
             />
           </Field>
         )}
@@ -297,17 +357,28 @@ export function SalesFormPage() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Text as="h2" weight="semibold" size={400}>
             {t('sales.items')}
           </Text>
-          <Button size="small" appearance="secondary" onClick={() => setLines((prev) => [...prev, emptyLine()])}>
-            {t('sales.addLine')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Input
+              value={itemSearch}
+              placeholder={t('items.itemSearchPlaceholder')}
+              onChange={(_, d) => setItemSearch(d.value)}
+              className="min-w-44"
+            />
+            <Button size="small" appearance="secondary" onClick={() => setLines((prev) => [...prev, emptyLine()])}>
+              {t('sales.addLine')}
+            </Button>
+          </div>
         </div>
+        <Text size={200} className="text-neutral-500">
+          {t('sales.unitPriceOverrideHint')}
+        </Text>
         {lines.map((line) => (
           <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 [&_.fui-Select__select]:h-8 [&_.fui-Input__input]:h-8">
               <Field label={t('sales.itemName')} required>
                 <Select value={line.itemId} onChange={(_, d) => setLine(line.key, 'itemId', d.value)}>
                   <option value="">—</option>
@@ -327,7 +398,7 @@ export function SalesFormPage() {
                   onChange={(_, d) => setLine(line.key, 'qty', d.value)}
                 />
               </Field>
-              <Field label={t('sales.unitPriceOverride')} hint={t('sales.unitPriceOverrideHint')}>
+              <Field label={t('sales.unitPriceOverride')}>
                 <Input
                   type="number"
                   min={0}
@@ -336,19 +407,31 @@ export function SalesFormPage() {
                 />
               </Field>
             </div>
+            {line.itemId && (
+              <Text size={200} className="text-neutral-500">
+                {t('sales.availableStock')}: {itemStock.get(line.itemId) ?? '—'}
+              </Text>
+            )}
           </div>
         ))}
       </div>
 
-      <div className="flex items-center gap-3">
-        <Button appearance="primary" disabled={saving} onClick={() => void submit()}>
-          {saving ? <Spinner size="tiny" /> : t('sales.create')}
-        </Button>
-        <Link to={isEdit ? `/sales/${id}` : '/sales'}>
-          <Button appearance="secondary" disabled={saving}>
-            {t('sales.cancel')}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-3">
+          <Button appearance="primary" disabled={saving} onClick={() => void submit()}>
+            {saving ? <Spinner size="tiny" /> : isEdit ? t('sales.create') : t('sales.saveDraft')}
           </Button>
-        </Link>
+          <Link to={isEdit ? `/sales/${id}` : '/sales'}>
+            <Button appearance="secondary" disabled={saving}>
+              {t('sales.cancel')}
+            </Button>
+          </Link>
+        </div>
+        {!isEdit && (
+          <Text size={200} className="text-neutral-500">
+            {t('sales.saveDraftHint')}
+          </Text>
+        )}
       </div>
     </div>
   );

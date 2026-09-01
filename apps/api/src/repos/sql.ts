@@ -2929,7 +2929,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     sellerUnitId: string,
     items: CreateSalesRepoInput['items'],
     qty: (line: CreateSalesRepoInput['items'][number]) => string,
-  ): Promise<{ itemId: string; qty: string; listPrice: string; price: string; lineTotal: string }[]> {
+  ): Promise<{ itemId: string; qty: string; listPrice: string | null; price: string | null; lineTotal: string | null }[]> {
     const itemIds = [...new Set(items.map((l) => l.itemId))];
     const prices = new Map<string, string>();
     for (const itemId of itemIds) {
@@ -2940,21 +2940,35 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     }
     return items.map((line) => {
       const qtyValue = qty(line);
-      const listPrice = line.unitPriceOverride ?? prices.get(line.itemId) ?? null;
-      if (listPrice === null || listPrice === '') throw new Error(SALES_LINE_INVALID);
+      const raw = line.unitPriceOverride ?? prices.get(line.itemId) ?? null;
+      const listPrice = raw === '' ? null : raw;
       return {
         itemId: line.itemId,
         qty: qtyValue,
         listPrice,
         price: listPrice,
-        lineTotal: roundMoney(Number(qtyValue) * Number(listPrice)),
+        lineTotal: listPrice === null ? null : roundMoney(Number(qtyValue) * Number(listPrice)),
       };
     });
   }
 
-  function calcTotal(lines: { lineTotal: string }[], discountPercent: string, freight: string): string {
-    const subtotal = lines.reduce((sum, l) => sum + Number(l.lineTotal ?? '0'), 0);
+  function calcTotal(lines: { lineTotal: string | null }[], discountPercent: string, freight: string): string {
+    const subtotal = lines.reduce((sum, l) => sum + Number(l.lineTotal ?? 0), 0);
     return roundMoney(subtotal * (1 - Number(discountPercent) / 100) + Number(freight));
+  }
+
+  type SalesLineIssueReason = 'NO_LIST_PRICE' | 'NO_BATCH_STOCK' | 'QTY_EXCEEDS_STOCK';
+  interface SalesLineIssue {
+    index: number;
+    itemId: string;
+    itemName: string | null;
+    reason: SalesLineIssueReason;
+    message: string;
+  }
+  function errorWithLineDetails(message: string, issues: SalesLineIssue[]): Error {
+    const err = new Error(message);
+    (err as { details?: unknown }).details = { lines: issues };
+    return err;
   }
 
   const sales: SalesRepository = {
@@ -3027,11 +3041,12 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         const { rows } = await exec.query(
           `INSERT INTO sales_orders
              (sales_no, seller_unit_id, buyer_unit_id, source, delivery_method,
-              delivery_address, freight, discount_percent, currency, total_amount,
-              status, remark, created_by)
+              delivery_address, carrier, tracking_no, freight, discount_percent,
+              currency, total_amount, status, remark, created_by)
            VALUES (${quote(salesNo)}, ${quote(input.sellerUnitId)}, ${quote(input.buyerUnitId)},
                    ${quote(input.source)}, ${quote(input.deliveryMethod)},
-                   ${quote(input.deliveryAddress)}, ${quote(input.freight)},
+                   ${quote(input.deliveryAddress)}, ${quote(nn(input.carrier))},
+                   ${quote(nn(input.trackingNo))}, ${quote(input.freight)},
                    ${quote(input.discountPercent)}, ${quote(input.currency)},
                    ${quote(calcTotal(lines, input.discountPercent, input.freight))},
                    'DRAFT', ${quote(input.remark)}, ${quote(input.createdBy)})
@@ -3094,6 +3109,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
           `UPDATE sales_orders SET
              delivery_method = COALESCE(${quote(input.deliveryMethod ?? null)}, delivery_method),
              delivery_address = COALESCE(${quote(input.deliveryAddress ?? null)}, delivery_address),
+             carrier = COALESCE(${quote(nn(input.carrier))}, carrier),
+             tracking_no = COALESCE(${quote(nn(input.trackingNo))}, tracking_no),
              freight = ${quote(freight)},
              discount_percent = ${quote(discountPercent)},
              currency = COALESCE(${quote(input.currency ?? null)}, currency),
@@ -3128,21 +3145,68 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         if (order.status !== 'DRAFT') throw new Error(SALES_STATE_CONFLICT);
 
         const { rows: itemRows } = await exec.query(
-          `SELECT oi.id AS order_item_id, oi.item_id, oi.qty
-           FROM sales_order_items oi WHERE oi.sales_order_id = ${quote(id)}
+          `SELECT oi.id AS order_item_id, oi.item_id, oi.qty, oi.list_price, oi.price,
+                  i.name AS item_name
+           FROM sales_order_items oi
+           LEFT JOIN items i ON i.id = oi.item_id
+           WHERE oi.sales_order_id = ${quote(id)}
            ORDER BY oi.created_at ASC, oi.id ASC`,
         );
+        const lines: {
+          index: number;
+          orderItemId: string;
+          itemId: string;
+          qty: number;
+          listPrice: string | null;
+          price: string | null;
+          itemName: string | null;
+        }[] = [];
         const lineByItem = new Map<string, { orderItemId: string; qty: number }>();
-        for (const row of itemRows) {
-          lineByItem.set(String(row.item_id), {
-            orderItemId: String(row.order_item_id),
-            qty: Number(String(row.qty)),
+        itemRows.forEach((row, index) => {
+          const itemId = String(row.item_id);
+          const orderItemId = String(row.order_item_id);
+          const qty = Number(String(row.qty));
+          lines.push({
+            index: index + 1,
+            orderItemId,
+            itemId,
+            qty,
+            listPrice: row.list_price != null ? String(row.list_price) : null,
+            price: row.price != null ? String(row.price) : null,
+            itemName: row.item_name ? String(row.item_name) : null,
           });
+          lineByItem.set(itemId, { orderItemId, qty });
+        });
+
+        // 发送时逐行校验价格：无零售价且无行级改价 → 400（带行级明细）。
+        const noPriceLines = lines.filter((l) => l.price === null || l.price === '');
+        if (noPriceLines.length > 0) {
+          throw errorWithLineDetails(
+            SALES_LINE_INVALID,
+            noPriceLines.map((l) => ({
+              index: l.index,
+              itemId: l.itemId,
+              itemName: l.itemName,
+              reason: 'NO_LIST_PRICE' as const,
+              message: `第${l.index}行（${l.itemName ?? '未知物品'}）：未设置零售价且未填写行级改价，无法发送`,
+            })),
+          );
         }
 
+        const lineInfoOf = (itemId: string) => lines.find((l) => l.itemId === itemId) ?? null;
         const manualByItem = new Map<string, { batchId: string; qty: number }[]>();
         for (const allocLine of allocations) {
-          if (!lineByItem.has(allocLine.itemId)) throw new Error(SALES_LINE_INVALID);
+          if (!lineByItem.has(allocLine.itemId)) {
+            throw errorWithLineDetails(SALES_LINE_INVALID, [
+              {
+                index: 0,
+                itemId: allocLine.itemId,
+                itemName: null,
+                reason: 'NO_BATCH_STOCK',
+                message: `手工分配引用了订单中不存在的物品（${allocLine.itemId}）`,
+              },
+            ]);
+          }
           const list = manualByItem.get(allocLine.itemId) ?? [];
           list.push({ batchId: allocLine.batchId, qty: Number(allocLine.qty) });
           manualByItem.set(allocLine.itemId, list);
@@ -3150,7 +3214,18 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         for (const [itemId, list] of manualByItem) {
           const line = lineByItem.get(itemId)!;
           const total = list.reduce((sum, a) => sum + a.qty, 0);
-          if (Math.abs(total - line.qty) > 0.001) throw new Error(SALES_LINE_INVALID);
+          if (Math.abs(total - line.qty) > 0.001) {
+            const info = lineInfoOf(itemId);
+            throw errorWithLineDetails(SALES_LINE_INVALID, [
+              {
+                index: info?.index ?? 0,
+                itemId,
+                itemName: info?.itemName ?? null,
+                reason: 'QTY_EXCEEDS_STOCK',
+                message: `第${info?.index ?? '?'}行（${info?.itemName ?? '未知物品'}）：手工分配数量与行数量不一致`,
+              },
+            ]);
+          }
         }
 
         interface AllocPlan {
@@ -3162,6 +3237,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         }
         const plan: AllocPlan[] = [];
         for (const [itemId, line] of lineByItem) {
+          const info = lineInfoOf(itemId);
           const manual = manualByItem.get(itemId);
           let remaining = line.qty;
           const take = (rows: { batch_id: unknown; qty: unknown; avg_cost: unknown }[]) => {
@@ -3188,9 +3264,29 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
                     AND batch_id = ${quote(allocLine.batchId)}
                   FOR UPDATE`,
               );
-              if (!stockRows[0]) throw new Error(STOCK_BATCH_NOT_FOUND);
+              if (!stockRows[0]) {
+                throw errorWithLineDetails(STOCK_BATCH_NOT_FOUND, [
+                  {
+                    index: info?.index ?? 0,
+                    itemId,
+                    itemName: info?.itemName ?? null,
+                    reason: 'NO_BATCH_STOCK',
+                    message: `第${info?.index ?? '?'}行（${info?.itemName ?? '未知物品'}）：指定批次在当前仓库无库存`,
+                  },
+                ]);
+              }
               const avail = Number(String(stockRows[0].qty ?? '0'));
-              if (avail < allocLine.qty) throw new Error(INSUFFICIENT_STOCK);
+              if (avail < allocLine.qty) {
+                throw errorWithLineDetails(INSUFFICIENT_STOCK, [
+                  {
+                    index: info?.index ?? 0,
+                    itemId,
+                    itemName: info?.itemName ?? null,
+                    reason: 'QTY_EXCEEDS_STOCK',
+                    message: `第${info?.index ?? '?'}行（${info?.itemName ?? '未知物品'}）：库存不足，无法发送`,
+                  },
+                ]);
+              }
               plan.push({
                 orderItemId: line.orderItemId,
                 itemId,
@@ -3213,7 +3309,17 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
                FOR UPDATE`,
             );
             const availTotal = fefoRows.reduce((sum, r) => sum + Number(String(r.qty ?? '0')), 0);
-            if (availTotal < line.qty) throw new Error(INSUFFICIENT_STOCK);
+            if (availTotal < line.qty) {
+              throw errorWithLineDetails(INSUFFICIENT_STOCK, [
+                {
+                  index: info?.index ?? 0,
+                  itemId,
+                  itemName: info?.itemName ?? null,
+                  reason: 'QTY_EXCEEDS_STOCK',
+                  message: `第${info?.index ?? '?'}行（${info?.itemName ?? '未知物品'}）：库存不足，无法发送`,
+                },
+              ]);
+            }
             take(fefoRows as { batch_id: unknown; qty: unknown; avg_cost: unknown }[]);
           }
         }

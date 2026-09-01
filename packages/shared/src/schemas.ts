@@ -262,7 +262,7 @@ export const outboundLineSchema = z.object({
 
 /**
  * 新建出库单（POST /outbound-orders）：type=NORMAL 手工出库；
- * type=LOSS 报损：报损原因必填、至少 1 张附图、每行必须指定批次。
+ * type=LOSS 报损：报损原因必填、至少 1 张附图；batchId 缺省时按 FEFO 自动分配。
  */
 export const outboundCreateSchema = z
   .object({
@@ -289,15 +289,6 @@ export const outboundCreateSchema = z
         path: ['photoFileIds'],
         message: '报损单必须至少附带 1 张图片',
       });
-    }
-    for (const [index, line] of value.lines.entries()) {
-      if (!line.batchId) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['lines', index, 'batchId'],
-          message: '报损单每行必须指定批次',
-        });
-      }
     }
   });
 
@@ -410,6 +401,8 @@ export const salesOrderCreateSchema = z.object({
   source: z.enum(SALES_SOURCES).default('RETAILER_REQUEST'),
   deliveryMethod: z.enum(DELIVERY_METHODS).default('PICKUP'),
   deliveryAddress: z.string().trim().max(1024).optional().nullable(),
+  carrier: z.string().trim().max(200).optional().nullable(),
+  trackingNo: z.string().trim().max(200).optional().nullable(),
   freight: shipmentMoney.optional().default('0'),
   discountPercent: discountPercent.optional().default('0'),
   currency: currency().optional(),
@@ -421,6 +414,8 @@ export const salesOrderCreateSchema = z.object({
 export const salesOrderPatchSchema = z.object({
   deliveryMethod: z.enum(DELIVERY_METHODS).optional(),
   deliveryAddress: z.string().trim().max(1024).optional().nullable(),
+  carrier: z.string().trim().max(200).optional().nullable(),
+  trackingNo: z.string().trim().max(200).optional().nullable(),
   freight: shipmentMoney.optional(),
   discountPercent: discountPercent.optional(),
   currency: currency().optional(),

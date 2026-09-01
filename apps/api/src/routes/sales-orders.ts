@@ -119,6 +119,8 @@ export function salesOrdersRouter(): Hono<AppEnv> {
         source: input.source,
         deliveryMethod: input.deliveryMethod,
         deliveryAddress: input.deliveryAddress ?? null,
+        carrier: input.carrier ?? null,
+        trackingNo: input.trackingNo ?? null,
         freight: input.freight,
         discountPercent: input.discountPercent,
         currency: input.currency ?? seller.baseCurrency ?? 'CNY',
@@ -138,6 +140,7 @@ export function salesOrdersRouter(): Hono<AppEnv> {
           400,
           ErrorCodes.SALES_LINE_INVALID,
           '行价格缺失或无效（需已设置零售价或提供行级改价）',
+          signalDetails(cause),
         );
       }
       throw cause;
@@ -176,6 +179,8 @@ export function salesOrdersRouter(): Hono<AppEnv> {
       const updated = await repos.sales.update(order.id, {
         deliveryMethod: input.deliveryMethod,
         deliveryAddress: input.deliveryAddress,
+        carrier: input.carrier,
+        trackingNo: input.trackingNo,
         freight: input.freight,
         discountPercent: input.discountPercent,
         currency: input.currency,
@@ -454,19 +459,30 @@ function isSignal(cause: unknown, marker: string): boolean {
   return cause instanceof Error && cause.message.includes(marker);
 }
 
+/** 从业务信号 Error 上取出 details（仓库抛错时通过 (err as {details}).details 附带行级明细）。 */
+function signalDetails(cause: unknown): { lines: unknown[] } | undefined {
+  if (cause instanceof Error) {
+    const details = (cause as { details?: unknown }).details;
+    if (details && typeof details === 'object' && 'lines' in (details as Record<string, unknown>)) {
+      return details as { lines: unknown[] };
+    }
+  }
+  return undefined;
+}
+
 /** 销售单业务信号 → HTTP 错误（与 shared/src/errors.ts 错误码一致）。 */
 function mapSalesSignal(c: Parameters<typeof error>[0], cause: unknown) {
   if (isSignal(cause, 'SALES_STATE_CONFLICT')) {
     return error(c, 409, ErrorCodes.SALES_STATE_CONFLICT, '销售单当前状态不允许该操作');
   }
   if (isSignal(cause, 'SALES_LINE_INVALID')) {
-    return error(c, 400, ErrorCodes.SALES_LINE_INVALID, '销售单行无效（批次/数量不匹配）');
+    return error(c, 400, ErrorCodes.SALES_LINE_INVALID, '销售单行无效（批次/数量不匹配）', signalDetails(cause));
   }
   if (isSignal(cause, 'INSUFFICIENT_STOCK')) {
-    return error(c, 409, ErrorCodes.INSUFFICIENT_STOCK, '库存不足，无法发送');
+    return error(c, 409, ErrorCodes.INSUFFICIENT_STOCK, '库存不足，无法发送', signalDetails(cause));
   }
   if (isSignal(cause, 'STOCK_BATCH_NOT_FOUND')) {
-    return error(c, 409, ErrorCodes.STOCK_BATCH_NOT_FOUND, '指定批次在当前仓库无库存');
+    return error(c, 409, ErrorCodes.STOCK_BATCH_NOT_FOUND, '指定批次在当前仓库无库存', signalDetails(cause));
   }
   throw cause;
 }

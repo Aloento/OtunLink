@@ -98,6 +98,7 @@ export function OutboundFormPage() {
     const prefilled = parsePrefill(searchParams.get('prefill'));
     return prefilled.length > 0 ? prefilled : [emptyLine()];
   });
+  const [itemSearch, setItemSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,8 +109,8 @@ export function OutboundFormPage() {
   });
 
   const { data: itemPage } = useQuery({
-    queryKey: ['items', 'picker', ''],
-    queryFn: () => listItems({ size: 100 }),
+    queryKey: ['items', 'picker', itemSearch],
+    queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
     staleTime: 30_000,
   });
 
@@ -219,10 +220,6 @@ export function OutboundFormPage() {
       }
       if (photos.length < 1) {
         setError(t('outbound.errors.photoRequired'));
-        return null;
-      }
-      if (lines.some((l) => !l.batchId)) {
-        setError(t('outbound.errors.batchRequired'));
         return null;
       }
     }
@@ -346,17 +343,25 @@ export function OutboundFormPage() {
       )}
 
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Text as="h2" weight="semibold" size={400}>
             {t('outbound.items')}
           </Text>
-          <Button
-            size="small"
-            appearance="secondary"
-            onClick={() => setLines((prev) => [...prev, emptyLine()])}
-          >
-            {t('outbound.addLine')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Input
+              value={itemSearch}
+              placeholder={t('items.itemSearchPlaceholder')}
+              onChange={(_, d) => setItemSearch(d.value)}
+              className="min-w-44"
+            />
+            <Button
+              size="small"
+              appearance="secondary"
+              onClick={() => setLines((prev) => [...prev, emptyLine()])}
+            >
+              {t('outbound.addLine')}
+            </Button>
+          </div>
         </div>
         {lines.map((line) => {
           const batchOptions = (stockPage?.items ?? []).filter((row) => row.itemId === line.itemId);
@@ -386,15 +391,13 @@ export function OutboundFormPage() {
                     onChange={(_, d) => setLine(line.key, 'qty', d.value)}
                   />
                 </Field>
-                <Field label={t('outbound.batchNo')} required={outboundType === 'LOSS'}>
+                <Field label={t('outbound.batchNo')}>
                   <Select
                     value={line.batchId}
                     onChange={(_, d) => setLine(line.key, 'batchId', d.value)}
                     disabled={!line.itemId}
                   >
-                    <option value="">
-                      {outboundType === 'LOSS' ? t('outbound.selectBatch') : t('outbound.fefo')}
-                    </option>
+                    <option value="">{t('outbound.fefo')}</option>
                     {batchOptions.map((row) => (
                       <option key={row.batchId} value={row.batchId}>
                         {row.batchNo ?? t('outbound.unnamedBatch', { id: row.batchId.slice(0, 8) })}（{row.qty}）

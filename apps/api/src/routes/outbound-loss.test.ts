@@ -125,7 +125,7 @@ async function seedStock(
 }
 
 describe(' 报损单（type=LOSS）', () => {
-  it('创建校验：缺原因 / 缺附图 / 行缺批次 → 400 VALIDATION_ERROR', async () => {
+  it('创建校验：缺原因 / 缺附图 → 400 VALIDATION_ERROR', async () => {
     const { app } = makeApp({ users: [collector, warehouse], units, items });
     const { batchId } = await seedStock(app, {
       warehouseUnitId: WAREHOUSE_UNIT,
@@ -159,8 +159,28 @@ describe(' 报损单（type=LOSS）', () => {
       }),
     });
     expect(noPhoto.status).toBe(400);
+  });
 
-    const noBatch = await app.request('/api/v1/outbound-orders', {
+  it('报损不选批次：创建 201，过账按 FEFO 自动分配并写 OUTBOUND_LOSS 流水', async () => {
+    const { app, repos } = makeApp({ users: [collector, warehouse], units, items });
+    const early = await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_A,
+      qty: '3',
+      unitCost: '2.00',
+      batchNo: 'B-EARLY',
+      expiryDate: '2025-01-01',
+    });
+    const late = await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_A,
+      qty: '5',
+      unitCost: '2.00',
+      batchNo: 'B-LATE',
+      expiryDate: '2025-12-31',
+    });
+
+    const created = await app.request('/api/v1/outbound-orders', {
       method: 'POST',
       headers: json('warehouse'),
       body: JSON.stringify({
@@ -168,12 +188,28 @@ describe(' 报损单（type=LOSS）', () => {
         type: 'LOSS',
         lossReason: '过期',
         photoFileIds: [PHOTO_1],
-        lines: [{ itemId: ITEM_A, qty: '1' }],
+        lines: [{ itemId: ITEM_A, qty: '6' }],
       }),
     });
-    expect(noBatch.status).toBe(400);
-    const body = (await noBatch.json()) as { error: { code: string } };
-    expect(body.error.code).toBe('VALIDATION_ERROR');
+    expect(created.status).toBe(201);
+    const draft = (await created.json()) as { data: { id: string } };
+
+    const posted = await app.request(`/api/v1/outbound-orders/${draft.data.id}/post`, {
+      method: 'POST',
+      headers: json('warehouse'),
+    });
+    expect(posted.status).toBe(200);
+    const payload = (await posted.json()) as {
+      data: { status: string; items: Array<{ batchId: string; qty: string }> };
+    };
+    expect(payload.data.status).toBe('POSTED');
+    // FEFO：先到期批（B-EARLY 2025-01-01）优先扣完，再扣 B-LATE。
+    expect(payload.data.items).toHaveLength(2);
+    expect(payload.data.items[0]).toMatchObject({ batchId: early.batchId, qty: '3.00' });
+    expect(payload.data.items[1]).toMatchObject({ batchId: late.batchId, qty: '3.00' });
+
+    const movements = await repos.stock.listMovements({ unitId: WAREHOUSE_UNIT, itemId: ITEM_A });
+    expect(movements.items.filter((m) => m.type === 'OUTBOUND_LOSS')).toHaveLength(2);
   });
 
   it('创建并过账：扣减指定批次 + 写 OUTBOUND_LOSS 流水', async () => {

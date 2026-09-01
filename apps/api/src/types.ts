@@ -1043,6 +1043,8 @@ export interface CreateSalesRepoInput {
   source: SalesSource;
   deliveryMethod: DeliveryMethod;
   deliveryAddress: string | null;
+  carrier: string | null;
+  trackingNo: string | null;
   freight: string;
   discountPercent: string;
   currency: string;
@@ -1054,6 +1056,8 @@ export interface CreateSalesRepoInput {
 export interface PatchSalesInput {
   deliveryMethod?: DeliveryMethod;
   deliveryAddress?: string | null;
+  carrier?: string | null;
+  trackingNo?: string | null;
   freight?: string;
   discountPercent?: string;
   currency?: string;
