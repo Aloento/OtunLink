@@ -212,6 +212,7 @@ export interface CreateFileInput {
 
 export interface ItemListQuery {
   q?: string;
+  category?: string;
   page?: number;
   size?: number;
 }
@@ -244,6 +245,7 @@ export interface ItemRepository {
   findById(id: string): Promise<ItemRecord | null>;
   findByBarcode(code: string): Promise<ItemRecord | null>;
   list(query: ItemListQuery): Promise<ItemListResult>;
+  listCategories(): Promise<string[]>;
   create(input: CreateItemInput): Promise<ItemRecord>;
   update(id: string, patch: UpdateItemInput): Promise<ItemRecord | null>;
   listImages(itemId: string): Promise<ItemImageRecord[]>;

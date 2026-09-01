@@ -113,16 +113,28 @@ const inClause = (column: string, values: string[]): string =>
 
 const col = (name: string, value: unknown): string => `${name} = ${quote(value)}`;
 
-function generateItemSku(name: string, fallback?: string): string {
-  const safeName = (fallback ?? name ?? 'ITEM')
-    .trim()
-    .replace(/[^A-Za-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+const SKU_ALPHANUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+function randomSkuCode(length: number): string {
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += SKU_ALPHANUM[Math.floor(Math.random() * SKU_ALPHANUM.length)];
+  }
+  return out;
+}
+
+// 生成短 SKU：优先取名字中的 ASCII 字母数字（首个字符保证为字母，最多 8 位），
+// 无 ASCII 字母时退化为 8 位随机码。目标 ≤16 字符。
+function generateItemSku(name: string): string {
+  const alnum = String(name ?? '')
+    .replace(/[^A-Za-z0-9]/g, '')
     .toUpperCase();
-  const base = safeName ? safeName.slice(0, 20) : 'ITEM';
-  const ts = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `SKU-${base}-${ts}-${random}`.slice(0, 64);
+  const firstLetter = alnum.search(/[A-Z]/);
+  if (firstLetter >= 0) {
+    const base = alnum.slice(firstLetter).slice(0, 8);
+    return `${base}-${randomSkuCode(6)}`;
+  }
+  return randomSkuCode(8);
 }
 
 function ensureItemSku(raw: string | null | undefined, name: string): string {
@@ -843,6 +855,10 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
           `(name ILIKE ${quote(`%${q}%`)} OR barcode ILIKE ${quote(`%${q}%`)} OR sku ILIKE ${quote(`%${q}%`)})`,
         );
       }
+      if (query.category) {
+        const category = query.category.trim();
+        if (category) where.push(`category = ${quote(category)}`);
+      }
       const clause = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
       const size = Math.min(Math.max(query.size ?? 50, 1), 50);
       const page = Math.max(query.page ?? 1, 1);
@@ -854,8 +870,26 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       );
       return { items: rows.map(mapItem), total, page, size };
     },
+    async listCategories(): Promise<string[]> {
+      const { rows } = await exec.query(
+        `SELECT btrim(category) AS category, count(*)::int AS n
+           FROM items
+          WHERE category IS NOT NULL AND btrim(category) <> ''
+          GROUP BY btrim(category)
+          ORDER BY n DESC, category ASC`,
+      );
+      return rows.map((row) => String(row.category));
+    },
     async create(input: CreateItemInput): Promise<ItemRecord> {
-      const sku = ensureItemSku(input.sku, input.name);
+      const hasManualSku = Boolean(input.sku?.trim());
+      let sku = ensureItemSku(input.sku, input.name);
+      if (!hasManualSku) {
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const dup = await exec.query(`SELECT 1 FROM items WHERE sku = ${quote(sku)} LIMIT 1`);
+          if (dup.rows.length === 0) break;
+          sku = generateItemSku(input.name);
+        }
+      }
       const { rows } = await exec.query(
         `INSERT INTO items
            (sku, name, barcode, spec_unit, inner_unit, inner_count, is_perishable,

@@ -12,6 +12,7 @@ export interface ItemListQuery {
   q?: string;
   page?: number;
   size?: number;
+  category?: string;
 }
 
 export interface CreateItemInput {
@@ -52,6 +53,7 @@ function toQuery(params: ItemListQuery): string {
   if (params.q) search.set('q', params.q);
   if (params.page !== undefined) search.set('page', String(params.page));
   if (params.size !== undefined) search.set('size', String(params.size));
+  if (params.category) search.set('category', params.category);
   const qs = search.toString();
   return qs ? `?${qs}` : '';
 }
@@ -66,6 +68,11 @@ export function getItem(id: string): Promise<ItemDetail> {
 
 export function getItemByBarcode(code: string): Promise<ItemDto> {
   return apiGet<ItemDto>(`/api/v1/items/by-barcode?code=${encodeURIComponent(code)}`);
+}
+
+export async function listItemCategories(): Promise<string[]> {
+  const data = await apiGet<{ categories: string[] }>('/api/v1/items/categories');
+  return data.categories;
 }
 
 export function createItem(input: CreateItemInput): Promise<ItemDetail> {

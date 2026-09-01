@@ -8,7 +8,7 @@ import {
   Textarea,
   Title1,
 } from '@fluentui/react-components';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -90,6 +90,7 @@ function emptyItem(item?: ItemDto): ItemLine {
 export function ShipmentFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { me } = useSession();
   const params = useParams<{ id: string }>();
   const isEdit = Boolean(params.id);
@@ -270,9 +271,11 @@ export function ShipmentFormPage() {
       if (isEdit) {
         const id = params.id!;
         await updateShipment(id, payload);
+        void queryClient.invalidateQueries({ queryKey: ['shipments'] });
         navigate(`/shipments/${id}`);
       } else {
         const created = await createShipment(payload);
+        void queryClient.invalidateQueries({ queryKey: ['shipments'] });
         navigate(`/shipments/${created.id}`);
       }
     } catch (cause) {

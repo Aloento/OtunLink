@@ -275,8 +275,10 @@ class MemoryItemRepository implements ItemRepository {
 
   async list(query: ItemListQuery): Promise<ItemListResult> {
     const q = query.q?.trim().toLowerCase();
+    const category = query.category?.trim();
     const all = [...this.rows.values()]
       .filter((row) => {
+        if (category && row.category?.trim() !== category) return false;
         if (!q) return true;
         return (
           row.name.toLowerCase().includes(q) ||
@@ -293,12 +295,32 @@ class MemoryItemRepository implements ItemRepository {
     return { items, total: all.length, page, size };
   }
 
+  async listCategories(): Promise<string[]> {
+    const counts = new Map<string, number>();
+    for (const row of this.rows.values()) {
+      const category = row.category?.trim();
+      if (!category) continue;
+      counts.set(category, (counts.get(category) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([category]) => category);
+  }
+
   async create(input: CreateItemInput): Promise<ItemRecord> {
     this.assertBarcodeAvailable(input.barcode ?? null);
     const now = new Date();
+    const hasManualSku = Boolean(input.sku?.trim());
+    let sku = generateItemSku(input.sku, input.name);
+    if (!hasManualSku) {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (![...this.rows.values()].some((row) => row.sku === sku)) break;
+        sku = generateItemSku(null, input.name);
+      }
+    }
     const row: ItemRecord = {
       id: uuid(),
-      sku: generateItemSku(input.sku, input.name),
+      sku,
       name: input.name,
       barcode: normalizeEmpty(input.barcode),
       specUnit: input.specUnit ?? 'PIECE',
@@ -395,18 +417,28 @@ class MemoryFileRepository implements FileRepository {
   }
 }
 
+const SKU_ALPHANUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+function randomSkuCode(length: number): string {
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += SKU_ALPHANUM[Math.floor(Math.random() * SKU_ALPHANUM.length)];
+  }
+  return out;
+}
+
 function generateItemSku(raw: string | null | undefined, name: string): string {
   const candidate = raw?.trim();
   if (candidate && candidate.length > 0) return candidate;
-  const safeName = name
-    .trim()
-    .replace(/[^A-Za-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+  const alnum = String(name ?? '')
+    .replace(/[^A-Za-z0-9]/g, '')
     .toUpperCase();
-  const base = safeName ? safeName.slice(0, 20) : 'ITEM';
-  const ts = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `SKU-${base}-${ts}-${random}`.slice(0, 64);
+  const firstLetter = alnum.search(/[A-Z]/);
+  if (firstLetter >= 0) {
+    const base = alnum.slice(firstLetter).slice(0, 8);
+    return `${base}-${randomSkuCode(6)}`;
+  }
+  return randomSkuCode(8);
 }
 
 function normalizeEmpty<T extends string>(value: T | null | undefined): T | null {

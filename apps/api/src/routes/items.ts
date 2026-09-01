@@ -40,11 +40,21 @@ export function itemsRouter(): Hono<AppEnv> {
     if (!repos) return dbUnavailable(c);
 
     const q = c.req.query('q')?.trim() || undefined;
+    const category = c.req.query('category')?.trim() || undefined;
     const page = parsePositiveInt(c.req.query('page'), 1);
     const size = parsePositiveInt(c.req.query('size'), 50, 50);
 
-    const result = await repos.items.list({ q, page, size });
+    const result = await repos.items.list({ q, category, page, size });
     return ok(c, { ...result, items: result.items.map(itemDto) });
+  });
+
+  // 分类列表：从物品自由文本 category 派生（去重、非空，按使用次数降序再按名称升序）。
+  router.get('/categories', read, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const categories = await repos.items.listCategories();
+    return ok(c, { categories });
   });
 
   // 扫码定位：按条码查找 ACTIVE 物品（放在 /:id 之前注册）。

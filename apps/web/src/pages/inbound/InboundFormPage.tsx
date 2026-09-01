@@ -1,5 +1,5 @@
 import { Button, Field, Input, Select, Spinner, Text, Textarea, Title1 } from '@fluentui/react-components';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -46,6 +46,7 @@ function emptyLine(): ItemLine {
 export function InboundFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { me } = useSession();
 
   const [warehouseUnitId, setWarehouseUnitId] = useState('');
@@ -124,6 +125,7 @@ export function InboundFormPage() {
       const created = await createManualInbound(payload);
       // 创建即过账：建档批次 + 写库存（也可在详情页手动过账）。
       await postInbound(created.id);
+      void queryClient.invalidateQueries({ queryKey: ['inbound-orders'] });
       navigate(`/inbound/${created.id}`);
     } catch (cause) {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));

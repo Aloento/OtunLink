@@ -1,15 +1,17 @@
 import {
   Button,
   Checkbox,
+  Combobox,
   Field,
   Input,
+  Option,
   Select,
   Spinner,
   Text,
   Textarea,
   Title1,
 } from '@fluentui/react-components';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -22,7 +24,7 @@ import {
 } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
-import { attachItemImages, createItem, getItem, updateItem } from '../../api/items';
+import { attachItemImages, createItem, getItem, listItemCategories, updateItem } from '../../api/items';
 import { ImageUpload } from '../../components/ImageUpload';
 import { ScannerDialog } from '../../components/ScannerDialog';
 
@@ -57,6 +59,7 @@ const EMPTY_FORM: FormState = {
 export function ItemFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const params = useParams<{ id: string }>();
   const isEdit = Boolean(params.id);
 
@@ -72,6 +75,12 @@ export function ItemFormPage() {
     queryFn: () => getItem(params.id!),
     enabled: isEdit,
     staleTime: 30_000,
+  });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['items', 'categories'],
+    queryFn: listItemCategories,
+    staleTime: 60_000,
   });
 
   useEffect(() => {
@@ -123,6 +132,7 @@ export function ItemFormPage() {
         if (newFiles.length > 0) {
           await attachItemImages(id, newFiles.map((file) => file.id));
         }
+        void queryClient.invalidateQueries({ queryKey: ['items'] });
         navigate(`/items/${id}`);
       } else {
         const detail = await createItem({
@@ -138,6 +148,7 @@ export function ItemFormPage() {
           status: form.status,
           fileIds: files.map((file) => file.id),
         });
+        void queryClient.invalidateQueries({ queryKey: ['items'] });
         navigate(`/items/${detail.id}`);
       }
     } catch (cause) {
@@ -179,7 +190,19 @@ export function ItemFormPage() {
           </div>
         </Field>
         <Field label={t('items.category')}>
-          <Input value={form.category} onChange={(_, d) => set('category', d.value)} />
+          <Combobox
+            freeform
+            value={form.category}
+            onChange={(event) => set('category', event.target.value)}
+            onOptionSelect={(_, d) => set('category', d.optionValue ?? d.optionText ?? '')}
+            placeholder={t('items.categoryPlaceholder')}
+          >
+            {categories.map((c) => (
+              <Option key={c} value={c}>
+                {c}
+              </Option>
+            ))}
+          </Combobox>
         </Field>
         <Field label={t('items.specUnit')}>
           <Select value={form.specUnit} onChange={(_, d) => set('specUnit', d.value as SpecUnit)}>
@@ -198,7 +221,7 @@ export function ItemFormPage() {
             <option value="">—</option>
             {SPEC_UNITS.map((unit) => (
               <option key={unit} value={unit}>
-                {t(`items.specUnits.${unit}`)}
+                {t(`items.innerUnits.${unit}`)}
               </option>
             ))}
           </Select>

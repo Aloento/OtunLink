@@ -8,7 +8,7 @@ import {
   Textarea,
   Title1,
 } from '@fluentui/react-components';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -51,6 +51,7 @@ function emptyLine(): LineState {
 export function SalesFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const { me } = useSession();
@@ -195,9 +196,11 @@ export function SalesFormPage() {
           lines: linePayload,
         };
         const created = await createSalesOrder(payload);
+        void queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
         navigate(`/sales/${created.id}`);
         return;
       }
+      void queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       navigate(`/sales/${id}`);
     } catch (cause) {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));

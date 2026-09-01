@@ -10,7 +10,7 @@ import {
   Textarea,
   Title1,
 } from '@fluentui/react-components';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -65,6 +65,7 @@ function parsePrefill(raw: string | null): ItemLine[] {
 export function OutboundFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const { me } = useSession();
 
@@ -168,6 +169,7 @@ export function OutboundFormPage() {
     setError(null);
     try {
       const created = await createOutboundOrder(payload);
+      void queryClient.invalidateQueries({ queryKey: ['outbound-orders'] });
       navigate(`/outbound/${created.id}`);
     } catch (cause) {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));

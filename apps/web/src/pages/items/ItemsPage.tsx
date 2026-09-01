@@ -1,4 +1,4 @@
-import { Button, Input, Spinner, Text, Title1 } from '@fluentui/react-components';
+import { Button, Input, Select, Spinner, Text, Title1 } from '@fluentui/react-components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +8,7 @@ import type { ItemDto } from '@otunlink/shared';
 import { Permissions, hasPermission } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
-import { getItemByBarcode, listItems } from '../../api/items';
+import { getItemByBarcode, listItemCategories, listItems } from '../../api/items';
 import { useSession } from '../../auth/SessionProvider';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { ScannerDialog } from '../../components/ScannerDialog';
@@ -25,6 +25,7 @@ export function ItemsPage() {
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   const [page, setPage] = useState(1);
+  const [category, setCategory] = useState('');
   const [scanOpen, setScanOpen] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
 
@@ -36,9 +37,16 @@ export function ItemsPage() {
     return () => clearTimeout(timer);
   }, [q]);
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ['items', 'categories'],
+    queryFn: listItemCategories,
+    staleTime: 60_000,
+  });
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['items', 'list', debouncedQ, page],
-    queryFn: () => listItems({ q: debouncedQ || undefined, page, size: PAGE_SIZE }),
+    queryKey: ['items', 'list', debouncedQ, page, category],
+    queryFn: () =>
+      listItems({ q: debouncedQ || undefined, page, size: PAGE_SIZE, category: category || undefined }),
     placeholderData: keepPreviousData,
   });
 
@@ -103,6 +111,22 @@ export function ItemsPage() {
             onChange={(_, d) => setQ(d.value)}
             className="min-w-52"
           />
+          <Select
+            value={category}
+            onChange={(_, d) => {
+              setCategory(d.value);
+              setPage(1);
+            }}
+            className="min-w-36"
+            aria-label={t('items.category')}
+          >
+            <option value="">{t('items.categoryAll')}</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Select>
           <Button appearance="secondary" onClick={() => setScanOpen(true)}>
             {t('items.scan')}
           </Button>

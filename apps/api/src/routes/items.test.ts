@@ -195,4 +195,107 @@ describe('items 物品目录 API', () => {
     const res = await app.request('/api/v1/items', { headers: auth('pending') });
     expect(res.status).toBe(403);
   });
+
+  it('PATCH 物品 sku 设为 null 可正常清空', async () => {
+    const { app } = makeApp({
+      users: [collector],
+      items: [item({ id: 'i1', sku: 'OLD-SKU' })],
+    });
+    const res = await app.request('/api/v1/items/i1', {
+      method: 'PATCH',
+      headers: json('collector'),
+      body: JSON.stringify({ sku: null }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { sku: string | null } };
+    expect(body.data.sku).toBeNull();
+  });
+
+  it('PATCH 物品 sku 设为空字符串时归一化为 null', async () => {
+    const { app } = makeApp({
+      users: [collector],
+      items: [item({ id: 'i1', sku: 'OLD-SKU' })],
+    });
+    const res = await app.request('/api/v1/items/i1', {
+      method: 'PATCH',
+      headers: json('collector'),
+      body: JSON.stringify({ sku: '   ' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { sku: string | null } };
+    expect(body.data.sku).toBeNull();
+  });
+
+  it('分类列表去重、去空并按使用次数降序、名称升序排列', async () => {
+    const { app } = makeApp({
+      users: [collector],
+      items: [
+        item({ id: 'i1', category: '食品' }),
+        item({ id: 'i2', category: '饮料' }),
+        item({ id: 'i3', category: '食品' }),
+        item({ id: 'i4', category: '   ' }),
+        item({ id: 'i5', category: null }),
+        item({ id: 'i6', category: '苹果' }),
+      ],
+    });
+    const res = await app.request('/api/v1/items/categories', { headers: auth('collector') });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { categories: string[] } };
+    expect(body.data.categories).toEqual(['食品', '苹果', '饮料']);
+  });
+
+  it('列表按 category 精确过滤', async () => {
+    const { app } = makeApp({
+      users: [collector],
+      items: [
+        item({ id: 'i1', name: '苹果', category: '食品' }),
+        item({ id: 'i2', name: '可乐', category: '饮料' }),
+        item({ id: 'i3', name: '香蕉', category: '食品' }),
+      ],
+    });
+    const res = await app.request('/api/v1/items?category=食品', { headers: auth('collector') });
+    const body = (await res.json()) as { data: { items: Array<{ id: string }>; total: number } };
+    expect(body.data.total).toBe(2);
+    expect(body.data.items.map((i) => i.id).sort()).toEqual(['i1', 'i3']);
+  });
+
+  it('category 为空白时不过滤', async () => {
+    const { app } = makeApp({
+      users: [collector],
+      items: [
+        item({ id: 'i1', name: '苹果', category: '食品' }),
+        item({ id: 'i2', name: '可乐', category: '饮料' }),
+      ],
+    });
+    const res = await app.request('/api/v1/items?category=%20%20', { headers: auth('collector') });
+    const body = (await res.json()) as { data: { total: number } };
+    expect(body.data.total).toBe(2);
+  });
+
+  it('自动生成 SKU 不含 SKU-/ITEM 前缀且不超过 16 字符（含 ASCII 名）', async () => {
+    const { app } = makeApp({ users: [collector] });
+    const res = await app.request('/api/v1/items', {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify({ name: 'Milk 牛奶' }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { data: { sku: string } };
+    expect(body.data.sku).toMatch(/^MILK-[A-Z0-9]{6}$/);
+    expect(body.data.sku.length).toBeLessThanOrEqual(16);
+  });
+
+  it('纯中文名自动生成纯随机短码（无 ITEM 兜底）', async () => {
+    const { app } = makeApp({ users: [collector] });
+    const res = await app.request('/api/v1/items', {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify({ name: '苹果' }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { data: { sku: string } };
+    expect(body.data.sku).toMatch(/^[A-Z0-9]{8}$/);
+    expect(body.data.sku).not.toContain('ITEM');
+    expect(body.data.sku.length).toBeLessThanOrEqual(16);
+  });
 });

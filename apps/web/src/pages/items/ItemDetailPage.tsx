@@ -40,7 +40,7 @@ export function ItemDetailPage() {
     [t('items.barcode'), data.barcode ?? '—'],
     [t('items.category'), data.category ?? '—'],
     [t('items.specUnit'), t(`items.specUnits.${data.specUnit}`)],
-    [t('items.innerUnit'), data.innerUnit ? t(`items.specUnits.${data.innerUnit}`) : '—'],
+    [t('items.innerUnit'), data.innerUnit ? t(`items.innerUnits.${data.innerUnit}`) : '—'],
     [t('items.innerCount'), data.innerCount ?? '—'],
     [
       t('items.status'),
