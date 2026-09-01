@@ -92,6 +92,8 @@ import type {
   UserRepository,
 } from '../types';
 import { expiryRemainingDays, type UnitType } from '@otunlink/shared';
+
+import { assertNotLockedAdmin, isPermanentAdminEmail } from '../lib/admins';
 import { mergeInboundLines, qtyEqual, type MergedInboundLine } from './inbound-lines';
 import { ensureBatchNo } from '../lib/batch';
 
@@ -146,6 +148,9 @@ class MemoryUserRepository implements UserRepository {
   async update(id: string, patch: UpdateUserInput): Promise<UserRecord | null> {
     const existing = this.rows.get(id);
     if (!existing) return null;
+    if (isPermanentAdminEmail(existing.email)) {
+      assertNotLockedAdmin(existing);
+    }
     const next: UserRecord = {
       ...existing,
       ...(patch.name !== undefined ? { name: patch.name } : {}),
@@ -160,6 +165,10 @@ class MemoryUserRepository implements UserRepository {
   }
 
   async delete(id: string): Promise<boolean> {
+    const existing = this.rows.get(id);
+    if (existing && isPermanentAdminEmail(existing.email)) {
+      assertNotLockedAdmin(existing);
+    }
     return this.rows.delete(id);
   }
 }

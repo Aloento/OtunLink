@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { isPermanentAdminEmail, enforcePermanentAdminRole } from './admins';
 import { mailerStatus, normalizeEmailAddress, resolveConfiguredSender } from './email';
 
 describe('email config validation', () => {
@@ -32,5 +33,24 @@ describe('email config validation', () => {
         SMTP_USER: 'smtp-user',
       } as any),
     ).toBe('admin@example.com');
+  });
+
+  it('locks Aloento@outlook.com as a permanent admin', () => {
+    const env = { PERMANENT_ADMIN_EMAIL: 'Aloento@outlook.com' };
+    expect(isPermanentAdminEmail('Aloento@OUTLOOK.com', env)).toBe(true);
+    const user = enforcePermanentAdminRole({
+      id: 'user-1',
+      entraSub: 'sub-1',
+      email: 'Aloento@outlook.com',
+      name: 'Aloento',
+      role: null,
+      scopeUnitId: null,
+      status: 'ACTIVE',
+      locale: 'zh-CN',
+      createdAt: new Date('2025-01-01Z'),
+      updatedAt: new Date('2025-01-01Z'),
+    }, env);
+    expect(user).not.toBeNull();
+    expect(user!.role).toBe('ADMIN');
   });
 });

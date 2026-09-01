@@ -21,7 +21,9 @@ S3_SECRET_ACCESS_KEY=
 
 # ── 邮件（SMTP 直连）────────────────────────────────────────────────────
 # 非敏感配置（SMTP_HOST/MAIL_FROM/端口等）已在 wrangler.toml [vars]；
+# PERMANENT_ADMIN_EMAIL 设置为永久管理员邮箱。
 # SMTP_USER/SMTP_PASS 为 secret，本地写 .dev.vars、生产经 wrangler secret put。
 # 飞书 Lark：SMTP_USER 为发信账号，SMTP_PASS 为邮箱授权码/密码。不配则降级为仅站内通知。
+PERMANENT_ADMIN_EMAIL=Aloento@outlook.com
 SMTP_USER=
 SMTP_PASS=

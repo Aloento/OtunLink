@@ -5,19 +5,17 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 # 自定义域（musi.land zone 已在 Cloudflare 托管；部署时自动创建 CNAME 与证书）
-routes = [
-  { pattern = "api.otun.musi.land", custom_domain = true },
-]
+routes = [{ pattern = "api.otun.musi.land", custom_domain = true }]
 
 # ── Cloudflare 资源绑定（占位符由 CI 部署时替换为 GitHub Secrets 中的真实 id；
 #    本地开发需手动回填，见 docs/cloud-config.md §1）──────────────────────
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "<your-hyperdrive-id>"  # 真实 id 见 Cloudflare 控制台 Hyperdrive 页面
+id = "<your-hyperdrive-id>" # 真实 id 见 Cloudflare 控制台 Hyperdrive 页面
 
 [[kv_namespaces]]
 binding = "JWKS_CACHE"
-id = "<your-kv-id>"  # 真实 id 见 Cloudflare 控制台 KV 页面
+id = "<your-kv-id>"    # 真实 id 见 Cloudflare 控制台 KV 页面
 
 # ── 图片存储：S3 兼容对象存储（华为云 OBS，不用 R2）──────────────────────
 # Workers 无原生 S3 绑定，运行时经 aws4fetch（SigV4 签名）访问；
@@ -29,16 +27,17 @@ ENTRA_CLIENT_ID = "0edca98e-17df-41f2-b254-a579095ffcb7"
 ENTRA_AUDIENCE = "https://SoarCraft.onmicrosoft.com/OtunLink/API"
 ENTRA_ISSUER = "https://login.microsoftonline.com/9ed42989-9bdb-439d-80e7-c709641d1f08/v2.0"
 
-S3_ENDPOINT = "<your-obs-endpoint>"  # 部署前回填完整 URL（含 https://）
+S3_ENDPOINT = "<your-obs-endpoint>" # 部署前回填完整 URL（含 https://）
 S3_REGION = "eu-de"
-S3_BUCKET = "<your-bucket>"  # 部署前回填（见 docs/cloud-config.md）
+S3_BUCKET = "<your-bucket>"         # 部署前回填（见 docs/cloud-config.md）
 
 # ── 邮件（SMTP 直连，非敏感配置；SMTP_USER/SMTP_PASS 走 secrets）──────────────
 # 发信人 <your-mail-from>（飞书 Lark 邮箱）；仅端口 465（SSL）/587（STARTTLS）。
 # 发信频率 200 封/100 秒；单发件人单日上限 450 封。
 MAIL_PROVIDER = "smtp"
-MAIL_FROM = "<your-mail-from>"  # 部署前回填；也可改为 secret
-SMTP_HOST = "<your-smtp-host>"  # 部署前回填；也可改为 secret
+MAIL_FROM = "<your-mail-from>"                # 部署前回填；也可改为 secret
+SMTP_HOST = "<your-smtp-host>"                # 部署前回填；也可改为 secret
+PERMANENT_ADMIN_EMAIL = "Aloento@outlook.com"
 SMTP_PORT = "465"
 SMTP_SECURE = "true"
 SMTP_STARTTLS = "false"

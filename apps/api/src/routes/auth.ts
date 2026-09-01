@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 
+import { enforcePermanentAdminRole, isPermanentAdminEmail } from '../lib/admins';
 import { publicUserDto } from '../lib/dto';
 import { dbUnavailable, ok } from '../lib/http';
 import type { AppEnv } from '../types';
@@ -18,17 +19,24 @@ export function authRouter(): Hono<AppEnv> {
     let user = auth.user;
     if (!user) {
       const claims = auth.claims;
+      const email = claims.email ?? claims.preferredUsername ?? `${claims.oid ?? claims.sub}@placeholder.invalid`;
       user = await repos.users.create({
         // 优先存稳定的 oid（objectId），保证与该用户在管理端「新增用户」填写的标识一致，
         // 之后管理员可直接为此记录分配岗位；无 oid 时回退 sub。
         entraSub: claims.oid ?? claims.sub,
-        email: claims.email ?? claims.preferredUsername ?? `${claims.oid ?? claims.sub}@placeholder.invalid`,
+        email,
         name: claims.name ?? claims.sub,
         status: 'PENDING',
+        role: isPermanentAdminEmail(email, c.env) ? 'ADMIN' : undefined,
       });
     }
 
-    return ok(c, publicUserDto(user));
+    if (user && isPermanentAdminEmail(user.email, c.env) && user.role !== 'ADMIN') {
+      user = await repos.users.update(user.id, { role: 'ADMIN' });
+    }
+
+    const guardedUser = enforcePermanentAdminRole(user, c.env);
+    return ok(c, publicUserDto(guardedUser!));
   });
 
   return router;

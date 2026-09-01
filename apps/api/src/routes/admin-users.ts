@@ -2,6 +2,7 @@ import { Permissions, adminUserCreateSchema, adminUserPatchSchema } from '@otunl
 import { Hono } from 'hono';
 
 import { requirePermission } from '../auth/middleware';
+import { getPermanentAdminEmail, isPermanentAdminEmail } from '../lib/admins';
 import { adminUserDto } from '../lib/dto';
 import { dbUnavailable, notFound, ok, validationError } from '../lib/http';
 import type { AppEnv } from '../types';
@@ -59,6 +60,11 @@ export function adminUsersRouter(): Hono<AppEnv> {
       return validationError(c, '参数不合法', parsed.error.flatten());
     }
 
+    const target = await repos.users.findById(id);
+    if (target && isPermanentAdminEmail(target.email, c.env)) {
+      return validationError(c, `${getPermanentAdminEmail(c.env) || '永久管理员'} 为永久管理员，不能被修改`);
+    }
+
     const updated = await repos.users.update(id, parsed.data);
     if (!updated) return notFound(c, '用户不存在');
     return ok(c, adminUserDto(updated));
@@ -74,6 +80,11 @@ export function adminUsersRouter(): Hono<AppEnv> {
     const actor = c.get('auth').user;
     if (actor && actor.id === id) {
       return validationError(c, '不能删除当前登录账号');
+    }
+
+    const target = await repos.users.findById(id);
+    if (target && isPermanentAdminEmail(target.email, c.env)) {
+      return validationError(c, `${getPermanentAdminEmail(c.env) || '永久管理员'} 为永久管理员，不能删除`);
     }
 
     const deleted = await repos.users.delete(id);

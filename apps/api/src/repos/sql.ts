@@ -85,6 +85,7 @@ import type {
   UpdateUserInput,
   UserRecord,
 } from '../types';
+import { assertNotLockedAdmin, isPermanentAdminEmail } from '../lib/admins';
 import { ensureBatchNo } from '../lib/batch';
 import { mergeInboundLines, qtyEqual, type MergedInboundLine } from './inbound-lines';
 
@@ -767,6 +768,10 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       return mapUser(rows[0]);
     },
     async update(id: string, patch: UpdateUserInput): Promise<UserRecord | null> {
+      const existing = await this.findById(id);
+      if (existing && isPermanentAdminEmail(existing.email)) {
+        assertNotLockedAdmin(existing);
+      }
       const sets: string[] = [];
       if (patch.name !== undefined) sets.push(col('name', patch.name));
       if (patch.role !== undefined) sets.push(col('role', patch.role));
@@ -774,7 +779,6 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       if (patch.status !== undefined) sets.push(col('status', patch.status));
       if (patch.locale !== undefined) sets.push(col('locale', patch.locale));
       if (sets.length === 0) {
-        const existing = await this.findById(id);
         return existing;
       }
       sets.push('updated_at = now()');
@@ -784,6 +788,10 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       return rows[0] ? mapUser(rows[0]) : null;
     },
     async delete(id: string): Promise<boolean> {
+      const existing = await this.findById(id);
+      if (existing && isPermanentAdminEmail(existing.email)) {
+        assertNotLockedAdmin(existing);
+      }
       const { rows } = await exec.query(`DELETE FROM users WHERE id = ${quote(id)} RETURNING id`);
       return (rows.length ?? 0) > 0;
     },
