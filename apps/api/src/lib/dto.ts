@@ -505,6 +505,8 @@ export function salesOrderDto(
     source: order.source,
     deliveryMethod: order.deliveryMethod,
     deliveryAddress: order.deliveryAddress,
+    carrier: order.carrier ?? null,
+    trackingNo: order.trackingNo ?? null,
     freight: order.freight,
     discountPercent: order.discountPercent,
     currency: order.currency,

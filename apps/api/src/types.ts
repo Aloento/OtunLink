@@ -966,6 +966,8 @@ export interface SalesOrderRecord {
   source: SalesSource;
   deliveryMethod: DeliveryMethod;
   deliveryAddress: string | null;
+  carrier?: string | null;
+  trackingNo?: string | null;
   freight: string;
   discountPercent: string;
   currency: string;
@@ -1061,7 +1063,12 @@ export interface SalesRepository {
    * 非 DRAFT 抛 SALES_STATE_CONFLICT；库存不足抛 INSUFFICIENT_STOCK；
    * 手工批次不存在抛 STOCK_BATCH_NOT_FOUND。
    */
-  send(id: string, allocations: SalesAllocationInput[], sentBy: string): Promise<SalesOrderRecord | null>;
+  send(
+    id: string,
+    allocations: SalesAllocationInput[],
+    sentBy: string,
+    options?: { carrier?: string | null; trackingNo?: string | null },
+  ): Promise<SalesOrderRecord | null>;
   /**
    * 取消：DRAFT → CANCELLED（无库存动作）；SENT/PAYMENT_UPLOADED（未确认收货）→ CANCELLED，
    * 按原分配写 stock_movements（OUTBOUND_SALE_REVERSAL）回补批次。CONFIRMED 抛 SALES_STATE_CONFLICT。

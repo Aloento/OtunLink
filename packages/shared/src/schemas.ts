@@ -410,9 +410,11 @@ export const salesSendAllocationSchema = z.object({
   qty: shipmentQty,
 });
 
-/** 发送销售单（POST /sales-orders/:id/send）：allocations 缺省时按 FEFO 自动分配。 */
+/** 发送销售单（POST /sales-orders/:id/send）：allocations 缺省时按 FEFO 自动分配；仓库可填写配送商与运单号（自提可留空）。 */
 export const salesOrderSendSchema = z.object({
   allocations: z.array(salesSendAllocationSchema).max(500).optional(),
+  carrier: z.string().trim().max(256).optional().nullable(),
+  trackingNo: z.string().trim().max(128).optional().nullable(),
 });
 
 /** 上传支付凭证（POST /sales-orders/:id/payments）：凭证图片走 files 管线预上传。 */

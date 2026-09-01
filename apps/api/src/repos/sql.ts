@@ -577,6 +577,8 @@ function mapSalesOrder(row: Record<string, unknown>): SalesOrderRecord {
     source: (row.source as SalesOrderRecord['source']) ?? 'RETAILER_REQUEST',
     deliveryMethod: (row.delivery_method as SalesOrderRecord['deliveryMethod']) ?? 'PICKUP',
     deliveryAddress: row.delivery_address ? String(row.delivery_address) : null,
+    carrier: row.carrier ? String(row.carrier) : null,
+    trackingNo: row.tracking_no ? String(row.tracking_no) : null,
     freight: row.freight != null ? String(row.freight) : '0',
     discountPercent: row.discount_percent != null ? String(row.discount_percent) : '0',
     currency: String(row.currency ?? 'CNY'),
@@ -2912,6 +2914,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       id: string,
       allocations: SalesAllocationInput[],
       sentBy: string,
+      options: { carrier?: string | null; trackingNo?: string | null } = {},
     ): Promise<SalesOrderRecord | null> {
       await exec.query('BEGIN');
       try {
@@ -3046,7 +3049,9 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         }
         const { rows: updated } = await exec.query(
           `UPDATE sales_orders
-           SET status = 'SENT', sent_at = now(), updated_at = now()
+           SET status = 'SENT', sent_at = now(), updated_at = now(),
+               carrier = COALESCE(${quote(options.carrier ?? null)}, carrier),
+               tracking_no = COALESCE(${quote(options.trackingNo ?? null)}, tracking_no)
            WHERE id = ${quote(id)} AND status = 'DRAFT' RETURNING *`,
         );
         if (!updated[0]) throw new Error(SALES_STATE_CONFLICT);

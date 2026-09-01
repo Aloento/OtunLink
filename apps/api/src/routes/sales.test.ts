@@ -70,6 +70,7 @@ const warehouse2 = user({ entraSub: 'wh2', role: 'WAREHOUSE', scopeUnitId: WAREH
 const retailer = user({ entraSub: 'rt', role: 'RETAILER', scopeUnitId: RETAIL_UNIT });
 const retailer2 = user({ entraSub: 'rt2', role: 'RETAILER', scopeUnitId: RETAIL_UNIT_2 });
 const retailerGlobal = user({ entraSub: 'rtg', role: 'RETAILER', scopeUnitId: RETAIL_UNIT });
+const collector = user({ entraSub: 'col', role: 'COLLECTOR', scopeUnitId: COLLECTOR_UNIT });
 
 const units = [
   unit({ id: COLLECTOR_UNIT, type: 'COLLECTOR', name: '上海集货部' }),
@@ -99,7 +100,7 @@ function makeApp(extraPartnerships: PartnershipRecord[] = []) {
     ...extraPartnerships,
   ];
   const repos = createMemoryRepos({
-    users: [warehouse, warehouse2, retailer, retailer2, retailerGlobal],
+    users: [warehouse, warehouse2, retailer, retailer2, retailerGlobal, collector],
     units,
     items,
     partnerships,
@@ -202,6 +203,8 @@ async function getOrder(app: Awaited<ReturnType<typeof makeApp>>['app'], id: str
       status: string;
       totalAmount: string | null;
       currency: string;
+      carrier: string | null;
+      trackingNo: string | null;
       items: Array<{ id: string; itemId: string; qty: string; listPrice: string; price: string; lineTotal: string }>;
       allocations: Array<{ id: string; itemId: string; batchId: string; qty: string }>;
       payment: { amount: string; currency: string; methodNote: string | null } | null;
@@ -279,6 +282,52 @@ describe('ck-09a 销售单（请货/发货/FEFO 分配）', () => {
     const byBatch = new Map(stockBody.data.items.map((r) => [r.batchId, Number(r.qty)]));
     expect(byBatch.get(early.batchId) ?? 0).toBe(0);
     expect(byBatch.get(late.batchId)).toBe(7);
+  });
+
+  it('配送信息：仓库发送填写 carrier/trackingNo → 详情返回；零售只读可见；非仓库角色写 → 403', async () => {
+    const { app } = makeApp();
+    await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100');
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT, itemId: ITEM_A, qty: '10', unitCost: '8',
+      batchNo: 'B-1', expiryDate: '2025-03-01',
+    });
+
+    // 仓库发送时填写承运商与运单号。
+    const res = await createOrder(app, 'wh', [{ itemId: ITEM_A, qty: '1' }]);
+    const { data } = (await res.json()) as { data: { id: string } };
+    const sent = await app.request(`/api/v1/sales-orders/${data.id}/send`, {
+      method: 'POST', headers: json('wh'),
+      body: JSON.stringify({ carrier: '顺丰速运', trackingNo: 'SF1234567890' }),
+    });
+    expect(sent.status).toBe(200);
+    const order = await getOrder(app, data.id);
+    expect(order.carrier).toBe('顺丰速运');
+    expect(order.trackingNo).toBe('SF1234567890');
+
+    // 零售作为买方只读可见。
+    const rtOrder = await getOrder(app, data.id, 'rt');
+    expect(rtOrder.carrier).toBe('顺丰速运');
+    expect(rtOrder.trackingNo).toBe('SF1234567890');
+
+    // 自提时两字段可为空：仅 carrier 留空仍可发送。
+    const res2 = await createOrder(app, 'wh', [{ itemId: ITEM_A, qty: '1' }]);
+    const order2 = ((await res2.json()) as { data: { id: string } }).data;
+    const sent2 = await app.request(`/api/v1/sales-orders/${order2.id}/send`, {
+      method: 'POST', headers: json('wh'), body: '{}',
+    });
+    expect(sent2.status).toBe(200);
+    const order2After = await getOrder(app, order2.id);
+    expect(order2After.carrier).toBeNull();
+    expect(order2After.trackingNo).toBeNull();
+
+    // 非仓库/非管理员角色（收集员）无 SALES_SEND → 403。
+    const res3 = await createOrder(app, 'wh', [{ itemId: ITEM_A, qty: '1' }]);
+    const order3 = ((await res3.json()) as { data: { id: string } }).data;
+    const colSend = await app.request(`/api/v1/sales-orders/${order3.id}/send`, {
+      method: 'POST', headers: json('col'),
+      body: JSON.stringify({ carrier: '自提', trackingNo: null }),
+    });
+    expect(colSend.status).toBe(403);
   });
 
   it('手工覆盖批次：按指定批次分配；数量不匹配 → 400 SALES_LINE_INVALID；批次不存在/不足 → 409', async () => {

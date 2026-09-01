@@ -5,9 +5,11 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
 import type { ItemDto } from '@otunlink/shared';
+import { Permissions, hasPermission } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { getItemByBarcode, listItems } from '../../api/items';
+import { useSession } from '../../auth/SessionProvider';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { ScannerDialog } from '../../components/ScannerDialog';
 
@@ -17,6 +19,8 @@ const PAGE_SIZE = 20;
 export function ItemsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { me } = useSession();
+  const canWrite = hasPermission(me?.role, Permissions.ITEMS_WRITE);
 
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -102,9 +106,11 @@ export function ItemsPage() {
           <Button appearance="secondary" onClick={() => setScanOpen(true)}>
             {t('items.scan')}
           </Button>
-          <Link to="/items/new">
-            <Button appearance="primary">{t('items.newItem')}</Button>
-          </Link>
+          {canWrite && (
+            <Link to="/items/new">
+              <Button appearance="primary">{t('items.newItem')}</Button>
+            </Link>
+          )}
         </div>
       </div>
 

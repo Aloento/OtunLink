@@ -3,7 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 
+import { Permissions, hasPermission } from '@otunlink/shared';
+
 import { getItem } from '../../api/items';
+import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
 
 // 物品详情（ck-04 §6.1）：字段 + 图片（预签名 URL 展示）。
@@ -11,6 +14,8 @@ export function ItemDetailPage() {
   const { t } = useTranslation();
   const params = useParams<{ id: string }>();
   const id = params.id!;
+  const { me } = useSession();
+  const canWrite = hasPermission(me?.role, Permissions.ITEMS_WRITE);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['items', id],
@@ -54,9 +59,11 @@ export function ItemDetailPage() {
           <Link to="/items">
             <Button appearance="secondary">{t('items.back')}</Button>
           </Link>
-          <Link to={`/items/${id}/edit`}>
-            <Button appearance="primary">{t('items.edit')}</Button>
-          </Link>
+          {canWrite && (
+            <Link to={`/items/${id}/edit`}>
+              <Button appearance="primary">{t('items.edit')}</Button>
+            </Link>
+          )}
         </div>
       </div>
 

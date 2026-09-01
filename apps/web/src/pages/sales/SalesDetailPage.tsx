@@ -163,6 +163,18 @@ export function SalesDetailPage() {
             {order.deliveryAddress}
           </div>
         )}
+        {order.carrier && (
+          <div>
+            <span className="text-neutral-500">{t('sales.carrier')}：</span>
+            {order.carrier}
+          </div>
+        )}
+        {order.trackingNo && (
+          <div>
+            <span className="text-neutral-500">{t('sales.trackingNo')}：</span>
+            {order.trackingNo}
+          </div>
+        )}
         <div>
           <span className="text-neutral-500">{t('sales.freight')}：</span>
           {order.freight ?? '0'}
@@ -433,6 +445,8 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [manual, setManual] = useState<Record<string, string>>({});
+  const [carrier, setCarrier] = useState('');
+  const [trackingNo, setTrackingNo] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -496,7 +510,11 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
     setSending(true);
     setError(null);
     try {
-      await sendSalesOrder(order.id, { allocations });
+      await sendSalesOrder(order.id, {
+        allocations,
+        carrier: carrier.trim() || null,
+        trackingNo: trackingNo.trim() || null,
+      });
       await queryClient.invalidateQueries({ queryKey: ['sales-orders', order.id] });
       onSent();
     } catch (cause) {
@@ -513,6 +531,22 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
       <Text size={200} className="text-neutral-500">
         {t('sales.fefoHint')}
       </Text>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Field label={t('sales.carrier')}>
+          <Input
+            value={carrier}
+            onChange={(_, d) => setCarrier(d.value)}
+            placeholder={t('sales.carrierPlaceholder')}
+          />
+        </Field>
+        <Field label={t('sales.trackingNo')}>
+          <Input
+            value={trackingNo}
+            onChange={(_, d) => setTrackingNo(d.value)}
+            placeholder={t('sales.trackingNoPlaceholder')}
+          />
+        </Field>
+      </div>
       {isLoading ? (
         <Spinner size="tiny" label={t('common.loading')} />
       ) : (

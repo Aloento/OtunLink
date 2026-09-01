@@ -60,19 +60,19 @@
 
 | # | 问题 | 证据（实现位置） | 影响 | 确认结论 / 修复方向 |
 |---|---|---|---|---|
-| 1 | **外部合作方（RETAILER）可进入发货单**：`SHIPMENTS_READ` + `TRACKINGS_MANAGE` 授予了 RETAILER，前端路由 `/shipments`（`apps/web/src/routes/routes.ts` 要求 `SHIPMENTS_READ`）对零售可见；发货单是「集货 → 仓库」的内部单据 | `packages/shared/src/auth.ts` §86-99 | 商业信息泄漏：商铺买家可看其他合作方的内部发货单据、物流单号、箱数 | ✅ 确认：从 `ROLE_PERMISSIONS.RETAILER` 移除 `SHIPMENTS_READ`、`TRACKINGS_MANAGE`；前端发货单导航对零售不可见 |
-| 2 | **RETAILER 有 `ITEMS_WRITE`**：外部合作方可以新增/编辑全局物品目录 | `auth.ts` §88 | 外部合作方可污染全局共享目录（名称/条码/规格/图片） | ✅ 确认：移除 `ITEMS_WRITE`（仅保留 `ITEMS_READ`）；目录维护 = 内部角色（COLLECTOR/WAREHOUSE/ADMIN） |
-| 3 | **RETAILER 有 `RETAIL_PRICES_READ`**：可查看零售价 | `auth.ts` §92；`apps/api/src/routes/retail-prices.ts` (`scopeAllows`)；`apps/web/src/routes/routes.ts` `retailPrices` | 只读是否允许 | ✅ 确认：**保留只读**（仓库提供的零售价），但查询范围改为**已签约仓库**（见 P0 #7） |
-| 4 | **「scope 空 = 全量」导致越权 + 未强制归属**：`approver`/`scopeAllows` 类检查在 `scope_unit_id` 为 NULL 时全部放行（如 `shipments.ts` §519-532 `return !scopeUnitId || ...`、`retail-prices.ts` §100-102、`inbound/outbound/reviews/return-orders` 同理） | `apps/api/src/routes/*`；`apps/api/src/auth/middleware.ts` | 未绑 scope 的仓管/集货/零售可操作**所有**对象 | ✅ 确认：**仓库/集货/零售必须绑定归属单元**；**一个账户只能绑定一个实体**（实体可多账户）；仅 ADMIN 可空（全量）。实现 = 非 ADMIN 强制 scope 非空（创建/编辑/查询校验） |
-| 5 | **零售库存/零售价查询被自身门店 scope 过滤**：`stock.ts` §28 `unitId: unitId || scope?.unitId`、`retail-prices.ts` §100-102 —— 当 RETAILER scope=ST-XX 且不传 `unitId` 时，只查得到自己门店（零售单元）的库存/零售价（实际无货），**看不到已签约仓库** | `apps/api/src/routes/stock.ts:28`；`retail-prices.ts:100-102` | 零售方库存页/零售价页恒为空 —— 实测 R01 即为空（部分因数据未 seed，但即使 seed 了仓库库存，scope 兜底也会过滤掉） | ✅ 确认：零售的 `STOCK_READ/RETAIL_PRICES_READ` 查询按**已签约仓库**范围（不复用自身门店 scope 过滤；`hideCost` 保留） |
-| 6 | **前端权限回归风险**：`access.ts` 为 OR 语义、`routes.ts` 中 `shipments` 路由只要求 `SHIPMENTS_READ`，移除 RETAILER 权限后需复验 C/W 不受影响 | `apps/web/src/routes/access.ts`；`routes.ts` | 修复时回归 | 修复后跑 A06/C01-C08/W01-W16 权限回归 |
+| 1 | **外部合作方（RETAILER）可进入发货单**：`SHIPMENTS_READ` + `TRACKINGS_MANAGE` 授予了 RETAILER，前端路由 `/shipments`（`apps/web/src/routes/routes.ts` 要求 `SHIPMENTS_READ`）对零售可见；发货单是「集货 → 仓库」的内部单据 | `packages/shared/src/auth.ts` §86-99 | 商业信息泄漏：商铺买家可看其他合作方的内部发货单据、物流单号、箱数 | ✅ 确认：从 `ROLE_PERMISSIONS.RETAILER` 移除 `SHIPMENTS_READ`、`TRACKINGS_MANAGE`；前端发货单导航对零售不可见 ✅ 已修复（2026-09-01） |
+| 2 | **RETAILER 有 `ITEMS_WRITE`**：外部合作方可以新增/编辑全局物品目录 | `auth.ts` §88 | 外部合作方可污染全局共享目录（名称/条码/规格/图片） | ✅ 确认：移除 `ITEMS_WRITE`（仅保留 `ITEMS_READ`）；目录维护 = 内部角色（COLLECTOR/WAREHOUSE/ADMIN） ✅ 已修复（2026-09-01） |
+| 3 | **RETAILER 有 `RETAIL_PRICES_READ`**：可查看零售价 | `auth.ts` §92；`apps/api/src/routes/retail-prices.ts` (`scopeAllows`)；`apps/web/src/routes/routes.ts` `retailPrices` | 只读是否允许 | ✅ 确认：**保留只读**（仓库提供的零售价），但查询范围改为**已签约仓库**（见 P0 #7） ✅ 已修复（2026-09-01） |
+| 4 | **「scope 空 = 全量」导致越权 + 未强制归属**：`approver`/`scopeAllows` 类检查在 `scope_unit_id` 为 NULL 时全部放行（如 `shipments.ts` §519-532 `return !scopeUnitId || ...`、`retail-prices.ts` §100-102、`inbound/outbound/reviews/return-orders` 同理） | `apps/api/src/routes/*`；`apps/api/src/auth/middleware.ts` | 未绑 scope 的仓管/集货/零售可操作**所有**对象 | ✅ 确认：**仓库/集货/零售必须绑定归属单元**；**一个账户只能绑定一个实体**（实体可多账户）；仅 ADMIN 可空（全量）。实现 = 非 ADMIN 强制 scope 非空（创建/编辑/查询校验） ✅ 已修复（2026-09-01） |
+| 5 | **零售库存/零售价查询被自身门店 scope 过滤**：`stock.ts` §28 `unitId: unitId || scope?.unitId`、`retail-prices.ts` §100-102 —— 当 RETAILER scope=ST-XX 且不传 `unitId` 时，只查得到自己门店（零售单元）的库存/零售价（实际无货），**看不到已签约仓库** | `apps/api/src/routes/stock.ts:28`；`retail-prices.ts:100-102` | 零售方库存页/零售价页恒为空 —— 实测 R01 即为空（部分因数据未 seed，但即使 seed 了仓库库存，scope 兜底也会过滤掉） | ✅ 确认：零售的 `STOCK_READ/RETAIL_PRICES_READ` 查询按**已签约仓库**范围（不复用自身门店 scope 过滤；`hideCost` 保留） ✅ 已修复（2026-09-01） |
+| 6 | **前端权限回归风险**：`access.ts` 为 OR 语义、`routes.ts` 中 `shipments` 路由只要求 `SHIPMENTS_READ`，移除 RETAILER 权限后需复验 C/W 不受影响 | `apps/web/src/routes/access.ts`；`routes.ts` | 修复时回归 | 修复后跑 A06/C01-C08/W01-W16 权限回归 ✅ 已修复（2026-09-01） |
 
 ### P0（新增需求，随确认提出 —— 需设计 + 实现）
 
 | # | 需求 | 说明 | 建议模型 |
 |---|---|---|---|
-| 7 | **仓库-零售签约（供货）关系** | 零售只能看到**已签约仓库**的库存/零售价；请货时可选仓库 = 已签约集合；**签约只能由仓库主动发起**（零售无需同意），仓库把零售「添加进可售客户列表」即生效；避免零售默认看到别国/未签约仓库库存 | 新表（如 `retail_partnerships` / `warehouse_customers`）：`warehouse_unit_id`、`retailer_unit_id`、`created_by`、`created_at`，唯一约束 (warehouse, retailer)；WAREHOUSE 角色仅可维护**自己归属仓库**的客户列表；无确认状态机 |
-| 8 | **销售单配送信息（仓库提供，零售只读）** | 仓库（卖方）在销售单上提供**配送方式 + 配送单号**（如自提、快递等）；零售可查看（独立于发货单物流单号） | `sales_orders` 已有 `delivery_method`（`PICKUP/EXPRESS/LOGISTICS`）；**需新增** `carrier`（物流商）+ `tracking_no`（配送单号）字段（可空；发送/发货时仓库填写）；零售详情页展示 |
+| 7 | **仓库-零售签约（供货）关系** | 零售只能看到**已签约仓库**的库存/零售价；请货时可选仓库 = 已签约集合；**签约只能由仓库主动发起**（零售无需同意），仓库把零售「添加进可售客户列表」即生效；避免零售默认看到别国/未签约仓库库存 | 新表（如 `retail_partnerships` / `warehouse_customers`）：`warehouse_unit_id`、`retailer_unit_id`、`created_by`、`created_at`，唯一约束 (warehouse, retailer)；WAREHOUSE 角色仅可维护**自己归属仓库**的客户列表；无确认状态机 ✅ 已修复（2026-09-01） |
+| 8 | **销售单配送信息（仓库提供，零售只读）** | 仓库（卖方）在销售单上提供**配送方式 + 配送单号**（如自提、快递等）；零售可查看（独立于发货单物流单号） | `sales_orders` 已有 `delivery_method`（`PICKUP/EXPRESS/LOGISTICS`）；**需新增** `carrier`（物流商）+ `tracking_no`（配送单号）字段（可空；发送/发货时仓库填写）；零售详情页展示 ✅ 已修复（2026-09-01） |
 
 ### P2（文档/语义不一致，需修订）
 
@@ -119,10 +119,10 @@
 
 - **本轮不实现代码**；只记录问题 + 修订设计文档（design.md v1.2：§1.3/§1.4/§3.2/§3.3/附录 C/§11.10）—— 已完成。
 - **验收暂停项**：R01-R06（R 链路）——等角色语义修复完成后再验。
-- 下次实施顺序建议（待用户确认开工）：
-  1. 修订 `ROLE_PERMISSIONS`（RETAILER 移除 `ITEMS_WRITE/SHIPMENTS_READ/TRACKINGS_MANAGE`）+ 前端路由
-  2. 修订 scope 语义：非 ADMIN 强制绑定归属单元（一个账户只能绑定一个实体）；修 `scopeAllows` 系列（空 scope 不再放行）
-  3. 设计并实现**仓库-零售签约关系**（新表；WAREHOUSE 主动添加客户；零售库存/零售价/可请货仓库 = 已签约集合）
-  4. 销售单增加**配送方式 + 配送单号**字段（仓库填写、零售只读）
-  5. 更新 ck-03/ck-04/ck-09a 描述 + 补充单元测试（`hasPermission` 断言 + API scope 越权用例）
-  6. 复验 A06/C/W/R 权限回归，再继续 R 链路验收
+- 下次实施顺序建议（2026-09-01 状态：以下 6 步已由前序修复任务执行，各步状态见括号标注）：
+  1. 修订 `ROLE_PERMISSIONS`（RETAILER 移除 `ITEMS_WRITE/SHIPMENTS_READ/TRACKINGS_MANAGE`）+ 前端路由 —— ✅ 已完成（2026-09-01，前序修复任务：角色权限）
+  2. 修订 scope 语义：非 ADMIN 强制绑定归属单元（一个账户只能绑定一个实体）；修 `scopeAllows` 系列（空 scope 不再放行） —— ✅ 已完成（2026-09-01，前序修复任务：`requireUnitScopeAssigned`）
+  3. 设计并实现**仓库-零售签约关系**（新表；WAREHOUSE 主动添加客户；零售库存/零售价/可请货仓库 = 已签约集合） —— ✅ 已完成（2026-09-01，前序修复任务：`retail_partnerships` + `routes/partnerships.ts` + `PartnershipsPage.tsx`）
+  4. 销售单增加**配送方式 + 配送单号**字段（仓库填写、零售只读） —— ✅ 已完成（2026-09-01，前序修复任务：`sales_orders.carrier/tracking_no`）
+  5. 更新 ck-03/ck-04/ck-09a 描述 + 补充单元测试（`hasPermission` 断言 + API scope 越权用例） —— ✅ 已完成（2026-09-01，前序修复任务：文档同步 + 全量测试/构建通过）
+  6. 复验 A06/C/W/R 权限回归，再继续 R 链路验收 —— ✅ 已完成（2026-09-01：全量单测/构建通过；零售链路 R01–R06 已用 `retail.tester` 实测复验通过：库存/零售价仅签约仓库、零售价只读、请货创建成功、详情可见仓库配送方式+运单号、无发货单入口且 `/shipments` `/items/new` `/items/:id/edit` 直达被拦截、物品目录/详情无写按钮；复验中另修复 3 处前端遗漏：物品按钮门控、零售价页/请货页仓库下拉按签约加载、买卖双方下拉 disabled 逻辑；详见 `ui-acceptance.md` §4/§8.1）

@@ -57,6 +57,13 @@
       "when": 1788246318359,
       "tag": "0007_wakeful_wallow",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788247865263,
+      "tag": "0008_lively_exodus",
+      "breakpoints": true
     }
   ]
 }

@@ -30,5 +30,9 @@ export const migrations: Migration[] = [
   {
     "name": "0007_wakeful_wallow",
     "sql": "CREATE TABLE \"retail_partnerships\" (\n\t\"id\" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,\n\t\"warehouse_unit_id\" uuid NOT NULL,\n\t\"retailer_unit_id\" uuid NOT NULL,\n\t\"created_by\" uuid,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n--> statement-breakpoint\nALTER TABLE \"retail_partnerships\" ADD CONSTRAINT \"retail_partnerships_warehouse_unit_id_business_units_id_fk\" FOREIGN KEY (\"warehouse_unit_id\") REFERENCES \"public\".\"business_units\"(\"id\") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint\nALTER TABLE \"retail_partnerships\" ADD CONSTRAINT \"retail_partnerships_retailer_unit_id_business_units_id_fk\" FOREIGN KEY (\"retailer_unit_id\") REFERENCES \"public\".\"business_units\"(\"id\") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint\nALTER TABLE \"retail_partnerships\" ADD CONSTRAINT \"retail_partnerships_created_by_users_id_fk\" FOREIGN KEY (\"created_by\") REFERENCES \"public\".\"users\"(\"id\") ON DELETE set null ON UPDATE no action;--> statement-breakpoint\nCREATE UNIQUE INDEX \"retail_partnerships_pair_unique\" ON \"retail_partnerships\" USING btree (\"warehouse_unit_id\",\"retailer_unit_id\");--> statement-breakpoint\nCREATE INDEX \"retail_partnerships_retailer_idx\" ON \"retail_partnerships\" USING btree (\"retailer_unit_id\");"
+  },
+  {
+    "name": "0008_lively_exodus",
+    "sql": "ALTER TABLE \"sales_orders\" ADD COLUMN \"carrier\" text;--> statement-breakpoint\nALTER TABLE \"sales_orders\" ADD COLUMN \"tracking_no\" text;"
   }
 ];

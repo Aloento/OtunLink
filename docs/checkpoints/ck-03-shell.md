@@ -42,7 +42,7 @@ design.md：§6.1 页面/路由、§8.3 i18n、§8.6 错误码、§8.9 前端缓
 ### 遗留问题 / 与任务差异
 
 1. Fluent UI v9.74.7 的 `FluentProvider` 无 `locale` 属性（@fluentui/react-provider 类型中无 locale prop），Fluent 组件本地化无法通过 Provider 注入；改为 i18next + `document.documentElement.lang`，Fluent 自带日期/数字组件后续需单独适配。
-2. 角色路由矩阵按 design.md §3.2 权限 OR 语义实现，与父任务简化清单略有出入：RETAILER 可读 /shipments（SHIPMENTS_READ），WAREHOUSE 可进 /sales（SALES_CREATE|SALES_REQUEST 之一）。 **⚠️ 2026-08-31 业务评审废弃**：RETAILER 为外部合作方（商铺买家），**不可见** /shipments——该描述与已确认业务语义不符（见 `docs/qa/rbac-matrix-vs-semantics.md`），实现修复时同步更新。 
+2. 角色路由矩阵按 design.md §3.2 权限 OR 语义实现，与父任务简化清单略有出入：RETAILER 可读 /shipments（SHIPMENTS_READ），WAREHOUSE 可进 /sales（SALES_CREATE|SALES_REQUEST 之一）。 **✅ 2026-09-01 已按评审语义重实现**：本 checkpoint 的角色权限与 scope 语义已按 `docs/qa/rbac-matrix-vs-semantics.md` §1.1 评审结论重实现（ck-03 权限与 scope：RETAILER 不可见 /shipments；非 ADMIN 强制绑定归属单元、一个账户一个实体；仅 ADMIN 全量），设计文档以 design.md v1.4 为准。 
 3. 未引入 Playwright/jsdom：vitest 为 node 环境，测试仅覆盖纯函数（守卫 access、错误映射 http、格式化、i18n 资源一致性），未做 dev server 真实浏览器冒烟（MSAL 需真实 Entra 租户配置，验收 1/4 未截图验证）。
 4. Vite 构建存在 765.19 kB chunk 体积告警（Fluent 全量 + MSAL），后续可按需分包。
 5. 401 处理为骨架级：跳转 /login，未做 forceRefresh 重试与自动登出循环保护。

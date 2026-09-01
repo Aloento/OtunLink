@@ -411,6 +411,8 @@ export const salesOrders = pgTable(
     source: salesSourceEnum('source').notNull().default('RETAILER_REQUEST'),
     deliveryMethod: deliveryMethodEnum('delivery_method').notNull().default('PICKUP'),
     deliveryAddress: text('delivery_address'),
+    carrier: text('carrier'),
+    trackingNo: text('tracking_no'),
     freight: money('freight').notNull().default('0'),
     discountPercent: numeric('discount_percent', { precision: 5, scale: 2 }).notNull().default('0'),
     currency: varchar('currency', { length: 3 }).notNull().default('CNY'),

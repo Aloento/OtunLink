@@ -33,7 +33,7 @@ design.md：§4.2 物品、§8.1 图片、§8.7 扫码、§6.1/§6.2 页面与 A
 
 - API（apps/api）：`routes/items.ts`（CRUD + `/by-barcode` 搜索 + `/items/:id/images` 挂图，条码 active 唯一 → 409 `BARCODE_CONFLICT`）、`routes/files.ts`（multipart 上传 + `/files/:id/url` 15 分钟预签名）、`lib/image.ts`（JPEG/PNG/WebP 魔数 + 尺寸探测）、`lib/s3.ts`（aws4fetch AwsClient 封装 putObject/presignedGetUrl）；memory/sql 仓储补齐 items/files；新增错误码 `BARCODE_CONFLICT/FILE_INVALID/FILE_TOO_LARGE/STORAGE_UNAVAILABLE`。
 - Web（apps/web）：`pages/items/*`（列表/表单/详情）、`components/{ImageUpload,FileImage,ScannerDialog}`、`lib/image-compress.ts`（Canvas 压缩最长边 ≤1600、JPEG 质量适配 ≤2MB、320px 缩略图）、`lib/barcode.ts`（BarcodeDetector → @zxing/browser 回退，自管理 MediaStream 保证 track.stop 释放）、`types/barcode.d.ts`（TS7 lib.dom 无 BarcodeDetector，手动声明）。
-- 权限：物品目录全局共享，`ITEMS_READ` 全角色，`ITEMS_WRITE` 全角色（COLLECTOR/WAREHOUSE/RETAILER/ADMIN），按 design.md §3.2 矩阵。 **⚠️ 2026-08-31 业务评审废弃**：RETAILER（外部合作方）**不可管理物品列表**（仅 ITEMS_READ）——该描述与已确认业务语义不符（见 `docs/qa/rbac-matrix-vs-semantics.md`），实现修复时同步更新。
+- 权限：物品目录全局共享，`ITEMS_READ` 全角色，`ITEMS_WRITE` 全角色（COLLECTOR/WAREHOUSE/RETAILER/ADMIN），按 design.md §3.2 矩阵。 **✅ 2026-09-01 已按评审语义重实现**：本 checkpoint 的物品权限已按 `docs/qa/rbac-matrix-vs-semantics.md` §1.1 评审结论重实现（ck-04 物品权限：RETAILER 移除 ITEMS_WRITE、仅保留 ITEMS_READ；目录维护仅 COLLECTOR/WAREHOUSE/ADMIN），设计文档以 design.md v1.4 为准。
 - 验证：`pnpm -r typecheck` ✅ / `pnpm -r test` ✅（web 40、shared 16、db 8、api 45）/ `pnpm -r build` ✅（api 经 `wrangler deploy --dry-run`）。`wrangler dev` 本地起服后 curl：`/api/v1/items`、`/items/by-barcode`、`/files` POST、`/files/:id/url` 未带 token 均返回 401 `UNAUTHORIZED`。
 
 ### 遗留问题 / 与任务差异

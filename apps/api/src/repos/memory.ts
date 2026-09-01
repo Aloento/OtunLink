@@ -2674,6 +2674,7 @@ class MemorySalesRepository implements SalesRepository {
     id: string,
     allocations: SalesAllocationInput[],
     sentBy: string,
+    options: { carrier?: string | null; trackingNo?: string | null } = {},
   ): Promise<SalesOrderRecord | null> {
     const existing = this.rows.get(id);
     if (!existing) return null;
@@ -2740,6 +2741,14 @@ class MemorySalesRepository implements SalesRepository {
       status: 'SENT',
       sentAt: now,
       updatedAt: now,
+      carrier:
+        options.carrier !== undefined && options.carrier !== null
+          ? normalizeEmpty(options.carrier)
+          : existing.carrier,
+      trackingNo:
+        options.trackingNo !== undefined && options.trackingNo !== null
+          ? normalizeEmpty(options.trackingNo)
+          : existing.trackingNo,
     };
     this.rows.set(id, cloneSalesOrder(next));
     return this.withPayment(next);

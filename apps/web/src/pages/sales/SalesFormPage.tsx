@@ -24,6 +24,7 @@ import {
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { listItems } from '../../api/items';
+import { listPartnerships } from '../../api/partnerships';
 import { createSalesOrder, getSalesOrder, updateSalesOrder } from '../../api/sales';
 import { listUnits, type UnitDto } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
@@ -73,6 +74,11 @@ export function SalesFormPage() {
     queryFn: () => listUnits(),
     staleTime: 60_000,
   });
+  const partnershipsQuery = useQuery({
+    queryKey: ['partnerships', 'list'],
+    queryFn: () => listPartnerships(),
+    staleTime: 60_000,
+  });
 
   const { data: itemPage } = useQuery({
     queryKey: ['items', 'picker', ''],
@@ -86,14 +92,24 @@ export function SalesFormPage() {
     enabled: isEdit,
   });
 
-  const warehouses = useMemo(
-    () => (units ?? []).filter((u) => u.type === 'WAREHOUSE' && u.isActive),
-    [units],
-  );
-  const retailers = useMemo(
-    () => (units ?? []).filter((u) => u.type === 'RETAILER' && u.isActive),
-    [units],
-  );
+  const warehouses = useMemo(() => {
+    if (me?.role === 'RETAILER') {
+      return (partnershipsQuery.data?.items ?? []).map((p) => ({
+        id: p.warehouseUnitId,
+        name: p.warehouseUnitName ?? p.warehouseUnitId,
+      }));
+    }
+    return (units ?? []).filter((u) => u.type === 'WAREHOUSE' && u.isActive);
+  }, [me, partnershipsQuery.data, units]);
+  const retailers = useMemo(() => {
+    if (me?.role === 'WAREHOUSE') {
+      return (partnershipsQuery.data?.items ?? []).map((p) => ({
+        id: p.retailerUnitId,
+        name: p.retailerUnitName ?? p.retailerUnitId,
+      }));
+    }
+    return (units ?? []).filter((u) => u.type === 'RETAILER' && u.isActive);
+  }, [me, partnershipsQuery.data, units]);
 
   useEffect(() => {
     if (detailQuery.data) {
@@ -119,19 +135,17 @@ export function SalesFormPage() {
     }
   }, [detailQuery.data]);
 
-  // 默认选择：有 scope 直接锁定；无 scope 且唯一时自动选中。
+  // 默认选择：仓库/零售有 scope 直接锁定自己；否则唯一时自动选中。
   useEffect(() => {
-    if (isEdit || sellerUnitId || buyerUnitId) return;
-    if (me?.role === 'WAREHOUSE' && me.scopeUnitId) {
-      setSellerUnitId(me.scopeUnitId);
-      return;
+    if (isEdit) return;
+    if (!sellerUnitId) {
+      if (me?.role === 'WAREHOUSE' && me.scopeUnitId) setSellerUnitId(me.scopeUnitId);
+      else if (warehouses.length === 1) setSellerUnitId(warehouses[0].id);
     }
-    if (me?.role === 'RETAILER' && me.scopeUnitId) {
-      setBuyerUnitId(me.scopeUnitId);
-      return;
+    if (!buyerUnitId) {
+      if (me?.role === 'RETAILER' && me.scopeUnitId) setBuyerUnitId(me.scopeUnitId);
+      else if (retailers.length === 1) setBuyerUnitId(retailers[0].id);
     }
-    if (warehouses.length === 1 && !sellerUnitId) setSellerUnitId(warehouses[0].id);
-    if (retailers.length === 1 && !buyerUnitId) setBuyerUnitId(retailers[0].id);
   }, [isEdit, sellerUnitId, buyerUnitId, me, warehouses, retailers]);
 
   const setLine = (key: string, field: keyof LineState, value: string) =>
@@ -206,10 +220,10 @@ export function SalesFormPage() {
           <Select
             value={sellerUnitId}
             onChange={(_, d) => setSellerUnitId(d.value)}
-            disabled={isEdit || me?.role === 'WAREHOUSE' || Boolean(me?.scopeUnitId)}
+            disabled={isEdit || me?.role === 'WAREHOUSE'}
           >
             <option value="">—</option>
-            {warehouses.map((u: UnitDto) => (
+            {warehouses.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
               </option>
@@ -220,10 +234,10 @@ export function SalesFormPage() {
           <Select
             value={buyerUnitId}
             onChange={(_, d) => setBuyerUnitId(d.value)}
-            disabled={isEdit || me?.role === 'RETAILER' || Boolean(me?.scopeUnitId)}
+            disabled={isEdit || me?.role === 'RETAILER'}
           >
             <option value="">—</option>
-            {retailers.map((u: UnitDto) => (
+            {retailers.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
               </option>

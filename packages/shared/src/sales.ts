@@ -54,6 +54,8 @@ export interface SalesOrderDto {
   source: SalesSource;
   deliveryMethod: DeliveryMethod;
   deliveryAddress: string | null;
+  carrier: string | null;
+  trackingNo: string | null;
   freight: string | null;
   discountPercent: string;
   currency: string;

@@ -26,6 +26,7 @@ import {
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { listItems } from '../../api/items';
+import { listPartnerships } from '../../api/partnerships';
 import { listRetailPriceHistory, listRetailPrices, putRetailPrice } from '../../api/retail-prices';
 import { listUnits } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
@@ -58,16 +59,27 @@ export function RetailPricesPage() {
     queryFn: () => listUnits(),
     staleTime: 60_000,
   });
+  const partnershipsQuery = useQuery({
+    queryKey: ['partnerships', 'list'],
+    queryFn: () => listPartnerships(),
+    staleTime: 60_000,
+  });
   const { data: itemPage } = useQuery({
     queryKey: ['items', 'picker', ''],
     queryFn: () => listItems({ size: 100 }),
     staleTime: 30_000,
   });
 
-  const warehouses = useMemo(
-    () => (units ?? []).filter((u) => u.type === 'WAREHOUSE' && u.isActive),
-    [units],
-  );
+  const isRetailer = me?.role === 'RETAILER';
+  const warehouses = useMemo(() => {
+    if (isRetailer) {
+      return (partnershipsQuery.data?.items ?? []).map((p) => ({
+        id: p.warehouseUnitId,
+        name: p.warehouseUnitName ?? p.warehouseUnitId,
+      }));
+    }
+    return (units ?? []).filter((u) => u.type === 'WAREHOUSE' && u.isActive);
+  }, [isRetailer, partnershipsQuery.data, units]);
 
   const pricesQuery = useQuery({
     queryKey: ['retail-prices', 'list', unitId, itemId],

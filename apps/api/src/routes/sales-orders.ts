@@ -217,6 +217,7 @@ export function salesOrdersRouter(): Hono<AppEnv> {
           qty: String(a.qty),
         })),
         c.get('auth').user!.id,
+        { carrier: input.carrier ?? null, trackingNo: input.trackingNo ?? null },
       );
       if (!sent) return notFound(c, '销售单不存在');
       await notify(repos, createMailer(c.env), {
