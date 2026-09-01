@@ -12,26 +12,26 @@ routes = [
 # ── Cloudflare 资源绑定（真实值由用户回传，见 docs/cloud-config.md）────────
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "d3f06050a92846ca950561f5d37f1232"
+id = "<your-hyperdrive-id>"  # 部署前回填真实 id（见 docs/cloud-config.md）
 
 [[kv_namespaces]]
 binding = "JWKS_CACHE"
-id = "24881a3ca1404761a800540a6e809d8d"
+id = "<your-kv-id>"  # 部署前回填真实 id（见 docs/cloud-config.md）
 
 # ── 图片存储：S3 兼容对象存储（华为云 OBS，不用 R2）──────────────────────
 # Workers 无原生 S3 绑定，运行时经 aws4fetch（SigV4 签名）访问；
 # endpoint/bucket/region 为非敏感 vars，AccessKey 走 secrets（.dev.vars / wrangler secret put）。
 [vars]
-S3_ENDPOINT = "https://obs.eu-de.otc.t-systems.com"
+S3_ENDPOINT = "<your-obs-endpoint>"  # 部署前回填完整 URL（含 https://）
 S3_REGION = "eu-de"
-S3_BUCKET = "ims-test-images"
+S3_BUCKET = "<your-bucket>"  # 部署前回填（见 docs/cloud-config.md）
 
 # ── 邮件（SMTP 直连，非敏感配置；SMTP_USER/SMTP_PASS 走 secrets）──────────────
-# 发信人 otun@musi.land（飞书 Lark 邮箱）；仅端口 465（SSL）/587（STARTTLS）。
+# 发信人 <your-mail-from>（飞书 Lark 邮箱）；仅端口 465（SSL）/587（STARTTLS）。
 # 发信频率 200 封/100 秒；单发件人单日上限 450 封。
 MAIL_PROVIDER = "smtp"
-MAIL_FROM = "otun@musi.land"
-SMTP_HOST = "smtp.larksuite.com"
+MAIL_FROM = "<your-mail-from>"  # 部署前回填；也可改为 secret
+SMTP_HOST = "<your-smtp-host>"  # 部署前回填；也可改为 secret
 SMTP_PORT = "465"
 SMTP_SECURE = "true"
 SMTP_STARTTLS = "false"

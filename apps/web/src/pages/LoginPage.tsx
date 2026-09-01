@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { envAuthConfig } from '../auth/msalConfig';
 import { consumeReturnTo } from '../auth/returnTo';
 import { useSession } from '../auth/SessionProvider';
+import { Copyright } from '../components/Copyright';
 
 export function LoginPage() {
   const { instance } = useMsal();
@@ -34,18 +35,24 @@ export function LoginPage() {
   }, [authenticated, me, navigate]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <Title1 as="h1">{t('app.name')}</Title1>
-      {config ? (
-        <>
-          <Body1>{t('login.description')}</Body1>
-          <Button appearance="primary" onClick={login}>
-            {t('login.button')}
-          </Button>
-        </>
-      ) : (
-        <Body1>{t('login.unconfigured')}</Body1>
-      )}
+    <div className="flex min-h-screen flex-col">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
+        <img src="/icons/logo.png" alt="" className="h-20 w-20 shrink-0" />
+        <Title1 as="h1">{t('app.name')}</Title1>
+        {config ? (
+          <>
+            <Body1>{t('login.description')}</Body1>
+            <Button appearance="primary" onClick={login}>
+              {t('login.button')}
+            </Button>
+          </>
+        ) : (
+          <Body1>{t('login.unconfigured')}</Body1>
+        )}
+      </div>
+      <footer className="px-4 pb-6">
+        <Copyright />
+      </footer>
     </div>
   );
 }

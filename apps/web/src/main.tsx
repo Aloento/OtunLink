@@ -12,6 +12,7 @@ import { getMsalInstance } from './auth/msal';
 import { SessionProvider } from './auth/SessionProvider';
 import { initI18n } from './i18n';
 import { LocaleProvider } from './i18n/LocaleProvider';
+import './pwa/registerSw';
 import './index.css';
 
 initI18n();

@@ -6,6 +6,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 
 import { getUnreadCount } from '../api/notifications';
 import { useSession } from '../auth/SessionProvider';
+import { Copyright } from '../components/Copyright';
 import { LanguageSwitch } from '../components/LanguageSwitch';
 import { canAccessPermissions } from '../routes/access';
 import { NAV_ADMIN, NAV_MAIN, ROUTES, type RouteKey } from '../routes/routes';
@@ -73,6 +74,7 @@ export function AppLayout() {
   return (
     <div className="flex min-h-screen flex-col bg-neutral-50">
       <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-neutral-200 bg-white px-4">
+        <img src="/icons/logo.png" alt="" className="h-7 w-7 shrink-0" />
         <span className="text-base font-semibold text-neutral-900">{t('app.name')}</span>
         <div className="flex-1" />
         <span className="hidden text-sm text-neutral-500 sm:inline">
@@ -118,6 +120,10 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      <footer className="px-4 pb-20 pt-2 md:pb-4">
+        <Copyright />
+      </footer>
 
       {isMobile && (
         <nav className="fixed inset-x-0 bottom-0 z-20 flex gap-1 overflow-x-auto border-t border-neutral-200 bg-white px-3 py-2">

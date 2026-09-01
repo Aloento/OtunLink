@@ -36,10 +36,10 @@
 ### 1.3 邮件（SMTP 直连，可选）
 
 API 通过 Cloudflare Workers 出站 TCP 直连外部 SMTP（仅 465 隐式 TLS / 587 STARTTLS，
-25 端口被禁用），无需独立服务。配置（以飞书 Lark `otun@musi.land` 为例）：
+25 端口被禁用），无需独立服务。配置（以飞书 Lark 邮箱为例）：
 
-- 非敏感项（`apps/api/wrangler.toml [vars]`）：`MAIL_PROVIDER=smtp`、`MAIL_FROM=otun@musi.land`、
-  `SMTP_HOST=smtp.larksuite.com`、`SMTP_PORT`（默认 465）、`SMTP_SECURE`（`true`=465）/
+- 非敏感项（`apps/api/wrangler.toml [vars]`）：`MAIL_PROVIDER=smtp`、`MAIL_FROM=<MAIL_FROM>`、
+  `SMTP_HOST=<SMTP_HOST>`、`SMTP_PORT`（默认 465）、`SMTP_SECURE`（`true`=465）/
   `SMTP_STARTTLS`（`true`=587）、`SMTP_AUTH`（`plain`/`login`/`cram-md5`）。
 - secrets（生产 `wrangler secret put`，本地 `apps/api/.dev.vars`）：`SMTP_USER`、`SMTP_PASS`。
 
@@ -94,21 +94,21 @@ curl -X POST https://api.otun.musi.land/api/v1/admin/migrate -H "X-Admin-Secret:
 | ---- | ---- | ---- |
 | `DATABASE_URL` | 本地直连 PG（生产走 Hyperdrive binding，无需此项） | `postgres://...` |
 | `ADMIN_SECRET` | `/api/v1/admin/migrate` 的 bootstrap 密钥（X-Admin-Secret） | — |
-| `ENTRA_TENANT_ID` | Entra 租户（目录）ID | `9ed42989-...` |
-| `ENTRA_CLIENT_ID` | Entra 应用（客户端）ID | `0edca98e-...` |
-| `ENTRA_AUDIENCE` | 可选：token `aud` 校验值（默认接受 client id / `api://<client-id>` 及 MSAL 默认 scope） | `https://tenant.onmicrosoft.com/OtunLink/API` |
+| `ENTRA_TENANT_ID` | Entra 租户（目录）ID | `<TENANT_ID>` |
+| `ENTRA_CLIENT_ID` | Entra 应用（客户端）ID | `<CLIENT_ID>` |
+| `ENTRA_AUDIENCE` | 可选：token `aud` 校验值（默认接受 client id / `api://<client-id>` 及 MSAL 默认 scope） | `https://<TENANT_DOMAIN>.onmicrosoft.com/OtunLink/API` |
 | `ENTRA_ISSUER` | 可选：JWT issuer 覆盖（默认 `https://login.microsoftonline.com/<TENANT_ID>/v2.0`） | — |
 | `JWKS_CACHE` | KV binding（wrangler.toml `[[kv_namespaces]]` 声明，非环境变量） | `JWKS_CACHE` |
-| `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` | 华为云 OBS 非敏感配置（[vars]） | `https://obs.eu-de.otc.t-systems.com` |
+| `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` | 华为云 OBS 非敏感配置（[vars]） | `<OBS_ENDPOINT>` |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | OBS 凭据（**secret**，`wrangler secret put`） | — |
 | `MAIL_PROVIDER` | `smtp`（默认）/ `api`（预留，[vars]） | `smtp` |
-| `MAIL_FROM` | 发件地址（[vars]） | `otun@musi.land` |
-| `SMTP_HOST` | SMTP 服务器地址（[vars]；不配 = 降级仅站内通知） | `smtp.larksuite.com` |
+| `MAIL_FROM` | 发件地址（[vars]） | `<MAIL_FROM>` |
+| `SMTP_HOST` | SMTP 服务器地址（[vars]；不配 = 降级仅站内通知） | `<SMTP_HOST>` |
 | `SMTP_PORT` | SMTP 端口（465=隐式 TLS / 587=STARTTLS，[vars]） | `465` |
 | `SMTP_SECURE` | 465 隐式 TLS 时 `true`（[vars]） | `true` |
 | `SMTP_STARTTLS` | 587 STARTTLS 时 `true`（[vars]） | `false` |
 | `SMTP_AUTH` | 认证方式 `plain`/`login`/`cram-md5`（[vars]） | `plain` |
-| `SMTP_USER` | SMTP 用户名（**secret**）；飞书 Lark 为发信账号 | `otun@musi.land` |
+| `SMTP_USER` | SMTP 用户名（**secret**）；发信账号由 SMTP 服务商提供 | `<SMTP_USER>` |
 | `SMTP_PASS` | SMTP 密码/授权码（**secret**） | — |
 
 ### 前端（Pages 环境变量 / `apps/web/.env.production`）
@@ -131,9 +131,9 @@ CI（`.github/workflows/deploy.yml` 的 deploy-api job）会执行
 
 | Secret                  | 说明                                     | 示例             |
 | ----------------------- | ---------------------------------------- | ---------------- |
-| `SMTP_USER`             | 邮件账号（必填才会发信）                 | `otun@musi.land` |
+| `SMTP_USER`             | 邮件账号（必填才会发信）                 | `<SMTP_USER>` |
 | `SMTP_PASS`             | 邮箱授权码/密码                          | —                |
-| `S3_ACCESS_KEY_ID`      | 华为云 OBS AccessKey（图片上传）         | `HPUA...`        |
+| `S3_ACCESS_KEY_ID`      | 华为云 OBS AccessKey（图片上传）         | `xxxxxxxx...`        |
 | `S3_SECRET_ACCESS_KEY`  | 华为云 OBS SecretKey                     | —                |
 | `CLOUDFLARE_API_TOKEN`  | CF API Token（部署）                     | —                |
 | `CLOUDFLARE_ACCOUNT_ID` | CF 账号 ID（`wrangler secret put` 需要） | `xxxxxxxx`       |

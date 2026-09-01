@@ -4,7 +4,7 @@
 
 ## 1. 当前验证结论（✅ 已连通）
 
-- 连接串已配置在 `apps/api/.dev.vars`（gitignored）：`postgresql://<user>:<pwd>@164.30.21.203:5432/otunlink`
+- 连接串已配置在 `apps/api/.dev.vars`（gitignored）：`postgresql://<user>:<password>@<DB_HOST>:5432/otunlink`
 - `pnpm --filter @otunlink/db db:migrate` 已应用（`schema_migrations` 有记录、业务表存在）
 - `pnpm --filter @otunlink/db db:ping` 直连与经 relay 均 OK
 - Worker 内 `/api/v1/auth/me` 经 postgres.js（`cloudflare:sockets`）直连返回 **200 OK**（登录闭环实测，见 3.3b）
@@ -39,7 +39,7 @@ Worker (apps/api) ── 降级直连 ──► DATABASE_URL
 
 ```env
 # 直连（本地 / 降级）
-DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/otunlink?sslmode=require
+DATABASE_URL=postgresql://<user>:<password>@<DB_HOST>:5432/otunlink?sslmode=require
 
 # Hyperdrive（在 Cloudflare 控制台创建绑定后自动获得）
 # wrangler.toml:
@@ -106,13 +106,13 @@ curl -X POST http://localhost:8787/api/v1/admin/migrate \
 
 `pnpm --filter @otunlink/db seed` 幂等插入示例业务单元：
 
-| code | name | type |
-| ---- | ---- | ---- |
+| code  | name     | type      |
+| ----- | -------- | --------- |
 | SH-CN | 上海集货 | COLLECTOR |
 | GZ-CN | 广州集货 | COLLECTOR |
 | WH-HU | 匈牙利仓 | WAREHOUSE |
 | WH-AT | 奥地利仓 | WAREHOUSE |
-| ST-XX | XX超市 | RETAILER |
-| ST-YY | YY超市 | RETAILER |
+| ST-XX | XX超市   | RETAILER  |
+| ST-YY | YY超市   | RETAILER  |
 
 设置 `SEED_ADMIN=1` 可额外插入占位管理员用户（需先手动重置为可用凭证）。

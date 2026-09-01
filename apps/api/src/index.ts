@@ -198,7 +198,7 @@ export async function scheduled(
               body:
                 emailParagraph(alert.content) +
                 emailParagraph(`所属单元：${alert.unitName ?? '-'}`),
-              cta: { label: '前往处理', url: 'https://musi.land' },
+              cta: { label: '前往处理', url: 'https://otun.musi.land' },
               timestamp: new Date(),
             }),
           });

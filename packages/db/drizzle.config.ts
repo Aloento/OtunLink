@@ -7,6 +7,6 @@ export default defineConfig({
   schema: './src/index.ts',
   out: './migrations',
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/otunlink',
+    url: process.env.DATABASE_URL ?? 'postgresql://<user>:<password>@localhost:5432/otunlink',
   },
 });

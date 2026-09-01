@@ -46,7 +46,7 @@ export function testEmailRouter(): Hono<AppEnv> {
           body: emailParagraph(
             '这是一封来自 OtunLink 的连通性测试邮件，发送成功即代表邮件配置有效。',
           ),
-          cta: { label: '前往工作台', url: 'https://musi.land' },
+          cta: { label: '前往工作台', url: 'https://otun.musi.land' },
           timestamp: new Date(),
         }),
       });

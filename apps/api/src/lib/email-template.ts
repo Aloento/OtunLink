@@ -57,7 +57,7 @@ export function renderEmailHtml(options: EmailTemplateOptions): string {
     ? new Date(timestamp).toLocaleString('zh-CN', { hour12: false })
     : null;
   const footerText = footer ?? '邮件由 OtunLink 系统自动发送，本邮件为系统通知，请勿直接回复。';
-  const brandLink = 'https://musi.land';
+  const brandLink = 'https://otun.musi.land';
 
   return [
     '<!DOCTYPE html>',

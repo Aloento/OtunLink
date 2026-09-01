@@ -53,7 +53,7 @@ curl http://localhost:8787/api/v1/health   # => {"ok":true}
   入库/出库过账、效期预警等）写入 `notifications`，登录后在导航铃铛与
   `/notifications` 页查看；工作台 `/` 按角色聚合待办（`GET /api/v1/dashboard/todos`）。
 - **邮件（可选）**：`SMTP_HOST`/`MAIL_FROM` 等非敏感配置已在 `wrangler.toml [vars]`
-  （飞书 Lark：`smtp.larksuite.com`、发信人 `otun@musi.land`）；再配置
+  （飞书 Lark：`<SMTP_HOST>`、发信人 `<MAIL_FROM>`）；再配置
   `SMTP_USER` / `SMTP_PASS`（生产经 GitHub secret + `wrangler secret put`，
   本地写 `apps/api/.dev.vars`）后，API 通过 Cloudflare Workers 直连外部 SMTP
   （端口 465 隐式 TLS 或 587 STARTTLS）发送邮件；**未配置时自动降级为仅站内通知**，

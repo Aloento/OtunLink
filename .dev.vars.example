@@ -2,7 +2,7 @@
 # wrangler dev 会自动读取 apps/api/.dev.vars。
 
 # ── 本地 PostgreSQL（本地开发直连；生产走 Hyperdrive binding）────────────
-# DATABASE_URL=postgresql://user:password@host:5432/otunlink
+# DATABASE_URL=postgresql://<user>:<password>@<host>:5432/otunlink
 
 # ── Azure AD / Entra ID（单租户，见 docs/auth-setup.md）──────────────────
 ENTRA_TENANT_ID=
