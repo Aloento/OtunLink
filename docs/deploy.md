@@ -1,17 +1,17 @@
 # OtunLink 上线部署文档
 
 > 目标形态：Cloudflare Pages（前端）+ Cloudflare Workers（API）+ Hyperdrive
->（私有 PostgreSQL 连接池）+ R2/S3 OBS（图片，见 `docs/cloud-config.md`）+ KV
->（JWKS 缓存）+ SMTP 直连邮件。
+> （私有 PostgreSQL 连接池）+ R2/S3 OBS（图片，见 `docs/cloud-config.md`）+ KV
+> （JWKS 缓存）+ SMTP 直连邮件。
 
 ## 1. 组件与域名
 
-| 组件 | 部署目标 | 域名（示例） |
-| --- | --- | --- |
-| 前端（`apps/web`） | Cloudflare Pages | `app.example.com` |
-| API（`apps/api`） | Cloudflare Workers | `api.example.com` |
-| 邮件（SMTP 直连） | Workers 出站连接外部 SMTP（465/587） | 无独立域名 |
-| 图片存储 | R2（或 S3 兼容 OBS） | 走 Worker 内绑定 |
+| 组件               | 部署目标                             | 域名（示例）      |
+| ------------------ | ------------------------------------ | ----------------- |
+| 前端（`apps/web`） | Cloudflare Pages                     | `app.example.com` |
+| API（`apps/api`）  | Cloudflare Workers                   | `api.example.com` |
+| 邮件（SMTP 直连）  | Workers 出站连接外部 SMTP（465/587） | 无独立域名        |
+| 图片存储           | R2（或 S3 兼容 OBS）                 | 走 Worker 内绑定  |
 
 ### 1.1 Pages
 
@@ -56,10 +56,10 @@ API 通过 Cloudflare Workers 出站 TCP 直连外部 SMTP（仅 465 隐式 TLS 
 
 ## 3. 域名与 CNAME
 
-| DNS 记录 | 类型 | 值 |
-| --- | --- | --- |
+| DNS 记录          | 类型  | 值                          |
+| ----------------- | ----- | --------------------------- |
 | `app.example.com` | CNAME | `<pages-project>.pages.dev` |
-| `api.example.com` | CNAME | `<worker>.workers.dev` |
+| `api.example.com` | CNAME | `<worker>.workers.dev`      |
 
 若用自定义域直接托管 API，Workers 设置中绑定 `api.example.com` 即可，无需 CNAME。
 
@@ -87,29 +87,29 @@ pnpm --filter @otunlink/db exec drizzle-kit migrate
 
 ### API（`apps/api/.dev.vars` / Workers 环境变量）
 
-| 变量 | 说明 | 示例 |
-| --- | --- | --- |
-| `DATABASE_URL` | Hyperdrive 连接串或直连 PG | `postgres://...` |
-| `DB_NAME` / `DB_USER` / `DB_PASSWORD` / `DB_HOST` / `DB_PORT` | 使用 Hyperdrive binding 时可选 | — |
-| `JWT_PUBLIC_KEY` (JWKS) / `AUTH_JWKS_URI` / `AUTH_ISSUER` / `AUTH_AUDIENCE` | 登录签名校验证 | 见 auth-setup.md |
-| `KV_JWKS_CACHE` | KV binding 名称 | `JWKS_CACHE` |
-| `R2_BUCKET` / `S3_ENDPOINT` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` | 图片存储 | 见 cloud-config.md |
+| 变量                                                                          | 说明                                             | 示例                 |
+| ----------------------------------------------------------------------------- | ------------------------------------------------ | -------------------- |
+| `DATABASE_URL`                                                                | Hyperdrive 连接串或直连 PG                       | `postgres://...`     |
+| `DB_NAME` / `DB_USER` / `DB_PASSWORD` / `DB_HOST` / `DB_PORT`                 | 使用 Hyperdrive binding 时可选                   | —                    |
+| `JWT_PUBLIC_KEY` (JWKS) / `AUTH_JWKS_URI` / `AUTH_ISSUER` / `AUTH_AUDIENCE`   | 登录签名校验证                                   | 见 auth-setup.md     |
+| `KV_JWKS_CACHE`                                                               | KV binding 名称                                  | `JWKS_CACHE`         |
+| `R2_BUCKET` / `S3_ENDPOINT` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` | 图片存储                                         | 见 cloud-config.md   |
 | `MIGRATE_ON_START` | 启动时执行迁移 | `true`（生产关） |
-| `SMTP_HOST` | SMTP 服务器地址（[vars]，不配 = 降级仅站内通知） | `smtp.larksuite.com` |
-| `SMTP_USER` | SMTP 用户名（**secret**）；飞书 Lark 为发信账号 | `otun@musi.land` |
-| `SMTP_PASS` | SMTP 密码/授权码（**secret**） | — |
-| `MAIL_FROM` | 发件地址（[vars]） | `otun@musi.land` |
-| `SMTP_PORT` | SMTP 端口（465=隐式 TLS / 587=STARTTLS，[vars]） | `465` |
-| `SMTP_SECURE` | 465 隐式 TLS 时 `true`（[vars]） | `true` |
-| `SMTP_STARTTLS` | 587 STARTTLS 时 `true`（[vars]） | `false` |
-| `SMTP_AUTH` | 认证方式 `plain`/`login`/`cram-md5`（[vars]） | `plain` |
-| `MAIL_PROVIDER` | `smtp`（默认）/ `api`（预留，[vars]） | `smtp` |
+| `SMTP_HOST`                                                                   | SMTP 服务器地址（[vars]，不配 = 降级仅站内通知） | `smtp.larksuite.com` |
+| `SMTP_USER`                                                                   | SMTP 用户名（**secret**）；飞书 Lark 为发信账号  | `otun@musi.land`     |
+| `SMTP_PASS`                                                                   | SMTP 密码/授权码（**secret**）                   | —                    |
+| `MAIL_FROM`                                                                   | 发件地址（[vars]）                               | `otun@musi.land`     |
+| `SMTP_PORT`                                                                   | SMTP 端口（465=隐式 TLS / 587=STARTTLS，[vars]） | `465`                |
+| `SMTP_SECURE`                                                                 | 465 隐式 TLS 时 `true`（[vars]）                 | `true`               |
+| `SMTP_STARTTLS`                                                               | 587 STARTTLS 时 `true`（[vars]）                 | `false`              |
+| `SMTP_AUTH`                                                                   | 认证方式 `plain`/`login`/`cram-md5`（[vars]）    | `plain`              |
+| `MAIL_PROVIDER`                                                               | `smtp`（默认）/ `api`（预留，[vars]）            | `smtp`               |
 
 ### 前端（Pages 环境变量）
 
-| 变量 | 说明 |
-| --- | --- |
-| `VITE_API_BASE` | API 基址 |
+| 变量                                                                  | 说明      |
+| --------------------------------------------------------------------- | --------- |
+| `VITE_API_BASE`                                                       | API 基址  |
 | `VITE_AUTH_CLIENT_ID` / `VITE_AUTH_TENANT` / `VITE_AUTH_REDIRECT_URI` | MSAL 配置 |
 
 ### Worker secrets（GitHub Actions Secrets / `wrangler secret put`）
@@ -120,14 +120,14 @@ CI（`.github/workflows/deploy.yml` 的 deploy-api job）会执行
 非敏感项已在 `wrangler.toml [vars]`，无需作为 secret）。需在 GitHub 仓库
 **Settings → Secrets and variables → Actions** 配置：
 
-| Secret | 说明 | 示例 |
-| --- | --- | --- |
-| `SMTP_USER` | 邮件账号（必填才会发信） | `otun@musi.land` |
-| `SMTP_PASS` | 邮箱授权码/密码 | — |
-| `S3_ACCESS_KEY_ID` | 华为云 OBS AccessKey（图片上传） | `HPUA...` |
-| `S3_SECRET_ACCESS_KEY` | 华为云 OBS SecretKey | — |
-| `CLOUDFLARE_API_TOKEN` | CF API Token（部署） | — |
-| `CLOUDFLARE_ACCOUNT_ID` | CF 账号 ID（`wrangler secret put` 需要） | `xxxxxxxx` |
+| Secret                  | 说明                                     | 示例             |
+| ----------------------- | ---------------------------------------- | ---------------- |
+| `SMTP_USER`             | 邮件账号（必填才会发信）                 | `otun@musi.land` |
+| `SMTP_PASS`             | 邮箱授权码/密码                          | —                |
+| `S3_ACCESS_KEY_ID`      | 华为云 OBS AccessKey（图片上传）         | `HPUA...`        |
+| `S3_SECRET_ACCESS_KEY`  | 华为云 OBS SecretKey                     | —                |
+| `CLOUDFLARE_API_TOKEN`  | CF API Token（部署）                     | —                |
+| `CLOUDFLARE_ACCOUNT_ID` | CF 账号 ID（`wrangler secret put` 需要） | `xxxxxxxx`       |
 
 未配置的项 CI 会跳过对应 secret 写入；SMTP 未配置时 API 降级为仅站内通知。
 

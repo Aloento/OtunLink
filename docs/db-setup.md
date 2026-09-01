@@ -51,17 +51,17 @@ DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/otunlink?sslmode=require
 ### 3.3 生成并应用迁移
 
 ```bash
-pnpm --filter db db:generate     # 依据 schema 生成 SQL（离线，无需数据库）
-pnpm --filter db db:migrate      # 执行迁移（需要 DATABASE_URL）
-pnpm --filter db db:ping         # SELECT 1 连通性自检
-pnpm --filter db seed            # 写入示例业务单元（幂等）
+pnpm --filter @otunlink/db db:generate     # 依据 schema 重新生成基线 SQL 并内嵌（离线，无需数据库）
+pnpm --filter @otunlink/db db:migrate      # 执行迁移（需要 DATABASE_URL）
+pnpm --filter @otunlink/db db:ping         # SELECT 1 连通性自检
+pnpm --filter @otunlink/db seed            # 写入示例业务单元（幂等）
 ```
 
 等价于：
 
 ```bash
-DATABASE_URL='postgres://...' pnpm --filter db db:migrate
-DATABASE_URL='postgres://...' pnpm --filter db seed
+DATABASE_URL='postgres://...' pnpm --filter @otunlink/db db:migrate
+DATABASE_URL='postgres://...' pnpm --filter @otunlink/db seed
 ```
 
 ### 3.3b 本地开发注意事项
@@ -95,8 +95,8 @@ curl -X POST http://localhost:8787/api/v1/admin/migrate \
 
 ## 4. 迁移幂等与历史
 
-- 执行器在目标库维护 `__drizzle_migrations` 表（`version` 主键 + `applied_at`）。
-- 每次运行先读取已执行版本，只应用未执行的迁移文件；单个迁移在事务中执行，失败回滚。
+- 执行器在目标库维护 `schema_migrations` 表（`name` 主键 + `applied_at`）。
+- 每次运行先读取已执行迁移，只应用未执行的迁移；单个迁移在事务中执行，失败回滚。
 - 生成的 SQL 使用 drizzle-kit 的 `--> statement-breakpoint` 分隔符，执行器会先按此切分再逐条执行（该分隔符并非合法 SQL）。
 - `POST /api/v1/admin/migrate` 鉴权顺序：`X-Admin-Secret` 已配置(否则 503) → 头存在(401) → 头正确(401) → 角色为 ADMIN(403) → DB 可用(503) → 执行(失败 500)。
 

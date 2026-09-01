@@ -1,43 +1,23 @@
-CREATE TYPE "unit_type" AS ENUM ('COLLECTOR', 'WAREHOUSE', 'RETAILER');
---> statement-breakpoint
-CREATE TYPE "user_role" AS ENUM ('ADMIN', 'COLLECTOR', 'WAREHOUSE', 'RETAILER');
---> statement-breakpoint
-CREATE TYPE "user_status" AS ENUM ('ACTIVE', 'PENDING', 'DISABLED');
---> statement-breakpoint
-CREATE TYPE "spec_unit" AS ENUM ('PIECE', 'BAG', 'BOX', 'PACK', 'SET', 'OTHER');
---> statement-breakpoint
-CREATE TYPE "item_status" AS ENUM ('ACTIVE', 'INACTIVE');
---> statement-breakpoint
-CREATE TYPE "shipment_status" AS ENUM ('DRAFT', 'SENT', 'COUNTING', 'READY', 'DISCREPANCY', 'REVIEW_PENDING', 'INBOUNDED', 'RETURN_PENDING', 'RETURNED');
---> statement-breakpoint
-CREATE TYPE "discrepancy_review_status" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
---> statement-breakpoint
-CREATE TYPE "batch_source_type" AS ENUM ('SHIPMENT', 'MANUAL');
---> statement-breakpoint
-CREATE TYPE "inbound_source_type" AS ENUM ('SHIPMENT', 'MANUAL');
---> statement-breakpoint
-CREATE TYPE "inbound_status" AS ENUM ('DRAFT', 'POSTED');
---> statement-breakpoint
-CREATE TYPE "outbound_type" AS ENUM ('NORMAL', 'LOSS');
---> statement-breakpoint
-CREATE TYPE "outbound_status" AS ENUM ('DRAFT', 'POSTED');
---> statement-breakpoint
-CREATE TYPE "return_source_type" AS ENUM ('SHIPMENT', 'SALES');
---> statement-breakpoint
-CREATE TYPE "return_status" AS ENUM ('PENDING', 'CLOSED', 'REJECTED', 'REQUESTED', 'APPROVED', 'RETURNED', 'CANCELLED');
---> statement-breakpoint
-CREATE TYPE "sales_source" AS ENUM ('RETAILER_REQUEST', 'WAREHOUSE_INITIATED');
---> statement-breakpoint
-CREATE TYPE "delivery_method" AS ENUM ('PICKUP', 'EXPRESS', 'LOGISTICS');
---> statement-breakpoint
-CREATE TYPE "sales_status" AS ENUM ('DRAFT', 'SENT', 'PAYMENT_UPLOADED', 'CONFIRMED', 'CANCELLED');
---> statement-breakpoint
-CREATE TYPE "stock_movement_type" AS ENUM ('INBOUND_SHIPMENT', 'INBOUND_MANUAL', 'OUTBOUND_NORMAL', 'OUTBOUND_LOSS', 'OUTBOUND_SALE', 'OUTBOUND_SALE_REVERSAL', 'RETURN_IN', 'RETURN_OUT');
---> statement-breakpoint
-CREATE TYPE "notification_type" AS ENUM ('SHIPMENT_TRANSFER', 'DISCREPANCY', 'RETURN', 'AFTER_SALE', 'SALES', 'INBOUND', 'OUTBOUND', 'EXPIRY_ALERT', 'PAYMENT', 'SYSTEM');
---> statement-breakpoint
-CREATE TYPE "email_log_status" AS ENUM ('PENDING', 'SENT', 'FAILED');
---> statement-breakpoint
+CREATE TYPE "public"."batch_source_type" AS ENUM('SHIPMENT', 'MANUAL', 'RETURNS_PENDING');--> statement-breakpoint
+CREATE TYPE "public"."delivery_method" AS ENUM('PICKUP', 'EXPRESS', 'LOGISTICS');--> statement-breakpoint
+CREATE TYPE "public"."email_log_status" AS ENUM('PENDING', 'SENT', 'FAILED');--> statement-breakpoint
+CREATE TYPE "public"."inbound_source_type" AS ENUM('SHIPMENT', 'MANUAL');--> statement-breakpoint
+CREATE TYPE "public"."inbound_status" AS ENUM('DRAFT', 'POSTED');--> statement-breakpoint
+CREATE TYPE "public"."item_status" AS ENUM('ACTIVE', 'INACTIVE');--> statement-breakpoint
+CREATE TYPE "public"."notification_type" AS ENUM('SHIPMENT_TRANSFER', 'DISCREPANCY', 'RETURN', 'AFTER_SALE', 'SALES', 'INBOUND', 'OUTBOUND', 'EXPIRY_ALERT', 'PAYMENT', 'SYSTEM', 'SHIPMENT_SENT', 'INBOUND_CONFIRMED', 'SHIPMENT_RETURN_PENDING', 'REVIEW_PENDING', 'REVIEW_APPROVED', 'REVIEW_REJECTED', 'SALES_SENT', 'SALES_CANCELLED', 'SALES_PAYMENT_UPLOADED', 'SALES_CONFIRMED', 'AFTER_SALE_REQUESTED', 'RETURN_ACCEPTED', 'AFTER_SALE_APPROVED', 'AFTER_SALE_RETURNED');--> statement-breakpoint
+CREATE TYPE "public"."outbound_status" AS ENUM('DRAFT', 'POSTED');--> statement-breakpoint
+CREATE TYPE "public"."outbound_type" AS ENUM('NORMAL', 'LOSS');--> statement-breakpoint
+CREATE TYPE "public"."return_source_type" AS ENUM('SHIPMENT', 'SALES');--> statement-breakpoint
+CREATE TYPE "public"."return_status" AS ENUM('PENDING', 'CLOSED', 'REJECTED', 'REQUESTED', 'APPROVED', 'RETURNED', 'CANCELLED');--> statement-breakpoint
+CREATE TYPE "public"."discrepancy_review_status" AS ENUM('PENDING', 'APPROVED', 'REJECTED');--> statement-breakpoint
+CREATE TYPE "public"."sales_source" AS ENUM('RETAILER_REQUEST', 'WAREHOUSE_INITIATED');--> statement-breakpoint
+CREATE TYPE "public"."sales_status" AS ENUM('DRAFT', 'SENT', 'PAYMENT_UPLOADED', 'CONFIRMED', 'CANCELLED');--> statement-breakpoint
+CREATE TYPE "public"."shipment_status" AS ENUM('DRAFT', 'SENT', 'COUNTING', 'READY', 'DISCREPANCY', 'REVIEW_PENDING', 'INBOUNDED', 'RETURN_PENDING', 'RETURNED');--> statement-breakpoint
+CREATE TYPE "public"."spec_unit" AS ENUM('PIECE', 'BAG', 'BOX', 'PACK', 'SET', 'OTHER');--> statement-breakpoint
+CREATE TYPE "public"."stock_movement_type" AS ENUM('INBOUND_SHIPMENT', 'INBOUND_MANUAL', 'OUTBOUND_NORMAL', 'OUTBOUND_LOSS', 'OUTBOUND_SALE', 'OUTBOUND_SALE_REVERSAL', 'RETURN_IN', 'RETURN_OUT');--> statement-breakpoint
+CREATE TYPE "public"."unit_type" AS ENUM('COLLECTOR', 'WAREHOUSE', 'RETAILER');--> statement-breakpoint
+CREATE TYPE "public"."user_role" AS ENUM('ADMIN', 'COLLECTOR', 'WAREHOUSE', 'RETAILER');--> statement-breakpoint
+CREATE TYPE "public"."user_status" AS ENUM('ACTIVE', 'PENDING', 'DISABLED');--> statement-breakpoint
 CREATE TABLE "audit_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid,
@@ -103,9 +83,11 @@ CREATE TABLE "email_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"to_address" varchar(256) NOT NULL,
 	"subject" varchar(512),
+	"body" text,
 	"status" "email_log_status" DEFAULT 'PENDING' NOT NULL,
 	"provider" varchar(64),
 	"error" text,
+	"attempts" integer DEFAULT 0 NOT NULL,
 	"sent_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -130,6 +112,9 @@ CREATE TABLE "inbound_order_items" (
 	"qty" numeric(12, 2) NOT NULL,
 	"unit_cost" numeric(12, 2) NOT NULL,
 	"line_note" text,
+	"production_date" date,
+	"expiry_date" date,
+	"batch_no" varchar(64),
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -231,6 +216,14 @@ CREATE TABLE "payments" (
 	CONSTRAINT "payments_sales_order_id_unique" UNIQUE("sales_order_id")
 );
 --> statement-breakpoint
+CREATE TABLE "retail_partnerships" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"warehouse_unit_id" uuid NOT NULL,
+	"retailer_unit_id" uuid NOT NULL,
+	"created_by" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "retail_price_history" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"unit_id" uuid NOT NULL,
@@ -255,7 +248,10 @@ CREATE TABLE "return_order_items" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"return_order_id" uuid NOT NULL,
 	"item_id" uuid NOT NULL,
+	"shipment_item_id" uuid,
+	"sales_order_item_id" uuid,
 	"qty" numeric(12, 2) NOT NULL,
+	"received_qty" numeric(12, 2),
 	"original_batch_id" uuid,
 	"reason" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -276,6 +272,9 @@ CREATE TABLE "return_orders" (
 	"return_carrier" varchar(64),
 	"return_tracking_no" varchar(128),
 	"created_by" uuid,
+	"processed_by" uuid,
+	"processed_at" timestamp with time zone,
+	"processed_note" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "return_orders_return_no_unique" UNIQUE("return_no")
@@ -308,6 +307,8 @@ CREATE TABLE "sales_orders" (
 	"source" "sales_source" DEFAULT 'RETAILER_REQUEST' NOT NULL,
 	"delivery_method" "delivery_method" DEFAULT 'PICKUP' NOT NULL,
 	"delivery_address" text,
+	"carrier" text,
+	"tracking_no" text,
 	"freight" numeric(12, 2) DEFAULT '0' NOT NULL,
 	"discount_percent" numeric(5, 2) DEFAULT '0' NOT NULL,
 	"currency" varchar(3) DEFAULT 'CNY' NOT NULL,
@@ -360,6 +361,7 @@ CREATE TABLE "shipments" (
 	"remark" text,
 	"sent_at" timestamp with time zone,
 	"created_by" uuid,
+	"count_version" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "shipments_shipment_no_unique" UNIQUE("shipment_no")
@@ -440,18 +442,24 @@ ALTER TABLE "outbound_orders" ADD CONSTRAINT "outbound_orders_created_by_users_i
 ALTER TABLE "payments" ADD CONSTRAINT "payments_sales_order_id_sales_orders_id_fk" FOREIGN KEY ("sales_order_id") REFERENCES "public"."sales_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payments" ADD CONSTRAINT "payments_proof_file_id_files_id_fk" FOREIGN KEY ("proof_file_id") REFERENCES "public"."files"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payments" ADD CONSTRAINT "payments_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "retail_partnerships" ADD CONSTRAINT "retail_partnerships_warehouse_unit_id_business_units_id_fk" FOREIGN KEY ("warehouse_unit_id") REFERENCES "public"."business_units"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "retail_partnerships" ADD CONSTRAINT "retail_partnerships_retailer_unit_id_business_units_id_fk" FOREIGN KEY ("retailer_unit_id") REFERENCES "public"."business_units"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "retail_partnerships" ADD CONSTRAINT "retail_partnerships_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "retail_price_history" ADD CONSTRAINT "retail_price_history_updated_by_users_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "retail_prices" ADD CONSTRAINT "retail_prices_unit_id_business_units_id_fk" FOREIGN KEY ("unit_id") REFERENCES "public"."business_units"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "retail_prices" ADD CONSTRAINT "retail_prices_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "retail_prices" ADD CONSTRAINT "retail_prices_updated_by_users_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "return_order_items" ADD CONSTRAINT "return_order_items_return_order_id_return_orders_id_fk" FOREIGN KEY ("return_order_id") REFERENCES "public"."return_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "return_order_items" ADD CONSTRAINT "return_order_items_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "return_order_items" ADD CONSTRAINT "return_order_items_shipment_item_id_shipment_items_id_fk" FOREIGN KEY ("shipment_item_id") REFERENCES "public"."shipment_items"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "return_order_items" ADD CONSTRAINT "return_order_items_sales_order_item_id_sales_order_items_id_fk" FOREIGN KEY ("sales_order_item_id") REFERENCES "public"."sales_order_items"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "return_order_items" ADD CONSTRAINT "return_order_items_original_batch_id_batches_id_fk" FOREIGN KEY ("original_batch_id") REFERENCES "public"."batches"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "return_orders" ADD CONSTRAINT "return_orders_shipment_id_shipments_id_fk" FOREIGN KEY ("shipment_id") REFERENCES "public"."shipments"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "return_orders" ADD CONSTRAINT "return_orders_sales_order_id_sales_orders_id_fk" FOREIGN KEY ("sales_order_id") REFERENCES "public"."sales_orders"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "return_orders" ADD CONSTRAINT "return_orders_from_unit_id_business_units_id_fk" FOREIGN KEY ("from_unit_id") REFERENCES "public"."business_units"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "return_orders" ADD CONSTRAINT "return_orders_to_unit_id_business_units_id_fk" FOREIGN KEY ("to_unit_id") REFERENCES "public"."business_units"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "return_orders" ADD CONSTRAINT "return_orders_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "return_orders" ADD CONSTRAINT "return_orders_processed_by_users_id_fk" FOREIGN KEY ("processed_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_batch_allocations" ADD CONSTRAINT "sales_batch_allocations_order_item_id_sales_order_items_id_fk" FOREIGN KEY ("order_item_id") REFERENCES "public"."sales_order_items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_batch_allocations" ADD CONSTRAINT "sales_batch_allocations_batch_id_batches_id_fk" FOREIGN KEY ("batch_id") REFERENCES "public"."batches"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_order_items" ADD CONSTRAINT "sales_order_items_sales_order_id_sales_orders_id_fk" FOREIGN KEY ("sales_order_id") REFERENCES "public"."sales_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -493,10 +501,14 @@ CREATE INDEX "notifications_unit_idx" ON "notifications" USING btree ("unit_id")
 CREATE INDEX "outbound_order_items_order_idx" ON "outbound_order_items" USING btree ("outbound_order_id");--> statement-breakpoint
 CREATE INDEX "outbound_orders_warehouse_idx" ON "outbound_orders" USING btree ("warehouse_unit_id");--> statement-breakpoint
 CREATE INDEX "payments_sales_order_idx" ON "payments" USING btree ("sales_order_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "retail_partnerships_pair_unique" ON "retail_partnerships" USING btree ("warehouse_unit_id","retailer_unit_id");--> statement-breakpoint
+CREATE INDEX "retail_partnerships_retailer_idx" ON "retail_partnerships" USING btree ("retailer_unit_id");--> statement-breakpoint
 CREATE INDEX "retail_price_history_unit_item_idx" ON "retail_price_history" USING btree ("unit_id","item_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "retail_prices_unit_item_unique" ON "retail_prices" USING btree ("unit_id","item_id");--> statement-breakpoint
 CREATE INDEX "retail_prices_item_idx" ON "retail_prices" USING btree ("item_id");--> statement-breakpoint
 CREATE INDEX "return_order_items_order_idx" ON "return_order_items" USING btree ("return_order_id");--> statement-breakpoint
+CREATE INDEX "return_order_items_shipment_item_idx" ON "return_order_items" USING btree ("shipment_item_id");--> statement-breakpoint
+CREATE INDEX "return_order_items_sales_item_idx" ON "return_order_items" USING btree ("sales_order_item_id");--> statement-breakpoint
 CREATE INDEX "return_orders_shipment_idx" ON "return_orders" USING btree ("shipment_id");--> statement-breakpoint
 CREATE INDEX "return_orders_sales_idx" ON "return_orders" USING btree ("sales_order_id");--> statement-breakpoint
 CREATE INDEX "return_orders_from_idx" ON "return_orders" USING btree ("from_unit_id");--> statement-breakpoint

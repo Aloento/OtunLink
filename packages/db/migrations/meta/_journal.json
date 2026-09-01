@@ -5,64 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1788175531675,
-      "tag": "0000_majestic_alice",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1788175607118,
-      "tag": "0001_fancy_patch",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1788175659261,
-      "tag": "0002_glorious_firedrake",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1788182921423,
-      "tag": "0003_dusty_veda",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1788184715162,
-      "tag": "0004_unknown_boom_boom",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1788191690174,
-      "tag": "0005_early_zarek",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1788193321509,
-      "tag": "0006_shallow_peter_quill",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1788246318359,
-      "tag": "0007_wakeful_wallow",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1788247865263,
-      "tag": "0008_lively_exodus",
+      "when": 1788250831222,
+      "tag": "0000_dusty_fabian_cortez",
       "breakpoints": true
     }
   ]

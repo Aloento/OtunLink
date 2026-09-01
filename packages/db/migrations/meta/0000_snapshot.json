@@ -1,5 +1,5 @@
 {
-  "id": "0f0d216b-c5c7-457d-abb5-142fc9d2c7ee",
+  "id": "2830b51d-eeec-419f-80ba-87f5e9ab63b9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -650,6 +650,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "status": {
           "name": "status",
           "type": "email_log_status",
@@ -669,6 +675,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "sent_at": {
           "name": "sent_at",
@@ -823,6 +836,24 @@
         "line_note": {
           "name": "line_note",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "production_date": {
+          "name": "production_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expiry_date": {
+          "name": "expiry_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "batch_no": {
+          "name": "batch_no",
+          "type": "varchar(64)",
           "primaryKey": false,
           "notNull": false
         },
@@ -1930,6 +1961,128 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.retail_partnerships": {
+      "name": "retail_partnerships",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "warehouse_unit_id": {
+          "name": "warehouse_unit_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "retailer_unit_id": {
+          "name": "retailer_unit_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "retail_partnerships_pair_unique": {
+          "name": "retail_partnerships_pair_unique",
+          "columns": [
+            {
+              "expression": "warehouse_unit_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "retailer_unit_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "retail_partnerships_retailer_idx": {
+          "name": "retail_partnerships_retailer_idx",
+          "columns": [
+            {
+              "expression": "retailer_unit_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "retail_partnerships_warehouse_unit_id_business_units_id_fk": {
+          "name": "retail_partnerships_warehouse_unit_id_business_units_id_fk",
+          "tableFrom": "retail_partnerships",
+          "tableTo": "business_units",
+          "columnsFrom": [
+            "warehouse_unit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "retail_partnerships_retailer_unit_id_business_units_id_fk": {
+          "name": "retail_partnerships_retailer_unit_id_business_units_id_fk",
+          "tableFrom": "retail_partnerships",
+          "tableTo": "business_units",
+          "columnsFrom": [
+            "retailer_unit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "retail_partnerships_created_by_users_id_fk": {
+          "name": "retail_partnerships_created_by_users_id_fk",
+          "tableFrom": "retail_partnerships",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.retail_price_history": {
       "name": "retail_price_history",
       "schema": "",
@@ -2181,11 +2334,29 @@
           "primaryKey": false,
           "notNull": true
         },
+        "shipment_item_id": {
+          "name": "shipment_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sales_order_item_id": {
+          "name": "sales_order_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "qty": {
           "name": "qty",
           "type": "numeric(12, 2)",
           "primaryKey": false,
           "notNull": true
+        },
+        "received_qty": {
+          "name": "received_qty",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": false
         },
         "original_batch_id": {
           "name": "original_batch_id",
@@ -2222,6 +2393,36 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "return_order_items_shipment_item_idx": {
+          "name": "return_order_items_shipment_item_idx",
+          "columns": [
+            {
+              "expression": "shipment_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "return_order_items_sales_item_idx": {
+          "name": "return_order_items_sales_item_idx",
+          "columns": [
+            {
+              "expression": "sales_order_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2249,6 +2450,32 @@
             "id"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "return_order_items_shipment_item_id_shipment_items_id_fk": {
+          "name": "return_order_items_shipment_item_id_shipment_items_id_fk",
+          "tableFrom": "return_order_items",
+          "tableTo": "shipment_items",
+          "columnsFrom": [
+            "shipment_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "return_order_items_sales_order_item_id_sales_order_items_id_fk": {
+          "name": "return_order_items_sales_order_item_id_sales_order_items_id_fk",
+          "tableFrom": "return_order_items",
+          "tableTo": "sales_order_items",
+          "columnsFrom": [
+            "sales_order_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "return_order_items_original_batch_id_batches_id_fk": {
@@ -2359,6 +2586,24 @@
         "created_by": {
           "name": "created_by",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "processed_by": {
+          "name": "processed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "processed_at": {
+          "name": "processed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "processed_note": {
+          "name": "processed_note",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -2483,6 +2728,19 @@
           "tableTo": "users",
           "columnsFrom": [
             "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "return_orders_processed_by_users_id_fk": {
+          "name": "return_orders_processed_by_users_id_fk",
+          "tableFrom": "return_orders",
+          "tableTo": "users",
+          "columnsFrom": [
+            "processed_by"
           ],
           "columnsTo": [
             "id"
@@ -2767,6 +3025,18 @@
         },
         "delivery_address": {
           "name": "delivery_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carrier": {
+          "name": "carrier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tracking_no": {
+          "name": "tracking_no",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -3265,6 +3535,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "count_version": {
+          "name": "count_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "created_at": {
           "name": "created_at",
@@ -3847,6 +4124,193 @@
     }
   },
   "enums": {
+    "public.batch_source_type": {
+      "name": "batch_source_type",
+      "schema": "public",
+      "values": [
+        "SHIPMENT",
+        "MANUAL",
+        "RETURNS_PENDING"
+      ]
+    },
+    "public.delivery_method": {
+      "name": "delivery_method",
+      "schema": "public",
+      "values": [
+        "PICKUP",
+        "EXPRESS",
+        "LOGISTICS"
+      ]
+    },
+    "public.email_log_status": {
+      "name": "email_log_status",
+      "schema": "public",
+      "values": [
+        "PENDING",
+        "SENT",
+        "FAILED"
+      ]
+    },
+    "public.inbound_source_type": {
+      "name": "inbound_source_type",
+      "schema": "public",
+      "values": [
+        "SHIPMENT",
+        "MANUAL"
+      ]
+    },
+    "public.inbound_status": {
+      "name": "inbound_status",
+      "schema": "public",
+      "values": [
+        "DRAFT",
+        "POSTED"
+      ]
+    },
+    "public.item_status": {
+      "name": "item_status",
+      "schema": "public",
+      "values": [
+        "ACTIVE",
+        "INACTIVE"
+      ]
+    },
+    "public.notification_type": {
+      "name": "notification_type",
+      "schema": "public",
+      "values": [
+        "SHIPMENT_TRANSFER",
+        "DISCREPANCY",
+        "RETURN",
+        "AFTER_SALE",
+        "SALES",
+        "INBOUND",
+        "OUTBOUND",
+        "EXPIRY_ALERT",
+        "PAYMENT",
+        "SYSTEM",
+        "SHIPMENT_SENT",
+        "INBOUND_CONFIRMED",
+        "SHIPMENT_RETURN_PENDING",
+        "REVIEW_PENDING",
+        "REVIEW_APPROVED",
+        "REVIEW_REJECTED",
+        "SALES_SENT",
+        "SALES_CANCELLED",
+        "SALES_PAYMENT_UPLOADED",
+        "SALES_CONFIRMED",
+        "AFTER_SALE_REQUESTED",
+        "RETURN_ACCEPTED",
+        "AFTER_SALE_APPROVED",
+        "AFTER_SALE_RETURNED"
+      ]
+    },
+    "public.outbound_status": {
+      "name": "outbound_status",
+      "schema": "public",
+      "values": [
+        "DRAFT",
+        "POSTED"
+      ]
+    },
+    "public.outbound_type": {
+      "name": "outbound_type",
+      "schema": "public",
+      "values": [
+        "NORMAL",
+        "LOSS"
+      ]
+    },
+    "public.return_source_type": {
+      "name": "return_source_type",
+      "schema": "public",
+      "values": [
+        "SHIPMENT",
+        "SALES"
+      ]
+    },
+    "public.return_status": {
+      "name": "return_status",
+      "schema": "public",
+      "values": [
+        "PENDING",
+        "CLOSED",
+        "REJECTED",
+        "REQUESTED",
+        "APPROVED",
+        "RETURNED",
+        "CANCELLED"
+      ]
+    },
+    "public.discrepancy_review_status": {
+      "name": "discrepancy_review_status",
+      "schema": "public",
+      "values": [
+        "PENDING",
+        "APPROVED",
+        "REJECTED"
+      ]
+    },
+    "public.sales_source": {
+      "name": "sales_source",
+      "schema": "public",
+      "values": [
+        "RETAILER_REQUEST",
+        "WAREHOUSE_INITIATED"
+      ]
+    },
+    "public.sales_status": {
+      "name": "sales_status",
+      "schema": "public",
+      "values": [
+        "DRAFT",
+        "SENT",
+        "PAYMENT_UPLOADED",
+        "CONFIRMED",
+        "CANCELLED"
+      ]
+    },
+    "public.shipment_status": {
+      "name": "shipment_status",
+      "schema": "public",
+      "values": [
+        "DRAFT",
+        "SENT",
+        "COUNTING",
+        "READY",
+        "DISCREPANCY",
+        "REVIEW_PENDING",
+        "INBOUNDED",
+        "RETURN_PENDING",
+        "RETURNED"
+      ]
+    },
+    "public.spec_unit": {
+      "name": "spec_unit",
+      "schema": "public",
+      "values": [
+        "PIECE",
+        "BAG",
+        "BOX",
+        "PACK",
+        "SET",
+        "OTHER"
+      ]
+    },
+    "public.stock_movement_type": {
+      "name": "stock_movement_type",
+      "schema": "public",
+      "values": [
+        "INBOUND_SHIPMENT",
+        "INBOUND_MANUAL",
+        "OUTBOUND_NORMAL",
+        "OUTBOUND_LOSS",
+        "OUTBOUND_SALE",
+        "OUTBOUND_SALE_REVERSAL",
+        "RETURN_IN",
+        "RETURN_OUT"
+      ]
+    },
     "public.unit_type": {
       "name": "unit_type",
       "schema": "public",
@@ -3873,178 +4337,6 @@
         "ACTIVE",
         "PENDING",
         "DISABLED"
-      ]
-    },
-    "public.spec_unit": {
-      "name": "spec_unit",
-      "schema": "public",
-      "values": [
-        "PIECE",
-        "BAG",
-        "BOX",
-        "PACK",
-        "SET",
-        "OTHER"
-      ]
-    },
-    "public.item_status": {
-      "name": "item_status",
-      "schema": "public",
-      "values": [
-        "ACTIVE",
-        "INACTIVE"
-      ]
-    },
-    "public.shipment_status": {
-      "name": "shipment_status",
-      "schema": "public",
-      "values": [
-        "DRAFT",
-        "SENT",
-        "COUNTING",
-        "READY",
-        "DISCREPANCY",
-        "REVIEW_PENDING",
-        "INBOUNDED",
-        "RETURN_PENDING",
-        "RETURNED"
-      ]
-    },
-    "public.discrepancy_review_status": {
-      "name": "discrepancy_review_status",
-      "schema": "public",
-      "values": [
-        "PENDING",
-        "APPROVED",
-        "REJECTED"
-      ]
-    },
-    "public.batch_source_type": {
-      "name": "batch_source_type",
-      "schema": "public",
-      "values": [
-        "SHIPMENT",
-        "MANUAL"
-      ]
-    },
-    "public.inbound_source_type": {
-      "name": "inbound_source_type",
-      "schema": "public",
-      "values": [
-        "SHIPMENT",
-        "MANUAL"
-      ]
-    },
-    "public.inbound_status": {
-      "name": "inbound_status",
-      "schema": "public",
-      "values": [
-        "DRAFT",
-        "POSTED"
-      ]
-    },
-    "public.outbound_type": {
-      "name": "outbound_type",
-      "schema": "public",
-      "values": [
-        "NORMAL",
-        "LOSS"
-      ]
-    },
-    "public.outbound_status": {
-      "name": "outbound_status",
-      "schema": "public",
-      "values": [
-        "DRAFT",
-        "POSTED"
-      ]
-    },
-    "public.return_source_type": {
-      "name": "return_source_type",
-      "schema": "public",
-      "values": [
-        "SHIPMENT",
-        "SALES"
-      ]
-    },
-    "public.return_status": {
-      "name": "return_status",
-      "schema": "public",
-      "values": [
-        "PENDING",
-        "CLOSED",
-        "REJECTED",
-        "REQUESTED",
-        "APPROVED",
-        "RETURNED",
-        "CANCELLED"
-      ]
-    },
-    "public.sales_source": {
-      "name": "sales_source",
-      "schema": "public",
-      "values": [
-        "RETAILER_REQUEST",
-        "WAREHOUSE_INITIATED"
-      ]
-    },
-    "public.delivery_method": {
-      "name": "delivery_method",
-      "schema": "public",
-      "values": [
-        "PICKUP",
-        "EXPRESS",
-        "LOGISTICS"
-      ]
-    },
-    "public.sales_status": {
-      "name": "sales_status",
-      "schema": "public",
-      "values": [
-        "DRAFT",
-        "SENT",
-        "PAYMENT_UPLOADED",
-        "CONFIRMED",
-        "CANCELLED"
-      ]
-    },
-    "public.stock_movement_type": {
-      "name": "stock_movement_type",
-      "schema": "public",
-      "values": [
-        "INBOUND_SHIPMENT",
-        "INBOUND_MANUAL",
-        "OUTBOUND_NORMAL",
-        "OUTBOUND_LOSS",
-        "OUTBOUND_SALE",
-        "OUTBOUND_SALE_REVERSAL",
-        "RETURN_IN",
-        "RETURN_OUT"
-      ]
-    },
-    "public.notification_type": {
-      "name": "notification_type",
-      "schema": "public",
-      "values": [
-        "SHIPMENT_TRANSFER",
-        "DISCREPANCY",
-        "RETURN",
-        "AFTER_SALE",
-        "SALES",
-        "INBOUND",
-        "OUTBOUND",
-        "EXPIRY_ALERT",
-        "PAYMENT",
-        "SYSTEM"
-      ]
-    },
-    "public.email_log_status": {
-      "name": "email_log_status",
-      "schema": "public",
-      "values": [
-        "PENDING",
-        "SENT",
-        "FAILED"
       ]
     }
   },
