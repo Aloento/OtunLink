@@ -15,9 +15,14 @@ function toDate(value: Date | string | number): Date {
 }
 
 function dateOptions(timezone?: string): Intl.DateTimeFormatOptions {
-  return timezone
-    ? { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: timezone }
-    : { year: 'numeric', month: '2-digit', day: '2-digit' };
+  const base: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    // 全站日期时间统一附带时区偏移后缀（如 GMT+2 / GMT+8），便于跨时区协作。
+    timeZoneName: 'shortOffset',
+  };
+  return timezone ? { ...base, timeZone: timezone } : base;
 }
 
 function dateTimeOptions(timezone?: string): Intl.DateTimeFormatOptions {

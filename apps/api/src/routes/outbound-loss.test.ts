@@ -52,7 +52,7 @@ function item(partial: Partial<ItemRecord> & { id: string }): ItemRecord {
     specUnit: 'PIECE',
     innerUnit: null,
     innerCount: null,
-    isPerishable: false,
+    isPerishable: true,
     category: null,
     description: null,
     status: 'ACTIVE',
@@ -222,7 +222,7 @@ describe(' 报损单（type=LOSS）', () => {
     expect(movements.items.filter((m) => m.type === 'OUTBOUND_LOSS')).toHaveLength(1);
   });
 
-  it('余额不足：过账 → 409 INSUFFICIENT_STOCK 且不扣减', async () => {
+  it('余额不足：创建 → 409 INSUFFICIENT_STOCK 且不扣减', async () => {
     const { app, repos } = makeApp({ users: [collector, warehouse], units, items });
     const { batchId } = await seedStock(app, {
       warehouseUnitId: WAREHOUSE_UNIT,
@@ -244,13 +244,8 @@ describe(' 报损单（type=LOSS）', () => {
         lines: [{ itemId: ITEM_A, qty: '5', batchId }],
       }),
     });
-    const draftId = ((await created.json()) as { data: { id: string } }).data.id;
-    const failed = await app.request(`/api/v1/outbound-orders/${draftId}/post`, {
-      method: 'POST',
-      headers: json('warehouse'),
-    });
-    expect(failed.status).toBe(409);
-    expect(await failed.json()).toMatchObject({ error: { code: 'INSUFFICIENT_STOCK' } });
+    expect(created.status).toBe(409);
+    expect(await created.json()).toMatchObject({ error: { code: 'INSUFFICIENT_STOCK' } });
     const stock = await repos.stock.list({ unitId: WAREHOUSE_UNIT, itemId: ITEM_A });
     expect(stock.items[0].qty).toBe('1');
   });

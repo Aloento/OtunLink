@@ -15,6 +15,8 @@ import {
   type AuditLogListQuery,
 } from '../../api/admin';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { formatDateTime } from '../../i18n/format';
+import { useLocale } from '../../i18n/LocaleProvider';
 
 const PAGE_SIZE = 20;
 
@@ -28,6 +30,7 @@ function toReadable(value: unknown): string {
 // 审计日志（AD03）：按 entityType/entityId/actorId/from/to 筛选查询。
 export function AuditLogsPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
 
   const [filters, setFilters] = useState<AuditLogListQuery>({});
   const [page, setPage] = useState(1);
@@ -45,7 +48,7 @@ export function AuditLogsPage() {
     {
       key: 'createdAt',
       header: t('admin.auditLogs.createdAt'),
-      render: (l) => new Date(l.createdAt).toLocaleString(),
+      render: (l) => formatDateTime(l.createdAt, locale),
     },
     { key: 'action', header: t('admin.auditLogs.action'), render: (l) => l.action },
     { key: 'entityType', header: t('admin.auditLogs.entityType'), render: (l) => l.entityType },

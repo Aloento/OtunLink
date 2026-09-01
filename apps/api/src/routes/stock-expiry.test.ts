@@ -58,7 +58,7 @@ function item(partial: Partial<ItemRecord> & { id: string }): ItemRecord {
     specUnit: 'PIECE',
     innerUnit: null,
     innerCount: null,
-    isPerishable: false,
+    isPerishable: true,
     category: null,
     description: null,
     status: 'ACTIVE',

@@ -95,9 +95,11 @@ export function OutboundDetailPage() {
       header: t('outbound.batchNo'),
       render: (item) =>
         item.batchNo ?? (
-          <Badge appearance="tint" color="brand">
-            {t('outbound.fefo')}
-          </Badge>
+          <span title={t('outbound.fefoHint')}>
+            <Badge appearance="tint" color="brand">
+              {t('outbound.fefo')}
+            </Badge>
+          </span>
         ),
     },
     { key: 'qty', header: t('outbound.qty'), render: (item) => item.qty },
@@ -114,6 +116,11 @@ export function OutboundDetailPage() {
           <Link to="/outbound">
             <Button appearance="secondary">{t('outbound.back')}</Button>
           </Link>
+          {data.status === 'DRAFT' && canPost && (
+            <Link to={`/outbound/${id}/edit`}>
+              <Button appearance="secondary">{t('outbound.edit')}</Button>
+            </Link>
+          )}
           {data.status === 'DRAFT' && canPost && (
             <Button appearance="primary" disabled={posting} onClick={() => void handlePost()}>
               {posting ? <Spinner size="tiny" /> : t('outbound.post')}

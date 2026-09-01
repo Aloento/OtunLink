@@ -173,6 +173,14 @@ export default function App() {
           }
         />
         <Route
+          path={`${ROUTES.outbound.path}/:id/edit`}
+          element={
+            <RequirePermission permissions={[Permissions.STOCK_WRITE]}>
+              <OutboundFormPage />
+            </RequirePermission>
+          }
+        />
+        <Route
           path={`${ROUTES.outbound.path}/:id`}
           element={
             <RequirePermission permissions={ROUTES.outbound.permissions}>

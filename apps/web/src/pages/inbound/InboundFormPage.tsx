@@ -18,6 +18,7 @@ interface ItemLine {
   qty: string;
   unitCost: string;
   batchNo: string;
+  isPerishable: boolean;
   productionDate: string;
   expiryDate: string;
   lineNote: string;
@@ -36,6 +37,7 @@ function emptyLine(): ItemLine {
     qty: '',
     unitCost: '',
     batchNo: '',
+    isPerishable: false,
     productionDate: '',
     expiryDate: '',
     lineNote: '',
@@ -90,6 +92,25 @@ export function InboundFormPage() {
   const setLine = (key: string, field: keyof ItemLine, value: string) =>
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, [field]: value } : l)));
 
+  // 切换物品：同步易腐标记；切到非易腐物品时清空其生产/到期日期。
+  const pickItem = (key: string, itemId: string) => {
+    const item = (itemPage?.items ?? []).find((i) => i.id === itemId);
+    const isPerishable = item?.isPerishable ?? false;
+    setLines((prev) =>
+      prev.map((l) =>
+        l.key === key
+          ? {
+              ...l,
+              itemId,
+              isPerishable,
+              productionDate: isPerishable ? l.productionDate : '',
+              expiryDate: isPerishable ? l.expiryDate : '',
+            }
+          : l,
+      ),
+    );
+  };
+
   const buildPayload = (): InboundManualCreateInput | null => {
     if (!warehouseUnitId) {
       setError(t('outbound.errors.warehouseRequired'));
@@ -108,8 +129,8 @@ export function InboundFormPage() {
         qty: l.qty.trim(),
         unitCost: l.unitCost.trim() || null,
         batchNo: l.batchNo.trim() || null,
-        productionDate: l.productionDate || null,
-        expiryDate: l.expiryDate || null,
+        productionDate: l.isPerishable ? l.productionDate || null : null,
+        expiryDate: l.isPerishable ? l.expiryDate || null : null,
         lineNote: l.lineNote.trim() || null,
       })),
     };
@@ -188,7 +209,7 @@ export function InboundFormPage() {
           <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <Field label={t('inbound.itemName')} required>
-                <Select value={line.itemId} onChange={(_, d) => setLine(line.key, 'itemId', d.value)}>
+                <Select value={line.itemId} onChange={(_, d) => pickItem(line.key, d.value)}>
                   <option value="">—</option>
                   {(itemPage?.items ?? []).map((item) => (
                     <option key={item.id} value={item.id}>
@@ -216,7 +237,7 @@ export function InboundFormPage() {
                 />
               </Field>
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+            <div className={`grid grid-cols-1 gap-2 ${line.isPerishable ? 'sm:grid-cols-4' : 'sm:grid-cols-2'}`}>
               <Field label={t('inbound.batchNo')}>
                 <Input
                   value={line.batchNo}
@@ -224,20 +245,24 @@ export function InboundFormPage() {
                   onChange={(_, d) => setLine(line.key, 'batchNo', d.value)}
                 />
               </Field>
-              <Field label={t('inbound.productionDate')}>
-                <Input
-                  type="date"
-                  value={line.productionDate}
-                  onChange={(_, d) => setLine(line.key, 'productionDate', d.value)}
-                />
-              </Field>
-              <Field label={t('inbound.expiryDate')}>
-                <Input
-                  type="date"
-                  value={line.expiryDate}
-                  onChange={(_, d) => setLine(line.key, 'expiryDate', d.value)}
-                />
-              </Field>
+              {line.isPerishable && (
+                <>
+                  <Field label={t('inbound.productionDate')}>
+                    <Input
+                      type="date"
+                      value={line.productionDate}
+                      onChange={(_, d) => setLine(line.key, 'productionDate', d.value)}
+                    />
+                  </Field>
+                  <Field label={t('inbound.expiryDate')}>
+                    <Input
+                      type="date"
+                      value={line.expiryDate}
+                      onChange={(_, d) => setLine(line.key, 'expiryDate', d.value)}
+                    />
+                  </Field>
+                </>
+              )}
               <Field label={t('inbound.lineNote')}>
                 <Input
                   value={line.lineNote}

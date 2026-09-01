@@ -84,6 +84,7 @@ import type {
   UnitRecord,
   UnitRepository,
   UpdateItemInput,
+  UpdateOutboundRepoInput,
   UpdateShipmentInput,
   UpdateUnitInput,
   UpdateUserInput,
@@ -92,6 +93,7 @@ import type {
 } from '../types';
 import { expiryRemainingDays, type UnitType } from '@otunlink/shared';
 import { mergeInboundLines, qtyEqual, type MergedInboundLine } from './inbound-lines';
+import { ensureBatchNo } from '../lib/batch';
 
 // 内存实现：供单元测试/本地无 DB 联调使用；生产必须走 Drizzle（见 repos/sql.ts 注释）。
 
@@ -1248,6 +1250,7 @@ class MemoryInboundRepository implements InboundRepository {
 
   constructor(
     private readonly shipmentRepo: MemoryShipmentRepository,
+    private readonly itemRepo: ItemRepository,
     seed: { inbounds?: InboundOrderRecord[]; inboundItems?: InboundOrderItemRecord[] } = {},
     private readonly ledger: MemoryStockLedger = new MemoryStockLedger(),
   ) {
@@ -1264,6 +1267,18 @@ class MemoryInboundRepository implements InboundRepository {
     const next = (this.dailyCounters.get(key) ?? 0) + 1;
     this.dailyCounters.set(key, next);
     return `IB-${key}-${String(next).padStart(4, '0')}`;
+  }
+
+  /** 非易腐物品的生产/到期日清空为 null；易腐物品原样保留。 */
+  private async perishableDates(
+    itemId: string,
+    productionDate: string | null,
+    expiryDate: string | null,
+  ): Promise<{ productionDate: string | null; expiryDate: string | null }> {
+    const item = await this.itemRepo.findById(itemId);
+    return item && item.isPerishable
+      ? { productionDate, expiryDate }
+      : { productionDate: null, expiryDate: null };
   }
 
   /** 新建手动入库单（sourceType=MANUAL, DRAFT）。 */
@@ -1286,9 +1301,14 @@ class MemoryInboundRepository implements InboundRepository {
       updatedAt: now,
     };
     this.rows.set(inbound.id, cloneInbound(inbound));
-    this.items.set(
-      inbound.id,
-      input.lines.map((line) => ({
+    const itemRows: InboundOrderItemRecord[] = [];
+    for (const line of input.lines) {
+      const dates = await this.perishableDates(
+        line.itemId,
+        normalizeEmpty(line.productionDate),
+        normalizeEmpty(line.expiryDate),
+      );
+      itemRows.push({
         id: uuid(),
         inboundOrderId: inbound.id,
         itemId: line.itemId,
@@ -1296,12 +1316,13 @@ class MemoryInboundRepository implements InboundRepository {
         qty: line.qty,
         unitCost: line.unitCost ?? '0',
         lineNote: normalizeEmpty(line.lineNote),
-        productionDate: normalizeEmpty(line.productionDate),
-        expiryDate: normalizeEmpty(line.expiryDate),
+        productionDate: dates.productionDate,
+        expiryDate: dates.expiryDate,
         batchNo: normalizeEmpty(line.batchNo),
         createdAt: now,
-      })).map(cloneInboundItem),
-    );
+      });
+    }
+    this.items.set(inbound.id, itemRows.map(cloneInboundItem));
     return cloneInbound(inbound);
   }
 
@@ -1345,19 +1366,27 @@ class MemoryInboundRepository implements InboundRepository {
       updatedAt: now,
     };
     this.rows.set(inbound.id, cloneInbound(inbound));
-    const itemRows: InboundOrderItemRecord[] = merged.map((line) => ({
-      id: uuid(),
-      inboundOrderId: inbound.id,
-      itemId: line.itemId,
-      batchId: null,
-      qty: line.qty,
-      unitCost: line.unitCost,
-      lineNote: null,
-      productionDate: normalizeEmpty(line.productionDate),
-      expiryDate: normalizeEmpty(line.expiryDate),
-      batchNo: normalizeEmpty(line.batchNo),
-      createdAt: now,
-    }));
+    const itemRows: InboundOrderItemRecord[] = [];
+    for (const line of merged) {
+      const dates = await this.perishableDates(
+        line.itemId,
+        normalizeEmpty(line.productionDate),
+        normalizeEmpty(line.expiryDate),
+      );
+      itemRows.push({
+        id: uuid(),
+        inboundOrderId: inbound.id,
+        itemId: line.itemId,
+        batchId: null,
+        qty: line.qty,
+        unitCost: line.unitCost,
+        lineNote: null,
+        productionDate: dates.productionDate,
+        expiryDate: dates.expiryDate,
+        batchNo: normalizeEmpty(line.batchNo),
+        createdAt: now,
+      });
+    }
     this.items.set(inbound.id, itemRows.map(cloneInboundItem));
 
     if (params.flipShipmentStatus) {
@@ -1449,13 +1478,15 @@ class MemoryInboundRepository implements InboundRepository {
     if (existing.status !== 'DRAFT') throw new Error(INBOUND_STATE_CONFLICT_MESSAGE);
 
     const now = new Date();
-    const itemRows = (this.items.get(id) ?? []).map((row) => {
+    const itemRows: InboundOrderItemRecord[] = [];
+    for (const row of this.items.get(id) ?? []) {
+      const dates = await this.perishableDates(row.itemId, row.productionDate, row.expiryDate);
       const batch: MemoryBatchRecord = {
         id: uuid(),
         itemId: row.itemId,
-        batchNo: row.batchNo,
-        productionDate: row.productionDate,
-        expiryDate: row.expiryDate,
+        batchNo: ensureBatchNo(row.itemId, row.batchNo),
+        productionDate: dates.productionDate,
+        expiryDate: dates.expiryDate,
         sourceType: existing.sourceType,
         sourceOrderId: existing.shipmentId,
         createdBy: postedBy,
@@ -1472,8 +1503,8 @@ class MemoryInboundRepository implements InboundRepository {
         refNo: existing.inboundNo,
         operatorId: postedBy,
       });
-      return { ...row, batchId: batch.id };
-    });
+      itemRows.push({ ...row, batchId: batch.id });
+    }
     this.items.set(id, itemRows.map(cloneInboundItem));
 
     const next: InboundOrderRecord = {
@@ -1913,7 +1944,7 @@ class MemoryReturnRepository implements ReturnRepository {
       this.ledger.batches.set(batchId, {
         id: batchId,
         itemId,
-        batchNo: null,
+        batchNo: ensureBatchNo(itemId, null),
         productionDate: null,
         expiryDate: null,
         sourceType: 'RETURNS_PENDING',
@@ -2099,6 +2130,40 @@ class MemoryOutboundRepository implements OutboundRepository {
       })).map(cloneOutboundItem),
     );
     return cloneOutbound(order);
+  }
+
+  async update(
+    id: string,
+    input: UpdateOutboundRepoInput,
+  ): Promise<OutboundOrderRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'DRAFT') throw new Error(OUTBOUND_STATE_CONFLICT_MESSAGE);
+    const now = new Date();
+    const next: OutboundOrderRecord = {
+      ...existing,
+      type: input.type ?? 'NORMAL',
+      warehouseUnitId: input.warehouseUnitId,
+      counterpartyUnitId: normalizeEmpty(input.counterpartyUnitId),
+      lossReason: input.lossReason ?? null,
+      photoFileIds: [...input.photoFileIds],
+      remark: normalizeEmpty(input.remark),
+      updatedAt: now,
+    };
+    this.rows.set(id, cloneOutbound(next));
+    this.items.set(
+      id,
+      input.lines.map((line) => ({
+        id: uuid(),
+        outboundOrderId: id,
+        itemId: line.itemId,
+        batchId: line.batchId ?? null,
+        qty: line.qty,
+        unitCost: null,
+        createdAt: now,
+      })).map(cloneOutboundItem),
+    );
+    return cloneOutbound(next);
   }
 
   async post(id: string, postedBy: string): Promise<OutboundOrderRecord | null> {
@@ -3161,12 +3226,17 @@ export function createMemoryRepos(seed?: {
     items: seed?.shipmentItems,
     reviews: seed?.reviews,
   });
-  const inboundRepo = new MemoryInboundRepository(shipmentRepo, {
-    inbounds: seed?.inbounds,
-    inboundItems: seed?.inboundItems,
-  }, stockLedger);
   const unitRepo = new MemoryUnitRepository(seed?.units);
   const itemRepo = new MemoryItemRepository(seed?.items);
+  const inboundRepo = new MemoryInboundRepository(
+    shipmentRepo,
+    itemRepo,
+    {
+      inbounds: seed?.inbounds,
+      inboundItems: seed?.inboundItems,
+    },
+    stockLedger,
+  );
   const userRepo = new MemoryUserRepository(seed?.users);
   const retailPriceRepo = new MemoryRetailPriceRepository(stockLedger, unitRepo, itemRepo, userRepo);
   const salesRepo = new MemorySalesRepository(stockLedger, retailPriceRepo, unitRepo, itemRepo, {

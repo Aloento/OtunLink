@@ -79,11 +79,13 @@ import type {
   StockRowRecord,
   UnitRecord,
   UpdateItemInput,
+  UpdateOutboundRepoInput,
   UpdateShipmentInput,
   UpdateUnitInput,
   UpdateUserInput,
   UserRecord,
 } from '../types';
+import { ensureBatchNo } from '../lib/batch';
 import { mergeInboundLines, qtyEqual, type MergedInboundLine } from './inbound-lines';
 
 // SQL 数据访问实现（stopgap）。
@@ -1493,12 +1495,18 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     );
     const inbound = mapInbound(rows[0]);
     for (const line of params.lines) {
+      const dates = await perishableDates(
+        exec,
+        line.itemId,
+        nn(line.productionDate),
+        nn(line.expiryDate),
+      );
       await exec.query(
         `INSERT INTO inbound_order_items
            (inbound_order_id, item_id, qty, unit_cost, production_date, expiry_date, batch_no)
          VALUES (${quote(inbound.id)}, ${quote(line.itemId)}, ${quote(line.qty)},
-                ${quote(line.unitCost)}, ${quote(nn(line.productionDate))},
-                ${quote(nn(line.expiryDate))}, ${quote(nn(line.batchNo))})`,
+                ${quote(line.unitCost)}, ${quote(dates.productionDate)},
+                ${quote(dates.expiryDate)}, ${quote(nn(line.batchNo))})`,
       );
     }
     return inbound;
@@ -1513,11 +1521,13 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
   ): Promise<string> {
     const movementType = opts?.movementType ?? 'INBOUND_SHIPMENT';
     const sourceOrderId = opts?.sourceOrderId ?? inbound.shipmentId;
+    const batchNo = ensureBatchNo(line.itemId, line.batchNo);
+    const dates = await perishableDates(exec, line.itemId, line.productionDate, line.expiryDate);
     const { rows: batchRows } = await exec.query(
       `INSERT INTO batches
          (item_id, batch_no, production_date, expiry_date, source_type, source_order_id, created_by)
-       VALUES (${quote(line.itemId)}, ${quote(nn(line.batchNo))}, ${quote(nn(line.productionDate))},
-              ${quote(nn(line.expiryDate))}, ${quote(inbound.sourceType)},
+       VALUES (${quote(line.itemId)}, ${quote(batchNo)}, ${quote(dates.productionDate)},
+              ${quote(dates.expiryDate)}, ${quote(inbound.sourceType)},
               ${quote(sourceOrderId)}, ${quote(operatorId)})
        RETURNING id`,
     );
@@ -1623,12 +1633,18 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         );
         const inbound = mapInbound(rows[0]);
         for (const line of input.lines) {
+          const dates = await perishableDates(
+            exec,
+            line.itemId,
+            nn(line.productionDate),
+            nn(line.expiryDate),
+          );
           await exec.query(
             `INSERT INTO inbound_order_items
                (inbound_order_id, item_id, qty, unit_cost, production_date, expiry_date, batch_no, line_note)
              VALUES (${quote(inbound.id)}, ${quote(line.itemId)}, ${quote(line.qty)},
-                    ${quote(line.unitCost)}, ${quote(nn(line.productionDate))},
-                    ${quote(nn(line.expiryDate))}, ${quote(nn(line.batchNo))},
+                    ${quote(line.unitCost)}, ${quote(dates.productionDate)},
+                    ${quote(dates.expiryDate)}, ${quote(nn(line.batchNo))},
                     ${quote(nn(line.lineNote ?? null))})`,
           );
         }
@@ -2266,7 +2282,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
             `INSERT INTO batches
                (item_id, batch_no, production_date, expiry_date, source_type,
                 source_order_id, created_by)
-             VALUES (${quote(itemId)}, NULL, NULL, NULL, 'RETURNS_PENDING',
+             VALUES (${quote(itemId)}, ${quote(ensureBatchNo(itemId, null))}, NULL, NULL, 'RETURNS_PENDING',
                      ${quote(order.id)}, ${quote(receivedBy)})
              RETURNING id`,
           );
@@ -2390,6 +2406,52 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         }
         await exec.query('COMMIT');
         return outbound;
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async update(
+      id: string,
+      input: UpdateOutboundRepoInput,
+    ): Promise<OutboundOrderRecord | null> {
+      await exec.query('BEGIN');
+      try {
+        const { rows: locked } = await exec.query(
+          `SELECT * FROM outbound_orders WHERE id = ${quote(id)} FOR UPDATE`,
+        );
+        if (!locked[0]) {
+          await exec.query('ROLLBACK');
+          return null;
+        }
+        const existing = mapOutbound(locked[0]);
+        if (existing.status !== 'DRAFT') throw new Error(OUTBOUND_STATE_CONFLICT);
+        const { rows: updated } = await exec.query(
+          `UPDATE outbound_orders
+           SET type = ${quote(input.type)},
+               warehouse_unit_id = ${quote(input.warehouseUnitId)},
+               counterparty_unit_id = ${quote(input.counterpartyUnitId)},
+               loss_reason = ${quote(nn(input.lossReason))},
+               remark = ${quote(nn(input.remark))},
+               photo_file_ids = ${photoArray(input.photoFileIds)},
+               updated_at = now()
+           WHERE id = ${quote(id)} AND status = 'DRAFT'
+           RETURNING *`,
+        );
+        if (!updated[0]) throw new Error(OUTBOUND_STATE_CONFLICT);
+        await exec.query(
+          `DELETE FROM outbound_order_items WHERE outbound_order_id = ${quote(id)}`,
+        );
+        for (const line of input.lines) {
+          await exec.query(
+            `INSERT INTO outbound_order_items
+               (outbound_order_id, item_id, batch_id, qty)
+             VALUES (${quote(id)}, ${quote(line.itemId)}, ${quote(line.batchId)},
+                    ${quote(line.qty)})`,
+          );
+        }
+        await exec.query('COMMIT');
+        return mapOutbound(updated[0]);
       } catch (err) {
         await exec.query('ROLLBACK').catch(() => undefined);
         throw err;
@@ -3422,6 +3484,22 @@ function nn(value: string | null | undefined): string | null {
   if (value === undefined || value === null) return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+/** 非易腐物品（is_perishable=false）的生产/到期日应被清空；易腐物品原样保留。 */
+async function perishableDates(
+  exec: SqlExecutor,
+  itemId: string,
+  productionDate: string | null,
+  expiryDate: string | null,
+): Promise<{ productionDate: string | null; expiryDate: string | null }> {
+  const { rows } = await exec.query(
+    `SELECT is_perishable FROM items WHERE id = ${quote(itemId)} LIMIT 1`,
+  );
+  const perishable = rows[0] ? Boolean(rows[0].is_perishable) : false;
+  return perishable
+    ? { productionDate, expiryDate }
+    : { productionDate: null, expiryDate: null };
 }
 
 // postgres.js 对 date 列返回 JS Date 对象；统一转为 YYYY-MM-DD（保持原日历日期）。

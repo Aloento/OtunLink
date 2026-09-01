@@ -27,6 +27,23 @@ describe('formatDateTime', () => {
     expect(formatDateTime(d, 'zh-CN', 'UTC')).toMatch(/2024/);
     expect(formatDateTime(d, 'en')).toMatch(/2024/);
   });
+
+  it('appends a timezone offset suffix (UTC)', () => {
+    const d = new Date('2024-01-02T03:04:05Z');
+    expect(formatDateTime(d, 'en', 'UTC')).toMatch(/GMT/);
+    expect(formatDateTime(d, 'zh-CN', 'UTC')).toMatch(/GMT/);
+  });
+
+  it('appends a timezone offset suffix for a fixed offset zone', () => {
+    const d = new Date('2024-01-02T03:04:05Z');
+    expect(formatDateTime(d, 'en', 'Etc/GMT-8')).toMatch(/GMT\+8/);
+  });
+
+  it('appends a timezone offset suffix when no timezone is passed', () => {
+    const d = new Date('2024-01-02T03:04:05Z');
+    expect(formatDateTime(d, 'en')).toMatch(/GMT/);
+    expect(formatDate(d, 'en')).toMatch(/GMT/);
+  });
 });
 
 describe('formatNumber', () => {

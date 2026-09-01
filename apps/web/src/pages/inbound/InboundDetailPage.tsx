@@ -1,4 +1,4 @@
-import { Badge, Button, Body1, Spinner, Text, Title1 } from '@fluentui/react-components';
+import { Button, Body1, Spinner, Text, Title1 } from '@fluentui/react-components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -91,18 +91,6 @@ export function InboundDetailPage() {
       key: 'batchNo',
       header: t('inbound.batchNo'),
       render: (item) => item.batchNo ?? <Text className="text-neutral-400">—</Text>,
-    },
-    {
-      key: 'batchId',
-      header: t('inbound.batchId'),
-      render: (item) =>
-        item.batchId ? (
-          <Badge appearance="tint" color="success">
-            ✓
-          </Badge>
-        ) : (
-          <Text className="text-neutral-400">—</Text>
-        ),
     },
     { key: 'qty', header: t('inbound.qty'), render: (item) => item.qty },
     { key: 'unitCost', header: t('inbound.unitCost'), render: (item) => item.unitCost },

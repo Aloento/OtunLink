@@ -30,6 +30,8 @@ import {
 import { listAdminUnits } from '../../api/admin';
 import { type UnitDto } from '../../api/units';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { formatDateTime } from '../../i18n/format';
+import { useLocale } from '../../i18n/LocaleProvider';
 
 interface Draft {
   mode: 'create' | 'edit';
@@ -57,6 +59,7 @@ const emptyDraft = (): Draft => ({
 // 用户管理（AD01）：管理员为用户分配岗位与数据范围。
 export function AdminUsersPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const queryClient = useQueryClient();
 
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -171,7 +174,7 @@ export function AdminUsersPage() {
     {
       key: 'createdAt',
       header: t('admin.users.createdAt'),
-      render: (u) => new Date(u.createdAt).toLocaleString(),
+      render: (u) => formatDateTime(u.createdAt, locale),
     },
   ];
 

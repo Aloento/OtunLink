@@ -754,6 +754,17 @@ export interface CreateOutboundRepoInput {
   lines: { itemId: string; qty: string; batchId: string | null }[];
 }
 
+/** 编辑 DRAFT 出库单（PATCH /outbound-orders/:id）：整单替换，不含 createdBy。 */
+export interface UpdateOutboundRepoInput {
+  warehouseUnitId: string;
+  counterpartyUnitId: string | null;
+  type: OutboundType;
+  lossReason: string | null;
+  remark: string | null;
+  photoFileIds: string[];
+  lines: { itemId: string; qty: string; batchId: string | null }[];
+}
+
 export interface OutboundListQuery {
   page?: number;
   size?: number;
@@ -776,6 +787,8 @@ export interface OutboundRepository {
   listItems(outboundOrderId: string): Promise<OutboundOrderItemRecord[]>;
   /** 新建 DRAFT 出库单 + 明细（batchId 缺省，过账时 FEFO 分配）。 */
   create(input: CreateOutboundRepoInput): Promise<OutboundOrderRecord>;
+  /** 编辑 DRAFT 出库单：整单替换（主表字段 + 明细）。非 DRAFT 抛 OUTBOUND_STATE_CONFLICT。 */
+  update(id: string, input: UpdateOutboundRepoInput): Promise<OutboundOrderRecord | null>;
   /**
    * 出库过账：DRAFT → POSTED；按行 FEFO（无 batchId）或指定 batchId 扣减
    * stock 并写 stock_movements（OUTBOUND_NORMAL），回填分配与成本快照。

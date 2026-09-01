@@ -75,8 +75,8 @@ const units = [
   unit({ id: WAREHOUSE_UNIT_2, type: 'WAREHOUSE', name: '布达佩斯二仓' }),
 ];
 const items = [
-  item({ id: ITEM_A, name: '苹果', specUnit: 'PIECE' }),
-  item({ id: ITEM_B, name: '香蕉', specUnit: 'BOX' }),
+  item({ id: ITEM_A, name: '苹果', specUnit: 'PIECE', isPerishable: true }),
+  item({ id: ITEM_B, name: '香蕉', specUnit: 'BOX', isPerishable: true }),
 ];
 
 function makeApp(seed: { users?: UserRecord[]; units?: UnitRecord[]; items?: ItemRecord[] } = {}) {
@@ -245,7 +245,7 @@ describe(' 手动出库单', () => {
     expect(movements.items.filter((m) => m.type === 'OUTBOUND_NORMAL')).toHaveLength(2);
   });
 
-  it('指定批次过账：扣减该批次并写流水；不足 → 409 INSUFFICIENT_STOCK 且不产生部分扣减', async () => {
+  it('指定批次过账：扣减该批次并写流水；创建时不足 → 409 INSUFFICIENT_STOCK 且不产生部分扣减', async () => {
     const { app, repos } = makeApp({ users: [collector, warehouse], units, items });
     const { batchId } = await seedStock(app, {
       warehouseUnitId: WAREHOUSE_UNIT,
@@ -285,18 +285,13 @@ describe(' 手动出库单', () => {
         lines: [{ itemId: ITEM_A, qty: '9', batchId }],
       }),
     });
-    const tooMuchId = ((await tooMuch.json()) as { data: { id: string } }).data.id;
-    const failed = await app.request(`/api/v1/outbound-orders/${tooMuchId}/post`, {
-      method: 'POST',
-      headers: json('warehouse'),
-    });
-    expect(failed.status).toBe(409);
-    expect(await failed.json()).toMatchObject({ error: { code: 'INSUFFICIENT_STOCK' } });
+    expect(tooMuch.status).toBe(409);
+    expect(await tooMuch.json()).toMatchObject({ error: { code: 'INSUFFICIENT_STOCK' } });
     const unchanged = await repos.stock.list({ unitId: WAREHOUSE_UNIT, itemId: ITEM_A });
     expect(unchanged.items[0].qty).toBe('2');
   });
 
-  it('指定批次无库存/跨仓库批次 → 409 STOCK_BATCH_NOT_FOUND；二次过账 → 409 OUTBOUND_STATE_CONFLICT', async () => {
+  it('创建时指定批次无库存/跨仓库批次 → 409 INSUFFICIENT_STOCK；二次过账 → 409 OUTBOUND_STATE_CONFLICT', async () => {
     const { app } = makeApp({ users: [collector, warehouse, warehouse2], units, items });
     const { batchId } = await seedStock(app, {
       warehouseUnitId: WAREHOUSE_UNIT_2,
@@ -308,7 +303,7 @@ describe(' 手动出库单', () => {
       as: 'warehouse2',
     });
 
-    const created = await app.request('/api/v1/outbound-orders', {
+    const cross = await app.request('/api/v1/outbound-orders', {
       method: 'POST',
       headers: json('warehouse'),
       body: JSON.stringify({
@@ -316,13 +311,8 @@ describe(' 手动出库单', () => {
         lines: [{ itemId: ITEM_A, qty: '1', batchId }],
       }),
     });
-    const draftId = ((await created.json()) as { data: { id: string } }).data.id;
-    const failed = await app.request(`/api/v1/outbound-orders/${draftId}/post`, {
-      method: 'POST',
-      headers: json('warehouse'),
-    });
-    expect(failed.status).toBe(409);
-    expect(await failed.json()).toMatchObject({ error: { code: 'STOCK_BATCH_NOT_FOUND' } });
+    expect(cross.status).toBe(409);
+    expect(await cross.json()).toMatchObject({ error: { code: 'INSUFFICIENT_STOCK' } });
 
     // 先正常过账一个，再二次过账 → 状态冲突。
     const ok = await app.request('/api/v1/outbound-orders', {
@@ -441,6 +431,14 @@ describe(' 手动出库单', () => {
 
   it('删除 DRAFT 出库单成功，随后 GET 404', async () => {
     const { app } = makeApp({ users: [warehouse], units, items });
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_A,
+      qty: '1',
+      unitCost: '1.00',
+      batchNo: 'B-DEL-OK',
+      expiryDate: '2025-12-31',
+    });
     const created = await app.request('/api/v1/outbound-orders', {
       method: 'POST',
       headers: json('warehouse'),
@@ -497,6 +495,14 @@ describe(' 手动出库单', () => {
 
   it('无 STOCK_WRITE 权限（COLLECTOR）删除出库单返回 403', async () => {
     const { app } = makeApp({ users: [collector, warehouse], units, items });
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_A,
+      qty: '1',
+      unitCost: '1.00',
+      batchNo: 'B-DEL-FB',
+      expiryDate: '2025-12-31',
+    });
     const created = await app.request('/api/v1/outbound-orders', {
       method: 'POST',
       headers: json('warehouse'),
@@ -521,5 +527,218 @@ describe(' 手动出库单', () => {
       headers: auth('warehouse'),
     });
     expect(del.status).toBe(404);
+  });
+
+  it('创建草稿时校验库存：无批次行按仓库全部批次合计，不足 → 409 INSUFFICIENT_STOCK', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_A,
+      qty: '5',
+      unitCost: '1.00',
+      batchNo: 'B-FEFO',
+      expiryDate: '2025-12-31',
+    });
+
+    const tooMuch = await app.request('/api/v1/outbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '6' }],
+      }),
+    });
+    expect(tooMuch.status).toBe(409);
+    expect(await tooMuch.json()).toMatchObject({ error: { code: 'INSUFFICIENT_STOCK' } });
+  });
+
+  it('编辑 DRAFT 出库单：整单替换成功（行替换）', async () => {
+    const { app, repos } = makeApp({ users: [collector, warehouse], units, items });
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_A,
+      qty: '5',
+      unitCost: '1.00',
+      batchNo: 'B-A',
+      expiryDate: '2025-12-31',
+    });
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_B,
+      qty: '5',
+      unitCost: '2.00',
+      batchNo: 'B-B',
+      expiryDate: '2025-12-31',
+    });
+
+    const created = await app.request('/api/v1/outbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        counterpartyUnitId: COLLECTOR_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '2' }],
+      }),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const patched = await app.request(`/api/v1/outbound-orders/${id}`, {
+      method: 'PATCH',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        counterpartyUnitId: COLLECTOR_UNIT,
+        remark: '改单',
+        lines: [{ itemId: ITEM_B, qty: '3' }],
+      }),
+    });
+    expect(patched.status).toBe(200);
+    const payload = (await patched.json()) as {
+      data: {
+        id: string;
+        remark: string;
+        items: Array<{ itemId: string; qty: string; batchId: string | null }>;
+      };
+    };
+    expect(payload.data.remark).toBe('改单');
+    expect(payload.data.items).toHaveLength(1);
+    expect(payload.data.items[0]).toMatchObject({ itemId: ITEM_B, qty: '3', batchId: null });
+
+    const persisted = await repos.outbounds.findById(id);
+    expect(persisted?.remark).toBe('改单');
+    const persistedItems = await repos.outbounds.listItems(id);
+    expect(persistedItems).toHaveLength(1);
+    expect(persistedItems[0].itemId).toBe(ITEM_B);
+  });
+
+  it('编辑非 DRAFT（POSTED）出库单 → 409 OUTBOUND_STATE_CONFLICT', async () => {
+    const { app } = makeApp({ users: [warehouse], units, items });
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_A,
+      qty: '5',
+      unitCost: '1.00',
+      batchNo: 'B-EDIT',
+      expiryDate: '2025-12-31',
+    });
+    const created = await app.request('/api/v1/outbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '1' }],
+      }),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+    await app.request(`/api/v1/outbound-orders/${id}/post`, {
+      method: 'POST',
+      headers: json('warehouse'),
+    });
+
+    const patched = await app.request(`/api/v1/outbound-orders/${id}`, {
+      method: 'PATCH',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '1' }],
+      }),
+    });
+    expect(patched.status).toBe(409);
+    expect(await patched.json()).toMatchObject({ error: { code: 'OUTBOUND_STATE_CONFLICT' } });
+  });
+
+  it('编辑出库单：scope 越界 → 403', async () => {
+    const scoped = user({ entraSub: 'warehouse-b2', role: 'WAREHOUSE', scopeUnitId: WAREHOUSE_UNIT_2 });
+    const { app } = makeApp({ users: [collector, warehouse, scoped], units, items });
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_A,
+      qty: '5',
+      unitCost: '1.00',
+      batchNo: 'B-SCOPE',
+      expiryDate: '2025-12-31',
+    });
+    const created = await app.request('/api/v1/outbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '1' }],
+      }),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const patched = await app.request(`/api/v1/outbound-orders/${id}`, {
+      method: 'PATCH',
+      headers: json('warehouse-b2'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT_2,
+        lines: [{ itemId: ITEM_A, qty: '1' }],
+      }),
+    });
+    expect(patched.status).toBe(403);
+  });
+
+  it('编辑出库单：物品不存在 → 400', async () => {
+    const { app } = makeApp({ users: [warehouse], units, items });
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_A,
+      qty: '5',
+      unitCost: '1.00',
+      batchNo: 'B-ITEM',
+      expiryDate: '2025-12-31',
+    });
+    const created = await app.request('/api/v1/outbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '1' }],
+      }),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const patched = await app.request(`/api/v1/outbound-orders/${id}`, {
+      method: 'PATCH',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        lines: [{ itemId: '00000000-0000-4000-8000-000000000099', qty: '1' }],
+      }),
+    });
+    expect(patched.status).toBe(400);
+  });
+
+  it('编辑出库单：库存不足 → 409 INSUFFICIENT_STOCK', async () => {
+    const { app } = makeApp({ users: [warehouse], units, items });
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_A,
+      qty: '3',
+      unitCost: '1.00',
+      batchNo: 'B-STOCK',
+      expiryDate: '2025-12-31',
+    });
+    const created = await app.request('/api/v1/outbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '1' }],
+      }),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const patched = await app.request(`/api/v1/outbound-orders/${id}`, {
+      method: 'PATCH',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '4' }],
+      }),
+    });
+    expect(patched.status).toBe(409);
+    expect(await patched.json()).toMatchObject({ error: { code: 'INSUFFICIENT_STOCK' } });
   });
 });

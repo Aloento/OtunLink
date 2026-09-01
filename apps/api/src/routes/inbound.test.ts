@@ -396,6 +396,72 @@ describe(' 手动入库单', () => {
     });
   });
 
+  it('非易腐物品带生产/到期日：建档后批次 productionDate/expiryDate 为 null', async () => {
+    const { app, repos } = makeApp({ users: [collector, warehouse], units, items });
+
+    const created = await app.request('/api/v1/inbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        counterpartyUnitId: COLLECTOR_UNIT,
+        lines: [
+          {
+            itemId: ITEM_A,
+            qty: '3',
+            unitCost: '2.00',
+            batchNo: 'B-NONPER',
+            productionDate: '2025-01-01',
+            expiryDate: '2025-12-31',
+          },
+        ],
+      }),
+    });
+    expect(created.status).toBe(201);
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const posted = await app.request(`/api/v1/inbound-orders/${id}/post`, {
+      method: 'POST',
+      headers: json('warehouse'),
+    });
+    expect(posted.status).toBe(200);
+
+    const memoryInbound = repos.inbounds as unknown as {
+      batches: Map<string, { batchNo: string; productionDate: string | null; expiryDate: string | null }>;
+    };
+    const batch = [...memoryInbound.batches.values()][0];
+    expect(batch.productionDate).toBeNull();
+    expect(batch.expiryDate).toBeNull();
+  });
+
+  it('入库不填批次号过账：自动生成可读批次号（B-YYYYMMDD-XXXX）', async () => {
+    const { app, repos } = makeApp({ users: [collector, warehouse], units, items });
+
+    const created = await app.request('/api/v1/inbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        counterpartyUnitId: COLLECTOR_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '2', unitCost: '1.00' }],
+      }),
+    });
+    expect(created.status).toBe(201);
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const posted = await app.request(`/api/v1/inbound-orders/${id}/post`, {
+      method: 'POST',
+      headers: json('warehouse'),
+    });
+    expect(posted.status).toBe(200);
+
+    const memoryInbound = repos.inbounds as unknown as {
+      batches: Map<string, { batchNo: string }>;
+    };
+    const batch = [...memoryInbound.batches.values()][0];
+    expect(batch.batchNo).toMatch(/^B-\d{8}-[A-Z0-9]{4}$/);
+  });
+
   it('手动入库校验：非仓库目标 → 400；物品不存在 → 400；非法 JSON → 400', async () => {
     const { app } = makeApp({ users: [collector, warehouse, admin], units, items });
 

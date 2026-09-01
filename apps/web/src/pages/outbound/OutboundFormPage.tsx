@@ -13,13 +13,13 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import type { FileDto, OutboundCreateInput, OutboundType } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { listItems } from '../../api/items';
-import { createOutboundOrder } from '../../api/outbound';
+import { createOutboundOrder, getOutboundOrder, updateOutboundOrder } from '../../api/outbound';
 import { listStock } from '../../api/stock';
 import { listUnits } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
@@ -40,6 +40,21 @@ function genKey(prefix: string): string {
 
 function emptyLine(): ItemLine {
   return { key: genKey('l'), itemId: '', qty: '', batchId: '' };
+}
+
+/** 编辑模式回填时，将后端返回的 fileId 列表转成 ImageUpload 所需的 FileDto（仅 id 有效，渲染走预签名 URL）。 */
+function fileIdsToDtos(ids: string[]): FileDto[] {
+  return ids.map((id) => ({
+    id,
+    key: '',
+    thumbnailKey: null,
+    mime: '',
+    size: 0,
+    width: null,
+    height: null,
+    hasThumbnail: false,
+    createdAt: '',
+  }));
 }
 
 /** 解析 ?prefill=<json> 为行（「已过期」Tab 一键报损预填：物品 + 数量 + 批次）。 */
@@ -67,6 +82,8 @@ export function OutboundFormPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
+  const params = useParams<{ id: string }>();
+  const isEdit = Boolean(params.id);
   const { me } = useSession();
 
   const [outboundType, setOutboundType] = useState<OutboundType>(() =>
@@ -103,6 +120,13 @@ export function OutboundFormPage() {
     staleTime: 30_000,
   });
 
+  const { data: detail, isLoading: detailLoading } = useQuery({
+    queryKey: ['outbound-orders', params.id],
+    queryFn: () => getOutboundOrder(params.id!),
+    enabled: isEdit,
+    staleTime: 15_000,
+  });
+
   const warehouses = useMemo(
     () => (units ?? []).filter((u) => u.type === 'WAREHOUSE' && u.isActive),
     [units],
@@ -120,6 +144,61 @@ export function OutboundFormPage() {
     }
     if (warehouses.length === 1) setWarehouseUnitId(warehouses[0].id);
   }, [warehouseUnitId, me?.scopeUnitId, warehouses]);
+
+  // 编辑：回填草稿出库单详情。
+  useEffect(() => {
+    if (!detail) return;
+    setOutboundType(detail.type);
+    setWarehouseUnitId(detail.warehouseUnitId);
+    setCounterpartyUnitId(detail.counterpartyUnitId ?? '');
+    setLossReason(detail.lossReason ?? '');
+    setPhotos(fileIdsToDtos(detail.photoFileIds));
+    setRemark(detail.remark ?? '');
+    setLines(
+      detail.items.map((item) => ({
+        key: genKey('l'),
+        itemId: item.itemId,
+        qty: item.qty,
+        batchId: item.batchId ?? '',
+      })),
+    );
+  }, [detail]);
+
+  const stockRows = stockPage?.items ?? [];
+
+  // 每个 batchId 与每个 itemId 的可用量（各批次 qty 之和）。
+  const batchAvailable = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of stockRows) {
+      map.set(row.batchId, (map.get(row.batchId) ?? 0) + Number(row.qty));
+    }
+    return map;
+  }, [stockRows]);
+
+  const itemAvailable = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of stockRows) {
+      map.set(row.itemId, (map.get(row.itemId) ?? 0) + Number(row.qty));
+    }
+    return map;
+  }, [stockRows]);
+
+  // 指定批次用该批次可用量，未指定（FEFO）用物品总可用量；库存未加载时返回 null（跳过校验）。
+  const availableFor = (line: ItemLine): number | null => {
+    if (!warehouseUnitId || stockLoading || !line.itemId) return null;
+    if (line.batchId) return batchAvailable.get(line.batchId) ?? 0;
+    return itemAvailable.get(line.itemId) ?? 0;
+  };
+
+  // 行内即时校验：数量超过可用量时返回可用量，否则 null。
+  const lineExcess = (line: ItemLine): number | null => {
+    if (!line.itemId || !line.qty.trim()) return null;
+    const available = availableFor(line);
+    if (available === null) return null;
+    const qty = Number(line.qty.trim());
+    if (Number.isNaN(qty)) return null;
+    return qty > available ? available : null;
+  };
 
   const setLine = (key: string, field: keyof ItemLine, value: string) =>
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, [field]: value } : l)));
@@ -147,6 +226,15 @@ export function OutboundFormPage() {
         return null;
       }
     }
+    if (warehouseUnitId && !stockLoading) {
+      for (const l of lines) {
+        const excess = lineExcess(l);
+        if (excess !== null) {
+          setError(t('outbound.errors.insufficient', { available: excess }));
+          return null;
+        }
+      }
+    }
     return {
       warehouseUnitId,
       counterpartyUnitId: outboundType === 'NORMAL' ? counterpartyUnitId || null : null,
@@ -168,21 +256,32 @@ export function OutboundFormPage() {
     setSaving(true);
     setError(null);
     try {
-      const created = await createOutboundOrder(payload);
-      void queryClient.invalidateQueries({ queryKey: ['outbound-orders'] });
-      navigate(`/outbound/${created.id}`);
+      if (isEdit) {
+        const id = params.id!;
+        await updateOutboundOrder(id, payload);
+        void queryClient.invalidateQueries({ queryKey: ['outbound-orders'] });
+        navigate(`/outbound/${id}`);
+      } else {
+        const created = await createOutboundOrder(payload);
+        void queryClient.invalidateQueries({ queryKey: ['outbound-orders'] });
+        navigate(`/outbound/${created.id}`);
+      }
     } catch (cause) {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
       setSaving(false);
     }
   };
 
-  if (unitsLoading) return <Spinner label={t('common.loading')} />;
+  if (unitsLoading || (isEdit && detailLoading)) return <Spinner label={t('common.loading')} />;
 
   return (
     <div className="flex max-w-3xl flex-col gap-4">
       <Title1 as="h1">
-        {outboundType === 'LOSS' ? t('outbound.createLossTitle') : t('outbound.createTitle')}
+        {isEdit
+          ? t('outbound.editTitle')
+          : outboundType === 'LOSS'
+            ? t('outbound.createLossTitle')
+            : t('outbound.createTitle')}
       </Title1>
 
       <TabList
@@ -261,6 +360,7 @@ export function OutboundFormPage() {
         </div>
         {lines.map((line) => {
           const batchOptions = (stockPage?.items ?? []).filter((row) => row.itemId === line.itemId);
+          const excess = lineExcess(line);
           return (
             <div
               key={line.key}
@@ -297,12 +397,17 @@ export function OutboundFormPage() {
                     </option>
                     {batchOptions.map((row) => (
                       <option key={row.batchId} value={row.batchId}>
-                        {row.batchNo ?? row.batchId}（{row.qty}）
+                        {row.batchNo ?? t('outbound.unnamedBatch', { id: row.batchId.slice(0, 8) })}（{row.qty}）
                       </option>
                     ))}
                   </Select>
                 </Field>
               </div>
+              {excess !== null && (
+                <Text className="text-red-600">
+                  {t('outbound.errors.insufficient', { available: excess })}
+                </Text>
+              )}
             </div>
           );
         })}
@@ -313,7 +418,7 @@ export function OutboundFormPage() {
         <Button appearance="primary" disabled={saving} onClick={() => void submit()}>
           {saving ? <Spinner size="tiny" /> : t('outbound.create')}
         </Button>
-        <Link to="/outbound">
+        <Link to={isEdit ? `/outbound/${params.id}` : '/outbound'}>
           <Button appearance="secondary" disabled={saving}>
             {t('outbound.cancel')}
           </Button>

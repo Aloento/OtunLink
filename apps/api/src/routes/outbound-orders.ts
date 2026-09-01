@@ -11,7 +11,7 @@ import { requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '..
 import { outboundDto, outboundItemDto } from '../lib/dto';
 import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
 import { recordAudit } from '../lib/audit';
-import type { AppEnv, OutboundOrderRecord, Repos } from '../types';
+import type { AppEnv, OutboundOrderRecord, Repos, StockBatchRecord } from '../types';
 
 // 手动出库单：DRAFT → POSTED 扣减库存 + 写流水。
 // 读 = STOCK_READ（仓库/管理员）；写 = STOCK_WRITE（仓库）。报损（LOSS）同走写权限。
@@ -90,21 +90,119 @@ export function outboundOrdersRouter(): Hono<AppEnv> {
       return validationError(c, '部分物品不存在', { itemIds: missing });
     }
 
-    const created = await repos.outbounds.create({
-      warehouseUnitId: input.warehouseUnitId,
-      counterpartyUnitId: input.counterpartyUnitId ?? null,
-      type: input.type,
-      lossReason: input.lossReason ?? null,
-      remark: input.remark ?? null,
-      photoFileIds: input.photoFileIds ?? [],
-      createdBy: c.get('auth').user!.id,
-      lines: input.lines.map((l) => ({
-        itemId: l.itemId,
-        qty: String(l.qty),
-        batchId: l.batchId ?? null,
-      })),
-    });
-    return ok(c, await detailOf(repos, created), 201);
+    try {
+      await ensureStockAvailable(
+        repos,
+        input.warehouseUnitId,
+        input.lines.map((l) => ({ itemId: l.itemId, qty: String(l.qty), batchId: l.batchId ?? null })),
+      );
+      const created = await repos.outbounds.create({
+        warehouseUnitId: input.warehouseUnitId,
+        counterpartyUnitId: input.counterpartyUnitId ?? null,
+        type: input.type,
+        lossReason: input.lossReason ?? null,
+        remark: input.remark ?? null,
+        photoFileIds: input.photoFileIds ?? [],
+        createdBy: c.get('auth').user!.id,
+        lines: input.lines.map((l) => ({
+          itemId: l.itemId,
+          qty: String(l.qty),
+          batchId: l.batchId ?? null,
+        })),
+      });
+      return ok(c, await detailOf(repos, created), 201);
+    } catch (cause) {
+      if (isSignal(cause, 'INSUFFICIENT_STOCK')) {
+        return error(c, 409, ErrorCodes.INSUFFICIENT_STOCK, '库存不足，无法出库');
+      }
+      throw cause;
+    }
+  });
+
+  router.patch('/:id', write, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const outbound = await repos.outbounds.findById(c.req.param('id'));
+    if (!outbound) return notFound(c, '出库单不存在');
+
+    if (!scopeAllows(c.get('auth').user?.scopeUnitId ?? null, outbound.warehouseUnitId)) {
+      return forbidden(c, '数据范围越界（scope_unit_id 不匹配）');
+    }
+
+    const body = await readJson(c);
+    if (body === undefined) return validationError(c, '请求体不是合法 JSON');
+    const parsed = outboundCreateSchema.safeParse(body);
+    if (!parsed.success) return validationError(c, '参数不合法', parsed.error.flatten());
+    const input = parsed.data;
+
+    if (!scopeAllows(c.get('auth').user?.scopeUnitId ?? null, input.warehouseUnitId)) {
+      return forbidden(c, '数据范围越界（scope_unit_id 不匹配）');
+    }
+
+    const [warehouse, counterparty] = await Promise.all([
+      repos.units.findById(input.warehouseUnitId),
+      input.counterpartyUnitId
+        ? repos.units.findById(input.counterpartyUnitId)
+        : Promise.resolve(null),
+    ]);
+    if (!warehouse || warehouse.type !== 'WAREHOUSE') {
+      return validationError(c, '仓库不存在或不是仓库类型', {
+        warehouseUnitId: input.warehouseUnitId,
+      });
+    }
+    if (input.counterpartyUnitId && !counterparty) {
+      return validationError(c, '交易对手业务单元不存在', {
+        counterpartyUnitId: input.counterpartyUnitId,
+      });
+    }
+
+    const itemIds = [...new Set(input.lines.map((l) => l.itemId))];
+    const items = await Promise.all(itemIds.map((id) => repos.items.findById(id)));
+    const found = new Set(items.filter((i) => i).map((i) => i!.id));
+    const missing = itemIds.filter((id) => !found.has(id));
+    if (missing.length > 0) {
+      return validationError(c, '部分物品不存在', { itemIds: missing });
+    }
+
+    try {
+      await ensureStockAvailable(
+        repos,
+        input.warehouseUnitId,
+        input.lines.map((l) => ({ itemId: l.itemId, qty: String(l.qty), batchId: l.batchId ?? null })),
+      );
+      const updated = await repos.outbounds.update(outbound.id, {
+        warehouseUnitId: input.warehouseUnitId,
+        counterpartyUnitId: input.counterpartyUnitId ?? null,
+        type: input.type,
+        lossReason: input.lossReason ?? null,
+        remark: input.remark ?? null,
+        photoFileIds: input.photoFileIds ?? [],
+        lines: input.lines.map((l) => ({
+          itemId: l.itemId,
+          qty: String(l.qty),
+          batchId: l.batchId ?? null,
+        })),
+      });
+      if (!updated) return notFound(c, '出库单不存在');
+      await recordAudit(repos, {
+        userId: c.get('auth').user!.id,
+        action: 'OUTBOUND_UPDATE',
+        entityType: 'outbound_order',
+        entityId: outbound.id,
+        before: { status: outbound.status },
+        after: { status: 'DRAFT' },
+      });
+      return ok(c, await detailOf(repos, updated));
+    } catch (cause) {
+      if (isSignal(cause, 'OUTBOUND_STATE_CONFLICT')) {
+        return error(c, 409, ErrorCodes.OUTBOUND_STATE_CONFLICT, '仅草稿（DRAFT）出库单可编辑');
+      }
+      if (isSignal(cause, 'INSUFFICIENT_STOCK')) {
+        return error(c, 409, ErrorCodes.INSUFFICIENT_STOCK, '库存不足，无法出库');
+      }
+      throw cause;
+    }
   });
 
   router.get('/:id', read, async (c) => {
@@ -204,6 +302,35 @@ function parsePositiveInt(raw: string | undefined, fallback: number, max?: numbe
 
 function scopeAllows(scopeUnitId: string | null, warehouseUnitId: string): boolean {
   return !scopeUnitId || warehouseUnitId === scopeUnitId;
+}
+
+const INSUFFICIENT_STOCK_MESSAGE = 'INSUFFICIENT_STOCK: insufficient stock for outbound';
+
+/**
+ * 创建/编辑草稿时校验每行数量不超过可用库存（DRAFT 期间库存仍可能变化，
+ * 过账时保留二次校验）。指定 batchId 看该批次可用量；否则看该物品全部批次之和。
+ */
+async function ensureStockAvailable(
+  repos: Repos,
+  warehouseUnitId: string,
+  lines: { itemId: string; qty: string; batchId: string | null }[],
+): Promise<void> {
+  const itemIds = [...new Set(lines.map((l) => l.itemId))];
+  const batchesByItem = new Map<string, StockBatchRecord[]>();
+  await Promise.all(
+    itemIds.map(async (itemId) => {
+      batchesByItem.set(itemId, await repos.stock.listBatches({ unitId: warehouseUnitId, itemId }));
+    }),
+  );
+  for (const line of lines) {
+    const qty = Number(line.qty);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    const batches = batchesByItem.get(line.itemId) ?? [];
+    const available = line.batchId
+      ? Number(batches.find((b) => b.batchId === line.batchId)?.qty ?? 0)
+      : batches.reduce((sum, b) => sum + Number(b.qty), 0);
+    if (available < qty) throw new Error(INSUFFICIENT_STOCK_MESSAGE);
+  }
 }
 
 function isSignal(cause: unknown, marker: string): boolean {
