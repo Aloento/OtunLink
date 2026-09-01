@@ -250,6 +250,10 @@ export interface ItemRepository {
   update(id: string, patch: UpdateItemInput): Promise<ItemRecord | null>;
   listImages(itemId: string): Promise<ItemImageRecord[]>;
   attachImages(itemId: string, fileIds: string[]): Promise<ItemImageRecord[]>;
+  /** 任一单据/库存/零售价表引用该物品时返回 true（删除前检查）。 */
+  hasReferences(id: string): Promise<boolean>;
+  /** 删除物品及其 item_images（无引用时调用）。返回是否删除成功。 */
+  delete(id: string): Promise<boolean>;
 }
 
 export interface FileRepository {
@@ -447,6 +451,8 @@ export interface ShipmentRepository {
     reviewedBy: string | null,
     reason: string,
   ): Promise<DiscrepancyReviewRecord | null>;
+  /** 删除 DRAFT 发货单（级联删除子表）。非 DRAFT 抛 SHIPMENT_STATE_CONFLICT。 */
+  delete(id: string): Promise<boolean>;
 }
 
 /** saveCount 的仓库入参（路由层从 shared zod 校验后转换）。 */
@@ -643,6 +649,8 @@ export interface InboundRepository {
    * （INBOUND_SHIPMENT / INBOUND_MANUAL）。非 DRAFT 抛 INBOUND_STATE_CONFLICT 信号。
    */
   post(id: string, postedBy: string): Promise<InboundOrderRecord | null>;
+  /** 删除 DRAFT 入库单（级联删除明细）。非 DRAFT 抛 INBOUND_STATE_CONFLICT。 */
+  delete(id: string): Promise<boolean>;
 }
 
 export interface ReturnRepository {
@@ -691,6 +699,11 @@ export interface ReturnRepository {
     lines: SalesReturnReceiveLineInput[],
     note: string | null,
   ): Promise<ReturnOrderRecord | null>;
+  /**
+   * 删除未处理退货单（PENDING / REQUESTED）。SHIPMENT 来源且 PENDING 时，
+   * 先回退关联发货单 RETURN_PENDING → READY。其余状态抛 RETURN_STATE_CONFLICT。
+   */
+  delete(id: string): Promise<boolean>;
 }
 
 // ── 库存台账与手动出入库──────────────────────────────────────────────
@@ -770,6 +783,8 @@ export interface OutboundRepository {
    * 指定批次不存在抛 STOCK_BATCH_NOT_FOUND 信号。
    */
   post(id: string, postedBy: string): Promise<OutboundOrderRecord | null>;
+  /** 删除 DRAFT 出库单（级联删除明细）。非 DRAFT 抛 OUTBOUND_STATE_CONFLICT。 */
+  delete(id: string): Promise<boolean>;
 }
 
 /** 库存台账行（stock JOIN batches/items/units）。 */
@@ -1083,6 +1098,8 @@ export interface SalesRepository {
   ): Promise<PaymentRecord | null>;
   /** 确认收货：PAYMENT_UPLOADED → CONFIRMED；其他状态抛 SALES_STATE_CONFLICT。 */
   confirmReceipt(id: string, confirmedBy: string): Promise<SalesOrderRecord | null>;
+  /** 删除 DRAFT 销售单（级联删除明细与批次分配）。非 DRAFT 抛 SALES_STATE_CONFLICT。 */
+  delete(id: string): Promise<boolean>;
 }
 
 /** 站内通知行（notifications， 先写表， 通知中心使用）。 */

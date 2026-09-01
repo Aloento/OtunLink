@@ -147,6 +147,36 @@ export function inboundOrdersRouter(): Hono<AppEnv> {
     }
   });
 
+  router.delete('/:id', post, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const inbound = await repos.inbounds.findById(c.req.param('id'));
+    if (!inbound) return notFound(c, '入库单不存在');
+
+    if (!scopeAllows(c.get('auth').user?.scopeUnitId ?? null, inbound.warehouseUnitId)) {
+      return forbidden(c, '数据范围越界（scope_unit_id 不匹配）');
+    }
+
+    try {
+      const deleted = await repos.inbounds.delete(inbound.id);
+      if (!deleted) return notFound(c, '入库单不存在');
+      await recordAudit(repos, {
+        userId: c.get('auth').user!.id,
+        action: 'INBOUND_DELETE',
+        entityType: 'inbound_order',
+        entityId: inbound.id,
+        before: { status: inbound.status },
+      });
+      return ok(c, { id: inbound.id });
+    } catch (cause) {
+      if (isInboundStateConflict(cause)) {
+        return error(c, 409, ErrorCodes.INBOUND_STATE_CONFLICT, '仅草稿（DRAFT）入库单可删除');
+      }
+      throw cause;
+    }
+  });
+
   return router;
 }
 

@@ -335,4 +335,87 @@ describe(' 发货退货（拒收）闭环', () => {
     expect(again.status).toBe(409);
     expect(await again.json()).toMatchObject({ error: { code: 'RETURN_ALREADY_PROCESSED' } });
   });
+
+  it('删除 PENDING 退货单成功，关联发货单回退为 READY', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const { shipmentId, itemId } = await readyShipment(app);
+    const created = await app.request(`/api/v1/shipments/${shipmentId}/returns`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({ items: [{ shipmentItemId: itemId, qty: '2' }] }),
+    });
+    const returnId = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const del = await app.request(`/api/v1/return-orders/${returnId}`, {
+      method: 'DELETE',
+      headers: auth('warehouse'),
+    });
+    expect(del.status).toBe(200);
+    expect(await del.json()).toMatchObject({ data: { id: returnId } });
+
+    const get = await app.request(`/api/v1/return-orders/${returnId}`, { headers: auth('warehouse') });
+    expect(get.status).toBe(404);
+
+    const shipmentDetail = await app.request(`/api/v1/shipments/${shipmentId}`, {
+      headers: auth('warehouse'),
+    });
+    const shipmentPayload = (await shipmentDetail.json()) as { data: { status: string } };
+    expect(shipmentPayload.data.status).toBe('READY');
+  });
+
+  it('已处理（CLOSED）退货单删除返回 409 RETURN_STATE_CONFLICT', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const { shipmentId, itemId } = await readyShipment(app);
+    const created = await app.request(`/api/v1/shipments/${shipmentId}/returns`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({ items: [{ shipmentItemId: itemId, qty: '5' }] }),
+    });
+    const returnId = ((await created.json()) as { data: { id: string } }).data.id;
+    const accepted = await app.request(`/api/v1/return-orders/${returnId}/accept`, {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify({ note: '同意退货' }),
+    });
+    expect(accepted.status).toBe(200);
+
+    const del = await app.request(`/api/v1/return-orders/${returnId}`, {
+      method: 'DELETE',
+      headers: auth('warehouse'),
+    });
+    expect(del.status).toBe(409);
+    expect(await del.json()).toMatchObject({ error: { code: 'RETURN_STATE_CONFLICT' } });
+  });
+
+  it('无退货权限（PENDING 用户）删除退货单返回 403', async () => {
+    const pending = user({
+      entraSub: 'pending',
+      role: 'COLLECTOR',
+      scopeUnitId: COLLECTOR_UNIT,
+      status: 'PENDING',
+    });
+    const { app } = makeApp({ users: [collector, warehouse, pending], units, items });
+    const { shipmentId, itemId } = await readyShipment(app);
+    const created = await app.request(`/api/v1/shipments/${shipmentId}/returns`, {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({ items: [{ shipmentItemId: itemId, qty: '1' }] }),
+    });
+    const returnId = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const del = await app.request(`/api/v1/return-orders/${returnId}`, {
+      method: 'DELETE',
+      headers: auth('pending'),
+    });
+    expect(del.status).toBe(403);
+  });
+
+  it('删除不存在的退货单返回 404', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const del = await app.request('/api/v1/return-orders/00000000-0000-4000-8000-0000000000ff', {
+      method: 'DELETE',
+      headers: auth('warehouse'),
+    });
+    expect(del.status).toBe(404);
+  });
 });

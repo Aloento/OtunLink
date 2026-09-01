@@ -604,4 +604,64 @@ describe(' 销售单（请货/发货/FEFO 分配）', () => {
     const whRow = whPriceBody.data.items.find((r) => r.itemId === ITEM_A);
     expect(whRow?.unitCost).toBeDefined();
   });
+
+  it('删除 DRAFT 销售单成功，随后 GET 404', async () => {
+    const { app } = makeApp();
+    const res = await createOrder(app, 'wh', [{ itemId: ITEM_A, qty: '1', unitPriceOverride: '50' }]);
+    expect(res.status).toBe(201);
+    const id = ((await res.json()) as { data: { id: string } }).data.id;
+
+    const del = await app.request(`/api/v1/sales-orders/${id}`, {
+      method: 'DELETE',
+      headers: auth('wh'),
+    });
+    expect(del.status).toBe(200);
+    expect(await del.json()).toMatchObject({ data: { id } });
+
+    const get = await app.request(`/api/v1/sales-orders/${id}`, { headers: auth('wh') });
+    expect(get.status).toBe(404);
+  });
+
+  it('非 DRAFT（SENT）销售单删除返回 409 SALES_STATE_CONFLICT', async () => {
+    const { app } = makeApp();
+    await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100');
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT, itemId: ITEM_A, qty: '10', unitCost: '8',
+      batchNo: 'B-DEL', expiryDate: '2025-03-01',
+    });
+    const res = await createOrder(app, 'wh', [{ itemId: ITEM_A, qty: '1' }]);
+    const id = ((await res.json()) as { data: { id: string } }).data.id;
+    const sent = await app.request(`/api/v1/sales-orders/${id}/send`, {
+      method: 'POST', headers: json('wh'), body: '{}',
+    });
+    expect(sent.status).toBe(200);
+
+    const del = await app.request(`/api/v1/sales-orders/${id}`, {
+      method: 'DELETE',
+      headers: auth('wh'),
+    });
+    expect(del.status).toBe(409);
+    expect(await del.json()).toMatchObject({ error: { code: 'SALES_STATE_CONFLICT' } });
+  });
+
+  it('无 SALES_CREATE 权限（COLLECTOR）删除销售单返回 403', async () => {
+    const { app } = makeApp();
+    const res = await createOrder(app, 'wh', [{ itemId: ITEM_A, qty: '1', unitPriceOverride: '50' }]);
+    const id = ((await res.json()) as { data: { id: string } }).data.id;
+
+    const del = await app.request(`/api/v1/sales-orders/${id}`, {
+      method: 'DELETE',
+      headers: auth('col'),
+    });
+    expect(del.status).toBe(403);
+  });
+
+  it('删除不存在的销售单返回 404', async () => {
+    const { app } = makeApp();
+    const del = await app.request('/api/v1/sales-orders/00000000-0000-4000-8000-0000000000ff', {
+      method: 'DELETE',
+      headers: auth('wh'),
+    });
+    expect(del.status).toBe(404);
+  });
 });

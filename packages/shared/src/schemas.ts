@@ -74,11 +74,35 @@ const innerCountSchema = z
   ])
   .transform((value) => String(value));
 
+const BARCODE_MESSAGE = '条码必须为 8/12/13/14 位数字且校验位正确';
+
+/**
+ * 标准商品条码（GTIN-8/12/13/14）：纯数字、长度 ∈ {8,12,13,14}，且末位校验位正确。
+ * 校验位 = (10 - 权重和 % 10) % 10，权重：从右往左（不含校验位）奇数位 ×3、偶数位 ×1。
+ */
+export function isValidGtin(value: string): boolean {
+  if (!/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/.test(value)) return false;
+  const digits = [...value].map((ch) => Number(ch));
+  const check = digits[digits.length - 1];
+  let sum = 0;
+  for (let i = 0; i < digits.length - 1; i++) {
+    const fromRight = digits.length - 1 - i;
+    sum += digits[i] * (fromRight % 2 === 1 ? 3 : 1);
+  }
+  return (10 - (sum % 10)) % 10 === check;
+}
+
+/** 条码：trim 后允许空串（视为未填）；非空必须通过 GTIN 校验。 */
+const barcodeValue = z
+  .string()
+  .trim()
+  .refine((value) => value === '' || isValidGtin(value), BARCODE_MESSAGE);
+
 /** 新建物品（POST /items）。条码可空；spec_unit 默认 PIECE。 */
 export const itemCreateSchema = z.object({
   sku: z.string().trim().max(64).optional(),
   name: z.string().trim().min(1).max(256),
-  barcode: z.string().trim().max(128).optional(),
+  barcode: barcodeValue.optional(),
   specUnit: specUnit().optional(),
   innerUnit: specUnit().optional(),
   innerCount: innerCountSchema.optional(),
@@ -99,7 +123,7 @@ export const itemAttachImagesSchema = z.object({
 export const itemPatchSchema = z.object({
   sku: z.string().trim().max(64).optional().nullable(),
   name: z.string().trim().min(1).max(256).optional(),
-  barcode: z.string().trim().max(128).optional().nullable(),
+  barcode: barcodeValue.optional().nullable(),
   specUnit: specUnit().optional(),
   innerUnit: specUnit().optional().nullable(),
   innerCount: innerCountSchema.optional().nullable(),

@@ -455,4 +455,82 @@ describe(' 手动入库单', () => {
     expect(forbiddenScope.status).toBe(403);
     expect(await forbiddenScope.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
   });
+
+  it('删除 DRAFT 入库单成功，随后 GET 404', async () => {
+    const { app } = makeApp({ users: [warehouse], units, items });
+    const created = await app.request('/api/v1/inbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        counterpartyUnitId: COLLECTOR_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '5', unitCost: '2.50' }],
+      }),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const del = await app.request(`/api/v1/inbound-orders/${id}`, {
+      method: 'DELETE',
+      headers: auth('warehouse'),
+    });
+    expect(del.status).toBe(200);
+    expect(await del.json()).toMatchObject({ data: { id } });
+
+    const get = await app.request(`/api/v1/inbound-orders/${id}`, { headers: auth('warehouse') });
+    expect(get.status).toBe(404);
+  });
+
+  it('非 DRAFT（POSTED）入库单删除返回 409 INBOUND_STATE_CONFLICT', async () => {
+    const { app } = makeApp({ users: [warehouse], units, items });
+    const created = await app.request('/api/v1/inbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        counterpartyUnitId: COLLECTOR_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '5', unitCost: '2.50' }],
+      }),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+    await app.request(`/api/v1/inbound-orders/${id}/post`, {
+      method: 'POST',
+      headers: json('warehouse'),
+    });
+
+    const del = await app.request(`/api/v1/inbound-orders/${id}`, {
+      method: 'DELETE',
+      headers: auth('warehouse'),
+    });
+    expect(del.status).toBe(409);
+    expect(await del.json()).toMatchObject({ error: { code: 'INBOUND_STATE_CONFLICT' } });
+  });
+
+  it('无 INBOUND_CONFIRM 权限（COLLECTOR）删除入库单返回 403', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const created = await app.request('/api/v1/inbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        counterpartyUnitId: COLLECTOR_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '1', unitCost: '1.00' }],
+      }),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const del = await app.request(`/api/v1/inbound-orders/${id}`, {
+      method: 'DELETE',
+      headers: auth('collector'),
+    });
+    expect(del.status).toBe(403);
+  });
+
+  it('删除不存在的入库单返回 404', async () => {
+    const { app } = makeApp({ users: [warehouse], units, items });
+    const del = await app.request('/api/v1/inbound-orders/00000000-0000-4000-8000-0000000000ff', {
+      method: 'DELETE',
+      headers: auth('warehouse'),
+    });
+    expect(del.status).toBe(404);
+  });
 });

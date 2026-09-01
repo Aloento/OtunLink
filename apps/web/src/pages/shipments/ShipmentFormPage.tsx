@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
-import type { ItemDto } from '@otunlink/shared';
+import { CURRENCIES, type ItemDto } from '@otunlink/shared';
 
 import { useSession } from '../../auth/SessionProvider';
 import { errorI18nKey, isApiError } from '../../api/http';
@@ -329,7 +329,13 @@ export function ShipmentFormPage() {
           />
         </Field>
         <Field label={t('shipments.currency')}>
-          <Input value={form.currency} onChange={(_, d) => set('currency', d.value)} />
+          <Select value={form.currency} onChange={(_, d) => set('currency', d.value)}>
+            {CURRENCIES.map((currency) => (
+              <option key={currency} value={currency}>
+                {currency}
+              </option>
+            ))}
+          </Select>
         </Field>
         <Field label={t('shipments.expectedArrivalDate')}>
           <Input

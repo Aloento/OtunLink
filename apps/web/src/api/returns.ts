@@ -6,7 +6,7 @@ import type {
   ReturnStatus,
 } from '@otunlink/shared';
 
-import { apiGet, apiPost } from './http';
+import { apiDelete, apiGet, apiPost } from './http';
 
 // 退货单 API 客户端：发货退货（拒收）+ 零售售后退货（SALES）。
 
@@ -37,6 +37,11 @@ export function listReturns(params: ReturnListQuery = {}): Promise<Paged<ReturnO
 
 export function getReturn(id: string): Promise<ReturnOrderDetailDto> {
   return apiGet<ReturnOrderDetailDto>(`/api/v1/return-orders/${id}`);
+}
+
+/** 删除退货单：仅 PENDING（发货退货）/ REQUESTED（零售售后）可删，其他状态后端返回 409。 */
+export function deleteReturn(id: string): Promise<{ id: string }> {
+  return apiDelete<{ id: string }>(`/api/v1/return-orders/${id}`);
 }
 
 /** 集货方接受退货：全部拒收 → RETURNED；部分拒收 → 剩余自动建档入库单。 */

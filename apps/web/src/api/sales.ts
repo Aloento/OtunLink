@@ -9,7 +9,7 @@ import type {
   SalesStatus,
 } from '@otunlink/shared';
 
-import { apiGet, apiPatch, apiPost } from './http';
+import { apiDelete, apiGet, apiPatch, apiPost } from './http';
 
 // 销售单 API 客户端：门店请货 + 仓库主动送货，
 // 发送时 FEFO（或手工指定批次）分配并扣减库存，零售方上传支付凭证并确认收货。
@@ -53,6 +53,11 @@ export function updateSalesOrder(id: string, input: SalesOrderPatchInput): Promi
 /** 发送：DRAFT → SENT；allocations 缺省按 FEFO 分配，指定时按批次扣减。 */
 export function sendSalesOrder(id: string, input: SalesOrderSendInput): Promise<SalesOrderDetailDto> {
   return apiPost<SalesOrderDetailDto>(`/api/v1/sales-orders/${id}/send`, input);
+}
+
+/** 删除草稿销售单：仅 DRAFT 可删，其他状态后端返回 409。 */
+export function deleteSalesOrder(id: string): Promise<{ id: string }> {
+  return apiDelete<{ id: string }>(`/api/v1/sales-orders/${id}`);
 }
 
 /** 取消：确认收货前可取消，已分配库存按原批次回补。 */

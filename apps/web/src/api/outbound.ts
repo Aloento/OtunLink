@@ -6,7 +6,7 @@ import type {
 } from '@otunlink/shared';
 import type { OutboundCreateInput } from '@otunlink/shared';
 
-import { apiGet, apiPost } from './http';
+import { apiDelete, apiGet, apiPost } from './http';
 
 // 出库单 API 客户端：手工出库（NORMAL），POST 后按 FEFO 或指定批次扣减。
 
@@ -42,4 +42,9 @@ export function createOutboundOrder(input: OutboundCreateInput): Promise<Outboun
 /** 过账：DRAFT → POSTED，按 FEFO（或指定批次）扣减库存并写流水；低于可用量报 INSUFFICIENT_STOCK。 */
 export function postOutboundOrder(id: string): Promise<OutboundOrderDetailDto> {
   return apiPost<OutboundOrderDetailDto>(`/api/v1/outbound-orders/${id}/post`);
+}
+
+/** 删除草稿出库单：仅 DRAFT 可删，其他状态后端返回 409。 */
+export function deleteOutboundOrder(id: string): Promise<{ id: string }> {
+  return apiDelete<{ id: string }>(`/api/v1/outbound-orders/${id}`);
 }

@@ -9,7 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import {
   Permissions,
@@ -24,7 +24,7 @@ import {
 import { errorI18nKey, isApiError } from '../../api/http';
 import { listItems } from '../../api/items';
 import { createSalesReturn, listReturns } from '../../api/returns';
-import { cancelSalesOrder, confirmSaleReceipt, getSalesOrder, sendSalesOrder, uploadSalePayment } from '../../api/sales';
+import { cancelSalesOrder, confirmSaleReceipt, deleteSalesOrder, getSalesOrder, sendSalesOrder, uploadSalePayment } from '../../api/sales';
 import { listStockBatches } from '../../api/stock';
 import { useSession } from '../../auth/SessionProvider';
 import { ImageUpload } from '../../components/ImageUpload';
@@ -39,6 +39,7 @@ export function SalesDetailPage() {
   const { locale } = useLocale();
   const { id } = useParams<{ id: string }>();
   const { me } = useSession();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { data: order, isLoading, isError } = useQuery({
@@ -52,6 +53,18 @@ export function SalesDetailPage() {
   };
 
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteSalesOrder(id!),
+    onSuccess: () => {
+      setActionError(null);
+      void queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
+      navigate('/sales');
+    },
+    onError: (cause) => {
+      setActionError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));
+    },
+  });
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelSalesOrder(id!),
@@ -111,6 +124,17 @@ export function SalesDetailPage() {
             <Link to={`/sales/${order.id}/edit`}>
               <Button appearance="secondary">{t('sales.editTitle')}</Button>
             </Link>
+          )}
+          {canSend && (
+            <Button
+              appearance="secondary"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (window.confirm(t('sales.deleteConfirm'))) deleteMutation.mutate();
+              }}
+            >
+              {deleteMutation.isPending ? <Spinner size="tiny" /> : t('sales.delete')}
+            </Button>
           )}
           {canCancel && (
             <Button

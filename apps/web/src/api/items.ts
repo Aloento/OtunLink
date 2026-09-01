@@ -1,6 +1,6 @@
 import type { FileDto, ItemDto, ItemImageDto, Paged, SpecUnit, ItemStatus } from '@otunlink/shared';
 
-import { apiGet, apiPatch, apiPost, apiRequest } from './http';
+import { apiDelete, apiGet, apiPatch, apiPost, apiRequest } from './http';
 
 // 物品目录 API 客户端：/items 与 /files。
 
@@ -81,6 +81,11 @@ export function createItem(input: CreateItemInput): Promise<ItemDetail> {
 
 export function updateItem(id: string, input: UpdateItemInput): Promise<ItemDto> {
   return apiPatch<ItemDto>(`/api/v1/items/${id}`, input);
+}
+
+/** 删除物品：后端返回 409 ITEM_IN_USE 表示已被单据/库存引用。 */
+export function deleteItem(id: string): Promise<{ id: string }> {
+  return apiDelete<{ id: string }>(`/api/v1/items/${id}`);
 }
 
 export function attachItemImages(id: string, fileIds: string[]): Promise<ItemImageDto[]> {

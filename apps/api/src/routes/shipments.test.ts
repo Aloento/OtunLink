@@ -347,6 +347,72 @@ describe('shipments 发货单 API', () => {
     expect(filteredBody.data.total).toBe(0);
   });
 
+  it('删除 DRAFT 发货单成功，随后 GET 404', async () => {
+    const { app } = makeApp({ users: [collector], units, items });
+    const created = await app.request('/api/v1/shipments', {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify(body()),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const del = await app.request(`/api/v1/shipments/${id}`, {
+      method: 'DELETE',
+      headers: auth('collector'),
+    });
+    expect(del.status).toBe(200);
+    expect(await del.json()).toMatchObject({ data: { id } });
+
+    const get = await app.request(`/api/v1/shipments/${id}`, { headers: auth('collector') });
+    expect(get.status).toBe(404);
+  });
+
+  it('非 DRAFT（SENT）发货单删除返回 409 SHIPMENT_STATE_CONFLICT', async () => {
+    const { app } = makeApp({ users: [collector], units, items });
+    const created = await app.request('/api/v1/shipments', {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify(body()),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+    await app.request(`/api/v1/shipments/${id}/send`, {
+      method: 'POST',
+      headers: json('collector'),
+    });
+
+    const del = await app.request(`/api/v1/shipments/${id}`, {
+      method: 'DELETE',
+      headers: auth('collector'),
+    });
+    expect(del.status).toBe(409);
+    expect(await del.json()).toMatchObject({ error: { code: 'SHIPMENT_STATE_CONFLICT' } });
+  });
+
+  it('无创建权限（RETAILER）删除发货单返回 403', async () => {
+    const { app } = makeApp({ users: [collector, retailer], units, items });
+    const created = await app.request('/api/v1/shipments', {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify(body()),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const del = await app.request(`/api/v1/shipments/${id}`, {
+      method: 'DELETE',
+      headers: auth('retailer'),
+    });
+    expect(del.status).toBe(403);
+  });
+
+  it('删除不存在的发货单返回 404', async () => {
+    const { app } = makeApp({ users: [collector], units, items });
+    const del = await app.request('/api/v1/shipments/00000000-0000-4000-8000-0000000000ff', {
+      method: 'DELETE',
+      headers: auth('collector'),
+    });
+    expect(del.status).toBe(404);
+  });
+
   it('权限矩阵：RETAILER/WAREHOUSE 创建 403，WAREHOUSE 读 200', async () => {
     const { app } = makeApp({ users: [collector, warehouse, retailer], units, items });
 

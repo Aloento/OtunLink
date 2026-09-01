@@ -245,9 +245,14 @@ const BARCODE_CONFLICT_MESSAGE = 'BARCODE_CONFLICT: barcode already taken by an 
 class MemoryItemRepository implements ItemRepository {
   private rows = new Map<string, ItemRecord>();
   private images = new Map<string, ItemImageRecord[]>();
+  private referenceCheckers: ((itemId: string) => boolean)[] = [];
 
   constructor(seed: ItemRecord[] = []) {
     for (const row of seed) this.rows.set(row.id, cloneItem(row));
+  }
+
+  addReferenceChecker(checker: (itemId: string) => boolean): void {
+    this.referenceCheckers.push(checker);
   }
 
   private assertBarcodeAvailable(barcode: string | null | undefined, excludeId?: string): void {
@@ -386,6 +391,16 @@ class MemoryItemRepository implements ItemRepository {
     }
     this.images.set(itemId, [...existing, ...added]);
     return (this.images.get(itemId) ?? []).map(cloneItemImage);
+  }
+
+  async hasReferences(id: string): Promise<boolean> {
+    return this.referenceCheckers.some((check) => check(id));
+  }
+
+  async delete(id: string): Promise<boolean> {
+    if (!this.rows.has(id)) return false;
+    this.images.delete(id);
+    return this.rows.delete(id);
   }
 }
 
@@ -926,6 +941,29 @@ class MemoryShipmentRepository implements ShipmentRepository {
     if (!shipment) throw new Error('SHIPMENT_NOT_FOUND: shipment does not exist');
     this.rows.set(id, cloneShipment({ ...shipment, status, updatedAt: new Date() }));
   }
+
+  referencesItem(itemId: string): boolean {
+    for (const rows of this.items.values()) {
+      if (rows.some((row) => row.itemId === itemId)) return true;
+    }
+    return false;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const existing = this.rows.get(id);
+    if (!existing) return false;
+    if (existing.status !== 'DRAFT') throw new Error(SHIPMENT_STATE_MESSAGE);
+    // 手动级联删除子表（DB 已 ON DELETE CASCADE）。
+    for (const reviewId of [...this.reviews.keys()]) {
+      if (this.reviews.get(reviewId)?.shipmentId === id) {
+        this.reviews.delete(reviewId);
+        this.reviewItems.delete(reviewId);
+      }
+    }
+    this.trackings.delete(id);
+    this.items.delete(id);
+    return this.rows.delete(id);
+  }
 }
 
 function cloneShipment(row: ShipmentRecord): ShipmentRecord {
@@ -1448,6 +1486,21 @@ class MemoryInboundRepository implements InboundRepository {
     this.rows.set(id, cloneInbound(next));
     return cloneInbound(next);
   }
+
+  referencesItem(itemId: string): boolean {
+    for (const rows of this.items.values()) {
+      if (rows.some((row) => row.itemId === itemId)) return true;
+    }
+    return false;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const existing = this.rows.get(id);
+    if (!existing) return false;
+    if (existing.status !== 'DRAFT') throw new Error(INBOUND_STATE_CONFLICT_MESSAGE);
+    this.items.delete(id);
+    return this.rows.delete(id);
+  }
 }
 
 class MemoryReturnRepository implements ReturnRepository {
@@ -1941,6 +1994,30 @@ class MemoryReturnRepository implements ReturnRepository {
     this.rows.set(id, cloneReturn(next));
     return cloneReturn(next);
   }
+
+  referencesItem(itemId: string): boolean {
+    for (const rows of this.items.values()) {
+      if (rows.some((row) => row.itemId === itemId)) return true;
+    }
+    return false;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const order = this.rows.get(id);
+    if (!order) return false;
+    if (order.status !== 'PENDING' && order.status !== 'REQUESTED') {
+      throw new Error(RETURN_STATE_CONFLICT_MESSAGE);
+    }
+    // SHIPMENT 来源且 PENDING：回退关联发货单 RETURN_PENDING → READY。
+    if (order.sourceType === 'SHIPMENT' && order.status === 'PENDING' && order.shipmentId) {
+      const shipment = await this.shipmentRepo.findById(order.shipmentId);
+      if (shipment && shipment.status === 'RETURN_PENDING') {
+        this.shipmentRepo.transitionTo(order.shipmentId, 'READY');
+      }
+    }
+    this.items.delete(id);
+    return this.rows.delete(id);
+  }
 }
 
 // ── 内存实现：手动出入库 + 库存台账。 ──────────────────────────────────
@@ -2071,6 +2148,21 @@ class MemoryOutboundRepository implements OutboundRepository {
     };
     this.rows.set(id, cloneOutbound(next));
     return cloneOutbound(next);
+  }
+
+  referencesItem(itemId: string): boolean {
+    for (const rows of this.items.values()) {
+      if (rows.some((row) => row.itemId === itemId)) return true;
+    }
+    return false;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const existing = this.rows.get(id);
+    if (!existing) return false;
+    if (existing.status !== 'DRAFT') throw new Error(OUTBOUND_STATE_CONFLICT_MESSAGE);
+    this.items.delete(id);
+    return this.rows.delete(id);
   }
 }
 
@@ -2307,6 +2399,13 @@ class MemoryRetailPriceRepository implements RetailPriceRepository {
       .filter((row) => row.unitId === unitId && row.itemId === itemId)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
       .map((row) => ({ ...row }));
+  }
+
+  referencesItem(itemId: string): boolean {
+    for (const row of this.prices.values()) {
+      if (row.itemId === itemId) return true;
+    }
+    return false;
   }
 }
 
@@ -2925,6 +3024,24 @@ class MemorySalesRepository implements SalesRepository {
     this.rows.set(id, cloneSalesOrder(next));
     return this.withPayment(next);
   }
+
+  referencesItem(itemId: string): boolean {
+    for (const rows of this.items.values()) {
+      if (rows.some((row) => row.itemId === itemId)) return true;
+    }
+    return false;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const existing = this.rows.get(id);
+    if (!existing) return false;
+    if (existing.status !== 'DRAFT') throw new Error(SALES_STATE_CONFLICT_MESSAGE);
+    const itemIds = new Set((this.items.get(id) ?? []).map((row) => row.id));
+    this.allocRows = this.allocRows.filter((row) => !itemIds.has(row.orderItemId));
+    this.items.delete(id);
+    this.payments.delete(id);
+    return this.rows.delete(id);
+  }
 }
 
 // ── ck-??：仓库-零售签约（内存实现，与 SQL 实现语义一致）。 ────────────────────
@@ -3062,6 +3179,28 @@ export function createMemoryRepos(seed?: {
     returns: seed?.returns,
     returnItems: seed?.returnItems,
   });
+  const outboundRepo = new MemoryOutboundRepository(stockLedger, {
+    outbounds: seed?.outbounds,
+    outboundItems: seed?.outboundItems,
+  });
+
+  // 物品删除前的引用检查：任一单据/库存/零售价引用该物品即视为占用。
+  itemRepo.addReferenceChecker((itemId) => shipmentRepo.referencesItem(itemId));
+  itemRepo.addReferenceChecker((itemId) => inboundRepo.referencesItem(itemId));
+  itemRepo.addReferenceChecker((itemId) => outboundRepo.referencesItem(itemId));
+  itemRepo.addReferenceChecker((itemId) => salesRepo.referencesItem(itemId));
+  itemRepo.addReferenceChecker((itemId) => returnRepo.referencesItem(itemId));
+  itemRepo.addReferenceChecker((itemId) => retailPriceRepo.referencesItem(itemId));
+  itemRepo.addReferenceChecker((itemId) =>
+    [...stockLedger.batches.values()].some((row) => row.itemId === itemId),
+  );
+  itemRepo.addReferenceChecker((itemId) =>
+    [...stockLedger.stock.values()].some((row) => row.itemId === itemId),
+  );
+  itemRepo.addReferenceChecker((itemId) =>
+    stockLedger.movements.some((row) => row.itemId === itemId),
+  );
+
   return {
     users: userRepo,
     units: unitRepo,
@@ -3070,10 +3209,7 @@ export function createMemoryRepos(seed?: {
     shipments: shipmentRepo,
     inbounds: inboundRepo,
     returns: returnRepo,
-    outbounds: new MemoryOutboundRepository(stockLedger, {
-      outbounds: seed?.outbounds,
-      outboundItems: seed?.outboundItems,
-    }),
+    outbounds: outboundRepo,
     stock: new MemoryStockRepository(stockLedger, unitRepo, itemRepo),
     retailPrices: retailPriceRepo,
     sales: salesRepo,

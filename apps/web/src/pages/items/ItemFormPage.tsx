@@ -27,6 +27,7 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import { attachItemImages, createItem, getItem, listItemCategories, updateItem } from '../../api/items';
 import { ImageUpload } from '../../components/ImageUpload';
 import { ScannerDialog } from '../../components/ScannerDialog';
+import { isGtin } from '../../lib/gtin';
 
 interface FormState {
   name: string;
@@ -111,6 +112,10 @@ export function ItemFormPage() {
 
   const submit = async () => {
     if (!form.name.trim()) return;
+    if (form.barcode.trim() && !isGtin(form.barcode.trim())) {
+      setError(t('items.barcodeInvalid'));
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -181,9 +186,18 @@ export function ItemFormPage() {
         <Field label={t('items.sku')}>
           <Input value={form.sku} onChange={(_, d) => set('sku', d.value)} />
         </Field>
-        <Field label={t('items.barcode')}>
+        <Field
+          label={t('items.barcode')}
+          validationState={form.barcode && !isGtin(form.barcode) ? 'error' : undefined}
+          validationMessage={form.barcode && !isGtin(form.barcode) ? t('items.barcodeInvalid') : undefined}
+        >
           <div className="flex gap-2">
-            <Input value={form.barcode} onChange={(_, d) => set('barcode', d.value)} />
+            <Input
+              value={form.barcode}
+              maxLength={14}
+              inputMode="numeric"
+              onChange={(_, d) => set('barcode', d.value.replace(/\D/g, ''))}
+            />
             <Button type="button" appearance="secondary" onClick={() => setScanOpen(true)}>
               {t('items.scan')}
             </Button>

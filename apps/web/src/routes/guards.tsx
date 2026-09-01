@@ -23,7 +23,11 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const authenticated = useIsAuthenticated();
   if (!authenticated) {
     // 记录原目标路径，登录会话就绪后由 LoginPage / CallbackPage 恢复（defect #9）。
-    setReturnTo(window.location.pathname + window.location.search + window.location.hash);
+    // 仅在当前不在 /login 时记录：`<Navigate replace>` 后组件会重渲染，此时 location
+    // 已是 /login，若再写一次会把深链覆盖成 /login，导致登录后回不到原页。
+    if (window.location.pathname !== LOGIN_PATH) {
+      setReturnTo(window.location.pathname + window.location.search + window.location.hash);
+    }
     return <Navigate to={LOGIN_PATH} replace />;
   }
   return <>{children}</>;
@@ -49,6 +53,11 @@ export function RequireActive({ children }: { children: ReactNode }) {
     // 会话仍在（authenticated=true）但 /auth/me 因服务器/网络失败：展示可重试错误页，
     // 避免与 LoginPage 的「已登录即回首页」守卫互相导航导致死循环。
     if (error === 'server') return <SessionErrorPage onRetry={reload} />;
+    // 已登录但 /auth/me 返回空（如令牌失效被清缓存）：记录原目标路径，登录后回跳原页。
+    // 与 RequireAuth 相同，避免 `<Navigate replace>` 重渲染后把深链覆盖成 /login。
+    if (window.location.pathname !== LOGIN_PATH) {
+      setReturnTo(window.location.pathname + window.location.search + window.location.hash);
+    }
     return <Navigate to={LOGIN_PATH} replace />;
   }
   if (me.status !== 'ACTIVE') return <PendingPage me={me} onRefresh={reload} />;

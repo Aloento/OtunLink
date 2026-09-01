@@ -193,6 +193,35 @@ export function salesOrdersRouter(): Hono<AppEnv> {
     }
   });
 
+  router.delete('/:id', createPermission, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const order = await repos.sales.findById(c.req.param('id'));
+    if (!order) return notFound(c, '销售单不存在');
+    if (!scopeAllowsOrder(c.get('auth').user?.scopeUnitId ?? null, order)) {
+      return forbidden(c, '数据范围越界（scope_unit_id 不匹配）');
+    }
+
+    try {
+      const deleted = await repos.sales.delete(order.id);
+      if (!deleted) return notFound(c, '销售单不存在');
+      await recordAudit(repos, {
+        userId: c.get('auth').user!.id,
+        action: 'SALES_DELETE',
+        entityType: 'sales_order',
+        entityId: order.id,
+        before: { status: order.status },
+      });
+      return ok(c, { id: order.id });
+    } catch (cause) {
+      if (isSignal(cause, 'SALES_STATE_CONFLICT')) {
+        return error(c, 409, ErrorCodes.SALES_STATE_CONFLICT, '仅草稿（DRAFT）销售单可删除');
+      }
+      throw cause;
+    }
+  });
+
   router.post('/:id/send', requirePermission(Permissions.SALES_SEND), async (c) => {
     const repos = c.get('repos');
     if (!repos) return dbUnavailable(c);

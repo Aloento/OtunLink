@@ -1,11 +1,13 @@
 import { Body1, Button, Spinner, Text, Title1 } from '@fluentui/react-components';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Permissions, hasPermission } from '@otunlink/shared';
 
-import { getItem } from '../../api/items';
+import { deleteItem, getItem } from '../../api/items';
+import { isApiError } from '../../api/http';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
 
@@ -14,14 +16,33 @@ export function ItemDetailPage() {
   const { t } = useTranslation();
   const params = useParams<{ id: string }>();
   const id = params.id!;
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { me } = useSession();
   const canWrite = hasPermission(me?.role, Permissions.ITEMS_WRITE);
+
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['items', id],
     queryFn: () => getItem(id),
     staleTime: 30_000,
   });
+
+  const handleDelete = async () => {
+    if (!window.confirm(t('items.deleteConfirm', { name: data?.name ?? '' }))) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteItem(id);
+      void queryClient.invalidateQueries({ queryKey: ['items'] });
+      navigate('/items');
+    } catch (cause) {
+      setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));
+      setDeleting(false);
+    }
+  };
 
   if (isLoading) return <Spinner label={t('common.loading')} />;
   if (isError || !data) {
@@ -64,8 +85,15 @@ export function ItemDetailPage() {
               <Button appearance="primary">{t('items.edit')}</Button>
             </Link>
           )}
+          {canWrite && (
+            <Button appearance="secondary" disabled={deleting} onClick={() => void handleDelete()}>
+              {deleting ? <Spinner size="tiny" /> : t('items.delete')}
+            </Button>
+          )}
         </div>
       </div>
+
+      {error && <Text className="text-red-600">{error}</Text>}
 
       <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
         {rows.map(([label, value]) => (

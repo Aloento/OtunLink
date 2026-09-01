@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../index';
 import { createMemoryRepos } from '../repos/memory';
-import type { FileRecord, ItemRecord, TokenClaims, UserRecord } from '../types';
+import type {
+  FileRecord,
+  ItemRecord,
+  ShipmentItemRecord,
+  ShipmentRecord,
+  TokenClaims,
+  UserRecord,
+} from '../types';
 
 const now = new Date('2025-01-01T00:00:00.000Z');
 
@@ -53,7 +60,47 @@ function file(partial: Partial<FileRecord> & { id: string }): FileRecord {
   };
 }
 
-function makeApp(seed: { users?: UserRecord[]; items?: ItemRecord[]; files?: FileRecord[] }) {
+function shipment(partial: Partial<ShipmentRecord> & { id: string }): ShipmentRecord {
+  return {
+    shipmentNo: `SH-${partial.id}`,
+    shipperUnitId: 'u-shipper',
+    receiverUnitId: 'u-receiver',
+    status: 'DRAFT',
+    boxesCount: 1,
+    currency: 'CNY',
+    expectedArrivalDate: null,
+    remark: null,
+    sentAt: null,
+    countVersion: 0,
+    createdBy: null,
+    createdAt: now,
+    updatedAt: now,
+    ...partial,
+  };
+}
+
+function shipmentItem(
+  partial: Partial<ShipmentItemRecord> & { id: string; itemId: string },
+): ShipmentItemRecord {
+  return {
+    shipmentId: 's1',
+    name: '测试物品',
+    spec: null,
+    expectedQty: '10',
+    actualQty: null,
+    unitPrice: null,
+    productionDate: null,
+    expiryDate: null,
+    lineNote: null,
+    createdAt: now,
+    updatedAt: now,
+    ...partial,
+  };
+}
+
+function makeApp(
+  seed: Parameters<typeof createMemoryRepos>[0] = {},
+) {
   const repos = createMemoryRepos(seed);
   const app = createApp({
     verifyToken: async (_env, token): Promise<TokenClaims> => ({ sub: token }),
@@ -108,9 +155,9 @@ describe('items 物品目录 API', () => {
   it('按条码定位（by-barcode）', async () => {
     const { app } = makeApp({
       users: [collector],
-      items: [item({ id: 'i1', name: '苹果', barcode: '6901234567890' })],
+      items: [item({ id: 'i1', name: '苹果', barcode: '6901234567892' })],
     });
-    const res = await app.request('/api/v1/items/by-barcode?code=6901234567890', {
+    const res = await app.request('/api/v1/items/by-barcode?code=6901234567892', {
       headers: auth('collector'),
     });
     expect(res.status).toBe(200);
@@ -129,12 +176,12 @@ describe('items 物品目录 API', () => {
   it('ACTIVE 条码唯一：重复创建返回 409', async () => {
     const { app } = makeApp({
       users: [collector],
-      items: [item({ id: 'i1', barcode: '6901234567890' })],
+      items: [item({ id: 'i1', barcode: '6901234567892' })],
     });
     const res = await app.request('/api/v1/items', {
       method: 'POST',
       headers: json('collector'),
-      body: JSON.stringify({ name: '另一个', barcode: '6901234567890' }),
+      body: JSON.stringify({ name: '另一个', barcode: '6901234567892' }),
     });
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ error: { code: 'BARCODE_CONFLICT' } });
@@ -143,7 +190,7 @@ describe('items 物品目录 API', () => {
   it('原物品设为 INACTIVE 后条码可复用', async () => {
     const { app } = makeApp({
       users: [collector],
-      items: [item({ id: 'i1', barcode: '6901234567890' })],
+      items: [item({ id: 'i1', barcode: '6901234567892' })],
     });
     const off = await app.request('/api/v1/items/i1', {
       method: 'PATCH',
@@ -155,7 +202,7 @@ describe('items 物品目录 API', () => {
     const res = await app.request('/api/v1/items', {
       method: 'POST',
       headers: json('collector'),
-      body: JSON.stringify({ name: '复用条码', barcode: '6901234567890' }),
+      body: JSON.stringify({ name: '复用条码', barcode: '6901234567892' }),
     });
     expect(res.status).toBe(201);
   });
@@ -297,5 +344,95 @@ describe('items 物品目录 API', () => {
     expect(body.data.sku).toMatch(/^[A-Z0-9]{8}$/);
     expect(body.data.sku).not.toContain('ITEM');
     expect(body.data.sku.length).toBeLessThanOrEqual(16);
+  });
+
+  // ── 条码 GTIN 校验 ────────────────────────────────────────────────
+
+  it.each([
+    ['12345670', 'GTIN-8'],
+    ['123456789012', 'UPC-12'],
+    ['6901234567892', 'EAN-13'],
+    ['12345678901231', 'GTIN-14'],
+  ])('合法条码 %s（%s）创建物品通过', async (barcode) => {
+    const { app } = makeApp({ users: [collector] });
+    const res = await app.request('/api/v1/items', {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify({ name: '条码物品', barcode }),
+    });
+    expect(res.status).toBe(201);
+  });
+
+  it.each([
+    ['690123456789X', '含非数字'],
+    ['1234567', '长度 7'],
+    ['123456789', '长度 9'],
+    ['123456789012345', '长度 15'],
+    ['6901234567890', '校验位错误'],
+  ])('非法条码 %s（%s）创建物品返回 400', async (barcode) => {
+    const { app } = makeApp({ users: [collector] });
+    const res = await app.request('/api/v1/items', {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify({ name: '非法条码', barcode }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+  });
+
+  // ── 物品删除 ──────────────────────────────────────────────────────
+
+  it('无引用时 DELETE 成功，随后 GET 返回 404', async () => {
+    const { app } = makeApp({ users: [collector], items: [item({ id: 'i1' })] });
+
+    const del = await app.request('/api/v1/items/i1', {
+      method: 'DELETE',
+      headers: auth('collector'),
+    });
+    expect(del.status).toBe(200);
+    expect(await del.json()).toMatchObject({ data: { id: 'i1' } });
+
+    const get = await app.request('/api/v1/items/i1', { headers: auth('collector') });
+    expect(get.status).toBe(404);
+  });
+
+  it('被发货单引用时 DELETE 返回 409 ITEM_IN_USE', async () => {
+    const { app } = makeApp({
+      users: [collector],
+      items: [item({ id: 'i1' })],
+      shipments: [shipment({ id: 's1', shipperUnitId: 'u-shipper', receiverUnitId: 'u-receiver' })],
+      shipmentItems: [shipmentItem({ id: 'si1', shipmentId: 's1', itemId: 'i1' })],
+    });
+
+    const res = await app.request('/api/v1/items/i1', {
+      method: 'DELETE',
+      headers: auth('collector'),
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: { code: 'ITEM_IN_USE' } });
+  });
+
+  it('无 ITEMS_WRITE 权限（RETAILER）DELETE 返回 403', async () => {
+    const { app } = makeApp({
+      users: [user({ entraSub: 'retailer', role: 'RETAILER' })],
+      items: [item({ id: 'i1' })],
+    });
+    const res = await app.request('/api/v1/items/i1', {
+      method: 'DELETE',
+      headers: auth('retailer'),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('PENDING 用户 DELETE 返回 403', async () => {
+    const { app } = makeApp({
+      users: [user({ entraSub: 'pending', status: 'PENDING' })],
+      items: [item({ id: 'i1' })],
+    });
+    const res = await app.request('/api/v1/items/i1', {
+      method: 'DELETE',
+      headers: auth('pending'),
+    });
+    expect(res.status).toBe(403);
   });
 });

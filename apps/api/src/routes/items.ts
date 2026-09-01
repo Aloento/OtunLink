@@ -134,6 +134,24 @@ export function itemsRouter(): Hono<AppEnv> {
     }
   });
 
+  router.delete('/:id', write, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const id = c.req.param('id');
+    const item = await repos.items.findById(id);
+    if (!item) return notFound(c, '物品不存在');
+
+    const hasReferences = await repos.items.hasReferences(id);
+    if (hasReferences) {
+      return error(c, 409, ErrorCodes.ITEM_IN_USE, '该物品已被单据/库存引用，无法删除');
+    }
+
+    const deleted = await repos.items.delete(id);
+    if (!deleted) return notFound(c, '物品不存在');
+    return ok(c, { id });
+  });
+
   router.post('/:id/images', write, async (c) => {
     const repos = c.get('repos');
     if (!repos) return dbUnavailable(c);

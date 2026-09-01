@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { acquireAccessToken, apiBaseUrl, fetchMe, type MeUser } from '../api/client';
 import { setTokenProvider, setUnauthorizedHandler } from '../api/http';
 import { envAuthConfig } from './msalConfig';
+import { setReturnTo } from './returnTo';
 
 // 会话上下文：登录后拉取 /auth/me，并把 MSAL 令牌注入请求层。
 // 401 时清空会话并跳转登录（由请求层回调触发）。
@@ -89,6 +90,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
     setUnauthorizedHandler(() => {
       void expireSession();
+      setReturnTo(window.location.pathname + window.location.search + window.location.hash);
       navigate(LOGIN_FALLBACK, { replace: true });
     });
     return () => {

@@ -6,7 +6,7 @@ import type {
   Paged,
 } from '@otunlink/shared';
 
-import { apiGet, apiPost } from './http';
+import { apiDelete, apiGet, apiPost } from './http';
 
 // 入库单 API 客户端：确认收货自动建档的 DRAFT/POSTED + 手工入库单（sourceType=MANUAL）。
 
@@ -36,6 +36,11 @@ export function getInbound(id: string): Promise<InboundOrderDetailDto> {
 /** 过账：DRAFT → POSTED，建档批次并写库存/台账。 */
 export function postInbound(id: string): Promise<InboundOrderDetailDto> {
   return apiPost<InboundOrderDetailDto>(`/api/v1/inbound-orders/${id}/post`);
+}
+
+/** 删除草稿入库单：仅 DRAFT 可删，其他状态后端返回 409。 */
+export function deleteInbound(id: string): Promise<{ id: string }> {
+  return apiDelete<{ id: string }>(`/api/v1/inbound-orders/${id}`);
 }
 
 /** 新建手工入库单（sourceType=MANUAL）。 */

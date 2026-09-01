@@ -2,12 +2,12 @@ import { Badge, Button, Body1, Spinner, Text, Title1 } from '@fluentui/react-com
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Permissions, hasPermission, type OutboundOrderItemDto } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
-import { getOutboundOrder, postOutboundOrder } from '../../api/outbound';
+import { deleteOutboundOrder, getOutboundOrder, postOutboundOrder } from '../../api/outbound';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
 import { useLocale } from '../../i18n/LocaleProvider';
@@ -21,9 +21,11 @@ export function OutboundDetailPage() {
   const { me } = useSession();
   const params = useParams<{ id: string }>();
   const id = params.id!;
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const [posting, setPosting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -44,6 +46,20 @@ export function OutboundDetailPage() {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
     } finally {
       setPosting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(t('outbound.deleteConfirm'))) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteOutboundOrder(id);
+      await queryClient.invalidateQueries({ queryKey: ['outbound-orders'] });
+      navigate('/outbound');
+    } catch (cause) {
+      setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));
+      setDeleting(false);
     }
   };
 
@@ -101,6 +117,11 @@ export function OutboundDetailPage() {
           {data.status === 'DRAFT' && canPost && (
             <Button appearance="primary" disabled={posting} onClick={() => void handlePost()}>
               {posting ? <Spinner size="tiny" /> : t('outbound.post')}
+            </Button>
+          )}
+          {data.status === 'DRAFT' && canPost && (
+            <Button appearance="secondary" disabled={deleting} onClick={() => void handleDelete()}>
+              {deleting ? <Spinner size="tiny" /> : t('outbound.delete')}
             </Button>
           )}
         </div>

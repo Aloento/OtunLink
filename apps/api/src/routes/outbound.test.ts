@@ -438,4 +438,88 @@ describe(' 手动出库单', () => {
     expect(list.status).toBe(200);
     expect(((await list.json()) as { data: { total: number } }).data.total).toBe(0);
   });
+
+  it('删除 DRAFT 出库单成功，随后 GET 404', async () => {
+    const { app } = makeApp({ users: [warehouse], units, items });
+    const created = await app.request('/api/v1/outbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        counterpartyUnitId: COLLECTOR_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '1' }],
+      }),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const del = await app.request(`/api/v1/outbound-orders/${id}`, {
+      method: 'DELETE',
+      headers: auth('warehouse'),
+    });
+    expect(del.status).toBe(200);
+    expect(await del.json()).toMatchObject({ data: { id } });
+
+    const get = await app.request(`/api/v1/outbound-orders/${id}`, { headers: auth('warehouse') });
+    expect(get.status).toBe(404);
+  });
+
+  it('非 DRAFT（POSTED）出库单删除返回 409 OUTBOUND_STATE_CONFLICT', async () => {
+    const { app } = makeApp({ users: [warehouse], units, items });
+    await seedStock(app, {
+      warehouseUnitId: WAREHOUSE_UNIT,
+      itemId: ITEM_A,
+      qty: '5',
+      unitCost: '1.00',
+      batchNo: 'B-DEL',
+      expiryDate: '2025-12-31',
+    });
+    const created = await app.request('/api/v1/outbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '1' }],
+      }),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+    await app.request(`/api/v1/outbound-orders/${id}/post`, {
+      method: 'POST',
+      headers: json('warehouse'),
+    });
+
+    const del = await app.request(`/api/v1/outbound-orders/${id}`, {
+      method: 'DELETE',
+      headers: auth('warehouse'),
+    });
+    expect(del.status).toBe(409);
+    expect(await del.json()).toMatchObject({ error: { code: 'OUTBOUND_STATE_CONFLICT' } });
+  });
+
+  it('无 STOCK_WRITE 权限（COLLECTOR）删除出库单返回 403', async () => {
+    const { app } = makeApp({ users: [collector, warehouse], units, items });
+    const created = await app.request('/api/v1/outbound-orders', {
+      method: 'POST',
+      headers: json('warehouse'),
+      body: JSON.stringify({
+        warehouseUnitId: WAREHOUSE_UNIT,
+        lines: [{ itemId: ITEM_A, qty: '1' }],
+      }),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    const del = await app.request(`/api/v1/outbound-orders/${id}`, {
+      method: 'DELETE',
+      headers: auth('collector'),
+    });
+    expect(del.status).toBe(403);
+  });
+
+  it('删除不存在的出库单返回 404', async () => {
+    const { app } = makeApp({ users: [warehouse], units, items });
+    const del = await app.request('/api/v1/outbound-orders/00000000-0000-4000-8000-0000000000ff', {
+      method: 'DELETE',
+      headers: auth('warehouse'),
+    });
+    expect(del.status).toBe(404);
+  });
 });

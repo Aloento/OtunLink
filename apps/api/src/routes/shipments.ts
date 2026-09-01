@@ -14,6 +14,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 
 import { requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
+import { recordAudit } from '../lib/audit';
 import { createMailer } from '../lib/email';
 import {
   discrepancyReviewDto,
@@ -200,6 +201,37 @@ export function shipmentsRouter(): Hono<AppEnv> {
       }
       if (isStateConflict(cause)) {
         return error(c, 409, ErrorCodes.SHIPMENT_STATE_CONFLICT, '仅草稿状态可编辑');
+      }
+      throw cause;
+    }
+  });
+
+  router.delete('/:id', write, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const existing = await repos.shipments.findById(c.req.param('id'));
+    if (!existing) return notFound(c, '发货单不存在');
+
+    const user = c.get('auth').user!;
+    if (!scopeAllowsWrite(user.scopeUnitId, existing.shipperUnitId)) {
+      return forbidden(c, '数据范围越界（只能删除自己单元的发货单）');
+    }
+
+    try {
+      const deleted = await repos.shipments.delete(existing.id);
+      if (!deleted) return notFound(c, '发货单不存在');
+      await recordAudit(repos, {
+        userId: user.id,
+        action: 'SHIPMENT_DELETE',
+        entityType: 'shipment',
+        entityId: existing.id,
+        before: { status: existing.status },
+      });
+      return ok(c, { id: existing.id });
+    } catch (cause) {
+      if (isStateConflict(cause)) {
+        return error(c, 409, ErrorCodes.SHIPMENT_STATE_CONFLICT, '仅草稿（DRAFT）发货单可删除');
       }
       throw cause;
     }

@@ -2,7 +2,7 @@ import { Button, Body1, Input, Spinner, Text, Textarea, Title1 } from '@fluentui
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Permissions, hasPermission, type ReturnOrderItemDto } from '@otunlink/shared';
 
@@ -10,6 +10,7 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import {
   acceptReturn,
   approveSalesReturn,
+  deleteReturn,
   getReturn,
   receiveSalesReturn,
   rejectReturn,
@@ -28,10 +29,12 @@ export function ReturnDetailPage() {
   const { me } = useSession();
   const params = useParams<{ id: string }>();
   const id = params.id!;
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -51,6 +54,15 @@ export function ReturnDetailPage() {
     isSales &&
     hasPermission(me?.role, Permissions.AFTER_SALE_RECEIVE) &&
     (!me?.scopeUnitId || me.scopeUnitId === data?.toUnitId);
+
+  // 仅创建方可删除未处理的退货单：发货退货 PENDING（仓库发起）/ 零售售后 REQUESTED（零售发起）。
+  const canDelete =
+    (data?.status === 'PENDING' &&
+      !isSales &&
+      hasPermission(me?.role, Permissions.SHIPMENT_RETURNS_CREATE)) ||
+    (data?.status === 'REQUESTED' &&
+      isSales &&
+      hasPermission(me?.role, Permissions.AFTER_SALE_CREATE));
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['return-orders', id] });
 
@@ -118,6 +130,20 @@ export function ReturnDetailPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm(t('returns.deleteConfirm'))) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteReturn(id);
+      await queryClient.invalidateQueries({ queryKey: ['return-orders'] });
+      navigate('/returns');
+    } catch (cause) {
+      setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));
+      setDeleting(false);
+    }
+  };
+
   if (isLoading) return <Spinner label={t('common.loading')} />;
   if (isError || !data) {
     return (
@@ -176,9 +202,16 @@ export function ReturnDetailPage() {
         <Title1 as="h1">
           {t('returns.detail')} · {data.returnNo}
         </Title1>
-        <Link to="/returns">
-          <Button appearance="secondary">{t('returns.back')}</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {canDelete && (
+            <Button appearance="secondary" disabled={deleting} onClick={() => void handleDelete()}>
+              {deleting ? <Spinner size="tiny" /> : t('returns.delete')}
+            </Button>
+          )}
+          <Link to="/returns">
+            <Button appearance="secondary">{t('returns.back')}</Button>
+          </Link>
+        </div>
       </div>
 
       {error && <Text className="text-red-600">{error}</Text>}

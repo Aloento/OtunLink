@@ -638,4 +638,70 @@ describe(' 零售售后退货（SALES）闭环', () => {
     });
     expect(approveByWh2.status).toBe(403);
   });
+
+  it('删除 REQUESTED 售后退货单成功，随后 GET 404', async () => {
+    const { app } = makeApp();
+    const { orderId, salesOrderItemId } = await readySalesOrder(app, '5', [
+      { qty: '10', unitCost: '8', batchNo: 'B-1', expiryDate: '2025-03-01' },
+    ]);
+    const created = await createReturn(app, orderId, {
+      items: [{ salesOrderItemId, qty: '2' }],
+    });
+    const { returnId } = await createdOf(created);
+
+    const del = await app.request(`/api/v1/return-orders/${returnId}`, {
+      method: 'DELETE',
+      headers: auth('wh'),
+    });
+    expect(del.status).toBe(200);
+    expect(await del.json()).toMatchObject({ data: { id: returnId } });
+
+    const get = await app.request(`/api/v1/return-orders/${returnId}`, { headers: auth('wh') });
+    expect(get.status).toBe(404);
+  });
+
+  it('已收货（RETURNED）售后退货单删除返回 409 RETURN_STATE_CONFLICT', async () => {
+    const { app } = makeApp();
+    const { orderId, salesOrderItemId } = await readySalesOrder(app, '5', [
+      { qty: '10', unitCost: '8', batchNo: 'B-1', expiryDate: '2025-03-01' },
+    ]);
+    const created = await createReturn(app, orderId, {
+      items: [{ salesOrderItemId, qty: '2' }],
+    });
+    const { returnId, returnItemId } = await createdOf(created);
+    await app.request(`/api/v1/return-orders/${returnId}/approve`, {
+      method: 'POST',
+      headers: json('wh'),
+      body: JSON.stringify({}),
+    });
+    await app.request(`/api/v1/return-orders/${returnId}/receive`, {
+      method: 'POST',
+      headers: json('wh'),
+      body: JSON.stringify({ items: [{ returnItemId, receivedQty: '2' }] }),
+    });
+
+    const del = await app.request(`/api/v1/return-orders/${returnId}`, {
+      method: 'DELETE',
+      headers: auth('wh'),
+    });
+    expect(del.status).toBe(409);
+    expect(await del.json()).toMatchObject({ error: { code: 'RETURN_STATE_CONFLICT' } });
+  });
+
+  it('删除不属于自己 scope 的售后退货单返回 403', async () => {
+    const { app } = makeApp();
+    const { orderId, salesOrderItemId } = await readySalesOrder(app, '5', [
+      { qty: '10', unitCost: '8', batchNo: 'B-1', expiryDate: '2025-03-01' },
+    ]);
+    const created = await createReturn(app, orderId, {
+      items: [{ salesOrderItemId, qty: '2' }],
+    });
+    const { returnId } = await createdOf(created);
+
+    const del = await app.request(`/api/v1/return-orders/${returnId}`, {
+      method: 'DELETE',
+      headers: auth('wh2'),
+    });
+    expect(del.status).toBe(403);
+  });
 });

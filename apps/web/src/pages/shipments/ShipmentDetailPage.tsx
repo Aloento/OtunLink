@@ -9,13 +9,13 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Permissions, hasPermission, type ShipmentItemDto } from '@otunlink/shared';
 
 import { useSession } from '../../auth/SessionProvider';
 import { errorI18nKey, isApiError } from '../../api/http';
-import { getShipment, sendShipment, startCounting } from '../../api/shipments';
+import { deleteShipment, getShipment, sendShipment, startCounting } from '../../api/shipments';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
@@ -32,10 +32,12 @@ export function ShipmentDetailPage() {
   const { me } = useSession();
   const params = useParams<{ id: string }>();
   const id = params.id!;
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const [sending, setSending] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -87,6 +89,20 @@ export function ShipmentDetailPage() {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(t('shipments.deleteConfirm'))) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteShipment(id);
+      await queryClient.invalidateQueries({ queryKey: ['shipments'] });
+      navigate('/shipments');
+    } catch (cause) {
+      setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));
+      setDeleting(false);
     }
   };
 
@@ -168,6 +184,11 @@ export function ShipmentDetailPage() {
           {data.status === 'DRAFT' && canSend && (
             <Button appearance="primary" disabled={sending} onClick={() => void handleSend()}>
               {t('shipments.send')}
+            </Button>
+          )}
+          {data.status === 'DRAFT' && canEdit && (
+            <Button appearance="secondary" disabled={deleting} onClick={() => void handleDelete()}>
+              {deleting ? <Spinner size="tiny" /> : t('shipments.delete')}
             </Button>
           )}
           {data.status === 'SENT' && canCount && (

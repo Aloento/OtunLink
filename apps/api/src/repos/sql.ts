@@ -955,6 +955,39 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       }
       return this.listImages(itemId);
     },
+    async hasReferences(id: string): Promise<boolean> {
+      // shipment_items.item_id 是 SET NULL 外键，但历史发货单仍引用该物品，也必须检查。
+      const checks = [
+        `SELECT 1 FROM shipment_items WHERE item_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM inbound_order_items WHERE item_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM outbound_order_items WHERE item_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM sales_order_items WHERE item_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM return_order_items WHERE item_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM batches WHERE item_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM stock WHERE item_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM stock_movements WHERE item_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM retail_prices WHERE item_id = ${quote(id)} LIMIT 1`,
+      ];
+      for (const sql of checks) {
+        const { rows } = await exec.query(sql);
+        if (rows.length > 0) return true;
+      }
+      return false;
+    },
+    async delete(id: string): Promise<boolean> {
+      await exec.query('BEGIN');
+      try {
+        await exec.query(`DELETE FROM item_images WHERE item_id = ${quote(id)}`);
+        const { rows } = await exec.query(
+          `DELETE FROM items WHERE id = ${quote(id)} RETURNING id`,
+        );
+        await exec.query('COMMIT');
+        return rows.length > 0;
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
   };
 
   const files = {
@@ -1132,6 +1165,15 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
          WHERE id = ${quote(id)} AND status = 'DRAFT' RETURNING *`,
       );
       return rows[0] ? mapShipment(rows[0]) : null;
+    },
+    async delete(id: string): Promise<boolean> {
+      const existing = await this.findById(id);
+      if (!existing) return false;
+      if (existing.status !== 'DRAFT') throw new Error(SHIPMENT_STATE_CONFLICT);
+      const { rows } = await exec.query(
+        `DELETE FROM shipments WHERE id = ${quote(id)} AND status = 'DRAFT' RETURNING id`,
+      );
+      return rows.length > 0;
     },
     async listTrackings(shipmentId: string): Promise<ShipmentTrackingRecord[]> {
       const { rows } = await exec.query(
@@ -1691,6 +1733,15 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         throw err;
       }
     },
+    async delete(id: string): Promise<boolean> {
+      const existing = await this.findById(id);
+      if (!existing) return false;
+      if (existing.status !== 'DRAFT') throw new Error(INBOUND_STATE_CONFLICT);
+      const { rows } = await exec.query(
+        `DELETE FROM inbound_orders WHERE id = ${quote(id)} AND status = 'DRAFT' RETURNING id`,
+      );
+      return rows.length > 0;
+    },
   };
 
   const returns = {
@@ -1921,6 +1972,31 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         }
         await exec.query('COMMIT');
         return mapReturn(updated[0]);
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async delete(id: string): Promise<boolean> {
+      const existing = await this.findById(id);
+      if (!existing) return false;
+      if (existing.status !== 'PENDING' && existing.status !== 'REQUESTED') {
+        throw new Error(RETURN_STATE_CONFLICT);
+      }
+      await exec.query('BEGIN');
+      try {
+        // SHIPMENT 来源且 PENDING：回退关联发货单 RETURN_PENDING → READY。
+        if (existing.sourceType === 'SHIPMENT' && existing.status === 'PENDING' && existing.shipmentId) {
+          await exec.query(
+            `UPDATE shipments SET status = 'READY', updated_at = now()
+             WHERE id = ${quote(existing.shipmentId)} AND status = 'RETURN_PENDING'`,
+          );
+        }
+        const { rows } = await exec.query(
+          `DELETE FROM return_orders WHERE id = ${quote(id)} RETURNING id`,
+        );
+        await exec.query('COMMIT');
+        return rows.length > 0;
       } catch (err) {
         await exec.query('ROLLBACK').catch(() => undefined);
         throw err;
@@ -2438,6 +2514,15 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         await exec.query('ROLLBACK').catch(() => undefined);
         throw err;
       }
+    },
+    async delete(id: string): Promise<boolean> {
+      const existing = await this.findById(id);
+      if (!existing) return false;
+      if (existing.status !== 'DRAFT') throw new Error(OUTBOUND_STATE_CONFLICT);
+      const { rows } = await exec.query(
+        `DELETE FROM outbound_orders WHERE id = ${quote(id)} AND status = 'DRAFT' RETURNING id`,
+      );
+      return rows.length > 0;
     },
   };
 
@@ -3250,6 +3335,15 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         await exec.query('ROLLBACK').catch(() => undefined);
         throw err;
       }
+    },
+    async delete(id: string): Promise<boolean> {
+      const existing = await this.findById(id);
+      if (!existing) return false;
+      if (existing.status !== 'DRAFT') throw new Error(SALES_STATE_CONFLICT);
+      const { rows } = await exec.query(
+        `DELETE FROM sales_orders WHERE id = ${quote(id)} AND status = 'DRAFT' RETURNING id`,
+      );
+      return rows.length > 0;
     },
   };
 

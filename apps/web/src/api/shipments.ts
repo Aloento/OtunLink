@@ -10,7 +10,7 @@ import type {
   ShipmentTrackingInput,
 } from '@otunlink/shared';
 
-import { apiGet, apiPatch, apiPost } from './http';
+import { apiDelete, apiGet, apiPatch, apiPost } from './http';
 
 // 发货单 API 客户端：/shipments、/reviews。
 
@@ -60,6 +60,11 @@ export function updateShipment(id: string, input: ShipmentUpdateInput): Promise<
 
 export function sendShipment(id: string): Promise<ShipmentDetailDto> {
   return apiPost<ShipmentDetailDto>(`/api/v1/shipments/${id}/send`);
+}
+
+/** 删除草稿发货单：仅 DRAFT 可删，其他状态后端返回 409。 */
+export function deleteShipment(id: string): Promise<{ id: string }> {
+  return apiDelete<{ id: string }>(`/api/v1/shipments/${id}`);
 }
 
 // ── 收货点货与差异协商────────────────────────────────────────────────

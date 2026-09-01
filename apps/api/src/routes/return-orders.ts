@@ -84,6 +84,36 @@ export function returnOrdersRouter(): Hono<AppEnv> {
     return ok(c, await detailOf(repos, order));
   });
 
+  router.delete('/:id', read, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const order = await repos.returns.findById(c.req.param('id'));
+    if (!order) return notFound(c, '退货单不存在');
+
+    if (!scopeAllowsRead(c.get('auth').user?.scopeUnitId ?? null, order)) {
+      return forbidden(c, '数据范围越界（scope_unit_id 不匹配）');
+    }
+
+    try {
+      const deleted = await repos.returns.delete(order.id);
+      if (!deleted) return notFound(c, '退货单不存在');
+      await recordAudit(repos, {
+        userId: c.get('auth').user!.id,
+        action: 'RETURN_DELETE',
+        entityType: 'return_order',
+        entityId: order.id,
+        before: { status: order.status, sourceType: order.sourceType, shipmentId: order.shipmentId },
+      });
+      return ok(c, { id: order.id });
+    } catch (cause) {
+      if (isReturnStateConflict(cause)) {
+        return error(c, 409, ErrorCodes.RETURN_STATE_CONFLICT, '仅未处理（PENDING/REQUESTED）退货单可删除');
+      }
+      throw cause;
+    }
+  });
+
   router.post('/:id/accept', handle, async (c) => {
     const repos = c.get('repos');
     if (!repos) return dbUnavailable(c);
