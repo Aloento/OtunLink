@@ -34,8 +34,10 @@ pnpm -r build
 # 前端（Vite dev server，默认 http://localhost:5173）
 pnpm dev:web
 
-# API（Wrangler dev，默认 http://localhost:8787）
+# API（Wrangler dev，默认 http://localhost:8787；本地直连数据库用 dev:api:local）
 pnpm dev:api
+# 本地开发建议（绕过 Miniflare 的 Hyperdrive 模拟，直连 DATABASE_URL，见 docs/db-setup.md）：
+pnpm dev:api:local
 curl http://localhost:8787/api/v1/health   # => {"ok":true}
 ```
 
@@ -49,15 +51,15 @@ curl http://localhost:8787/api/v1/health   # => {"ok":true}
 
 - **站内通知**：关键业务动作（待点货、差异 review、发货/售后退货、销售发送/支付/确认、
   入库/出库过账、效期预警等）写入 `notifications`，登录后在导航铃铛与
-  `/notifications` 页查看；工作台 `/` 按角色聚合待办（`GET /dashboard/todos`）。
+  `/notifications` 页查看；工作台 `/` 按角色聚合待办（`GET /api/v1/dashboard/todos`）。
 - **邮件（可选）**：`SMTP_HOST`/`MAIL_FROM` 等非敏感配置已在 `wrangler.toml [vars]`
   （飞书 Lark：`smtp.larksuite.com`、发信人 `otun@musi.land`）；再配置
   `SMTP_USER` / `SMTP_PASS`（生产经 GitHub secret + `wrangler secret put`，
   本地写 `apps/api/.dev.vars`）后，API 通过 Cloudflare Workers 直连外部 SMTP
   （端口 465 隐式 TLS 或 587 STARTTLS）发送邮件；**未配置时自动降级为仅站内通知**，
-  `POST /admin/test-email` 可测试连通性。
+  `POST /api/v1/admin/test-email` 可测试连通性。
 - **审计日志**：`audit_logs` 记录关键写操作的 actor/entity/before/after，
-  管理员经 `GET /admin/audit-logs` 分页筛选查询。
+  管理员经 `GET /api/v1/admin/audit-logs` 分页筛选查询。
 
 ## 部署与上线
 

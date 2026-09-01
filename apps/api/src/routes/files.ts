@@ -1,6 +1,5 @@
 import { ErrorCodes, Permissions } from '@otunlink/shared';
 import { Hono } from 'hono';
-import type { Context } from 'hono';
 
 import { requirePermission } from '../auth/middleware';
 import { fileDto } from '../lib/dto';

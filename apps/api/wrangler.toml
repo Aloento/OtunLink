@@ -19,7 +19,7 @@ binding = "JWKS_CACHE"
 id = "24881a3ca1404761a800540a6e809d8d"
 
 # ── 图片存储：S3 兼容对象存储（华为云 OBS，不用 R2）──────────────────────
-# Workers 无原生 S3 绑定，运行时经 aws4fetch/@aws-sdk/client-s3 访问；
+# Workers 无原生 S3 绑定，运行时经 aws4fetch（SigV4 签名）访问；
 # endpoint/bucket/region 为非敏感 vars，AccessKey 走 secrets（.dev.vars / wrangler secret put）。
 [vars]
 S3_ENDPOINT = "https://obs.eu-de.otc.t-systems.com"

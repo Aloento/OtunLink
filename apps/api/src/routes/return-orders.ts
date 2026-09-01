@@ -12,7 +12,16 @@ import { Hono } from 'hono';
 import { requireAnyPermission, requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { createMailer } from '../lib/email';
 import { returnDto, returnItemDto } from '../lib/dto';
-import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import {
+  dbUnavailable,
+  error,
+  forbidden,
+  notFound,
+  ok,
+  parsePositiveInt,
+  readJson,
+  validationError,
+} from '../lib/http';
 import { recordAudit } from '../lib/audit';
 import { notify } from '../lib/notify';
 import type { AppEnv, Repos, ReturnOrderRecord } from '../types';
@@ -328,22 +337,6 @@ const RETURN_STATUS_FILTER = new Set([
 ]);
 
 const SOURCE_TYPE_FILTER = new Set(['SHIPMENT', 'SALES']);
-
-function parsePositiveInt(raw: string | undefined, fallback: number, max?: number): number {
-  if (!raw) return fallback;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1) return fallback;
-  if (max !== undefined && n > max) return max;
-  return n;
-}
-
-async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<unknown | undefined> {
-  try {
-    return await c.req.json();
-  } catch {
-    return undefined;
-  }
-}
 
 function scopeAllowsRead(scopeUnitId: string | null, order: ReturnOrderRecord): boolean {
   if (!scopeUnitId) return true;

@@ -32,7 +32,7 @@
 
 ## 3. 对象存储（S3 兼容，不使用 R2）
 
-华为云 OBS，资源见用户回传；Worker 无原生绑定，运行时经 `aws4fetch` / `@aws-sdk/client-s3` 访问。
+华为云 OBS，资源见用户回传；Worker 无原生绑定，运行时经 `aws4fetch`（SigV4 签名）访问。
 
 | 配置项 | 值 |
 | --- | --- |

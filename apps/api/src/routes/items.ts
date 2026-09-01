@@ -6,11 +6,17 @@ import {
   Permissions,
 } from '@otunlink/shared';
 import { Hono } from 'hono';
-import type { Context } from 'hono';
-
 import { requirePermission } from '../auth/middleware';
 import { itemDto, itemImageDto } from '../lib/dto';
-import { dbUnavailable, error, notFound, ok, validationError } from '../lib/http';
+import {
+  dbUnavailable,
+  error,
+  notFound,
+  ok,
+  parsePositiveInt,
+  readJson,
+  validationError,
+} from '../lib/http';
 import type { AppEnv, CreateItemInput, UpdateItemInput } from '../types';
 
 function isBarcodeConflict(cause: unknown): boolean {
@@ -170,20 +176,4 @@ export function itemsRouter(): Hono<AppEnv> {
   });
 
   return router;
-}
-
-function parsePositiveInt(raw: string | undefined, fallback: number, max?: number): number {
-  if (!raw) return fallback;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1) return fallback;
-  if (max !== undefined && n > max) return max;
-  return n;
-}
-
-async function readJson(c: Context<AppEnv>): Promise<unknown | undefined> {
-  try {
-    return await c.req.json();
-  } catch {
-    return undefined;
-  }
 }

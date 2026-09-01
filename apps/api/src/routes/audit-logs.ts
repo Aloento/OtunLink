@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 
 import { requirePermission } from '../auth/middleware';
 import { auditLogDto } from '../lib/dto';
-import { dbUnavailable, ok, validationError } from '../lib/http';
+import { dbUnavailable, ok, parsePositiveInt, validationError } from '../lib/http';
 import type { AppEnv } from '../types';
 
 // 审计日志查询：仅 ADMIN（AUDIT_ADMIN 权限）。
@@ -41,14 +41,6 @@ export function auditLogsRouter(): Hono<AppEnv> {
   });
 
   return router;
-}
-
-function parsePositiveInt(raw: string | undefined, fallback: number, max?: number): number {
-  if (!raw) return fallback;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1) return fallback;
-  if (max !== undefined && n > max) return max;
-  return n;
 }
 
 /** 返回 undefined=未传；null=格式非法；字符串=合法日期。 */

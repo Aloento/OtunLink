@@ -8,6 +8,7 @@
     "test": "pnpm -r test",
     "build": "pnpm -r build",
     "dev:api": "pnpm --filter @otunlink/api dev",
+    "dev:api:local": "pnpm --filter @otunlink/api dev:local",
     "dev:web": "pnpm --filter @otunlink/web dev"
   }
 }

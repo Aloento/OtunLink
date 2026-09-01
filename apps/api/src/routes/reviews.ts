@@ -4,7 +4,15 @@ import { Hono } from 'hono';
 import { requirePermission, requireUnitScopeAssigned } from '../auth/middleware';
 import { createMailer } from '../lib/email';
 import { discrepancyReviewDto } from '../lib/dto';
-import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import {
+  dbUnavailable,
+  error,
+  forbidden,
+  notFound,
+  ok,
+  readJson,
+  validationError,
+} from '../lib/http';
 import { notify } from '../lib/notify';
 import type { AppEnv } from '../types';
 
@@ -94,14 +102,6 @@ export function reviewsRouter(): Hono<AppEnv> {
   });
 
   return router;
-}
-
-async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<unknown | undefined> {
-  try {
-    return await c.req.json();
-  } catch {
-    return undefined;
-  }
 }
 
 function isReviewAlreadyProcessed(cause: unknown): boolean {

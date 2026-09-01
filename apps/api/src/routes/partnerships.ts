@@ -1,10 +1,15 @@
 import { partnershipCreateSchema } from '@otunlink/shared';
 import { Hono } from 'hono';
-import type { Context } from 'hono';
-
 import { requireRole, requireUnitScopeAssigned } from '../auth/middleware';
 import { partnershipDto, unitDto } from '../lib/dto';
-import { dbUnavailable, forbidden, notFound, ok, validationError } from '../lib/http';
+import {
+  dbUnavailable,
+  forbidden,
+  notFound,
+  ok,
+  readJson,
+  validationError,
+} from '../lib/http';
 import type { AppEnv, UserRecord } from '../types';
 
 // 仓库-零售签约：签约只由仓库侧发起（把零售加入「可售客户」），
@@ -111,12 +116,4 @@ export function partnershipsRouter(): Hono<AppEnv> {
 function ownsPartnership(user: UserRecord, warehouseUnitId: string): boolean {
   if (user.role === 'ADMIN') return true;
   return user.role === 'WAREHOUSE' && !!user.scopeUnitId && user.scopeUnitId === warehouseUnitId;
-}
-
-async function readJson(c: Context<AppEnv>): Promise<unknown | undefined> {
-  try {
-    return await c.req.json();
-  } catch {
-    return undefined;
-  }
 }

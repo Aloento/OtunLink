@@ -163,6 +163,7 @@ export const en: TranslationSchema = {
     MIGRATION_UNAVAILABLE: 'Data migration is temporarily unavailable',
     MIGRATION_FAILED: 'Data migration failed',
     BARCODE_CONFLICT: 'This barcode is already used by another active item',
+    ITEM_IN_USE: 'This item is referenced by existing records and cannot be deleted',
     TRACKING_CONFLICT: 'This tracking number already exists, please use another',
     SHIPMENT_STATE_CONFLICT: 'Only draft shipments can be edited / transferred',
     COUNTING_STATE_CONFLICT: 'Counting state or version changed, please refresh and retry',

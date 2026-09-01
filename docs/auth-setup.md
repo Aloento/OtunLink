@@ -79,4 +79,4 @@ https://login.microsoftonline.com/<TENANT_ID>/discovery/v2.0/keys
 2. KV 未绑定/读写失败时降级为 **模块内存缓存**（进程/isolate 级，重启失效）；
 3. 两级均未命中时直连 issuer 重新拉取并回写。
 
-生产建议在 `wrangler.jsonc` 中绑定 `JWKS_CACHE` KV namespace。
+生产建议在 `wrangler.toml` 中绑定 `JWKS_CACHE` KV namespace。

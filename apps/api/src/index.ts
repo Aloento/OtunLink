@@ -176,15 +176,11 @@ export async function scheduled(
   try {
     const repos = createSqlRepos(exec);
     const result = await runExpiryScan(repos);
-    console.log(
-      `[scheduled] expiry scan done: created=${result.createdCount} expiring=${result.expiringCount} expired=${result.expiredCount}`,
-    );
 
     // 配置了 SMTP 时，将效期预警邮件发给对应仓库的活跃用户（未配置则跳过）。
     const mailer = createMailer(env as unknown as AppEnv);
     if (mailer && result.alerts.length > 0) {
       const users = await repos.users.list();
-      let sent = 0;
       for (const alert of result.alerts) {
         const recipients = users.filter(
           (u) =>
@@ -206,11 +202,9 @@ export async function scheduled(
               timestamp: new Date(),
             }),
           });
-          if (outcome.ok) sent += 1;
-          else console.error('[scheduled] expiry alert email failed:', outcome.error);
+          if (!outcome.ok) console.error('[scheduled] expiry alert email failed:', outcome.error);
         }
       }
-      console.log(`[scheduled] expiry alert emails sent: ${sent}`);
     }
   } catch (cause) {
     console.error('[scheduled] expiry scan failed:', cause);

@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 
 import { requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { stockBatchDto, stockMovementDto, stockRowDto } from '../lib/dto';
-import { dbUnavailable, notFound, ok, validationError } from '../lib/http';
+import { dbUnavailable, notFound, ok, parsePositiveInt, validationError } from '../lib/http';
 import { resolvePartnerWarehouseScope } from '../lib/partnerships';
 import type { AppEnv } from '../types';
 
@@ -118,12 +118,4 @@ export function stockRouter(): Hono<AppEnv> {
   });
 
   return router;
-}
-
-function parsePositiveInt(raw: string | undefined, fallback: number, max?: number): number {
-  if (!raw) return fallback;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1) return fallback;
-  if (max !== undefined && n > max) return max;
-  return n;
 }

@@ -21,7 +21,16 @@ import {
   salesOrderItemDto,
   salesPaymentDto,
 } from '../lib/dto';
-import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import {
+  dbUnavailable,
+  error,
+  forbidden,
+  notFound,
+  ok,
+  parsePositiveInt,
+  readJson,
+  validationError,
+} from '../lib/http';
 import { recordAudit } from '../lib/audit';
 import { notify } from '../lib/notify';
 import { loadPartnerWarehouseIds } from '../lib/partnerships';
@@ -439,14 +448,6 @@ export function salesOrdersRouter(): Hono<AppEnv> {
 
 const SALES_STATUS_FILTER = new Set(['DRAFT', 'SENT', 'PAYMENT_UPLOADED', 'CONFIRMED', 'CANCELLED']);
 
-function parsePositiveInt(raw: string | undefined, fallback: number, max?: number): number {
-  if (!raw) return fallback;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1) return fallback;
-  if (max !== undefined && n > max) return max;
-  return n;
-}
-
 function isScopeOf(scopeUnitId: string | null, unitId: string): boolean {
   return !scopeUnitId || unitId === scopeUnitId;
 }
@@ -517,14 +518,6 @@ async function returnDetailOf(repos: Repos, order: ReturnOrderRecord) {
     }),
     items: items.map(returnItemDto),
   };
-}
-
-async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<unknown | undefined> {
-  try {
-    return await c.req.json();
-  } catch {
-    return undefined;
-  }
 }
 
 async function hydrateList(repos: Repos, rows: SalesOrderRecord[]) {

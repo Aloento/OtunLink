@@ -9,7 +9,16 @@ import { Hono } from 'hono';
 
 import { requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { outboundDto, outboundItemDto } from '../lib/dto';
-import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import {
+  dbUnavailable,
+  error,
+  forbidden,
+  notFound,
+  ok,
+  parsePositiveInt,
+  readJson,
+  validationError,
+} from '../lib/http';
 import { recordAudit } from '../lib/audit';
 import type { AppEnv, OutboundOrderRecord, Repos, StockBatchRecord } from '../types';
 
@@ -292,14 +301,6 @@ export function outboundOrdersRouter(): Hono<AppEnv> {
 const OUTBOUND_STATUS_FILTER = new Set(['DRAFT', 'POSTED']);
 const OUTBOUND_TYPE_FILTER = new Set(['NORMAL', 'LOSS']);
 
-function parsePositiveInt(raw: string | undefined, fallback: number, max?: number): number {
-  if (!raw) return fallback;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1) return fallback;
-  if (max !== undefined && n > max) return max;
-  return n;
-}
-
 function scopeAllows(scopeUnitId: string | null, warehouseUnitId: string): boolean {
   return !scopeUnitId || warehouseUnitId === scopeUnitId;
 }
@@ -335,14 +336,6 @@ async function ensureStockAvailable(
 
 function isSignal(cause: unknown, marker: string): boolean {
   return cause instanceof Error && cause.message.includes(marker);
-}
-
-async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<unknown | undefined> {
-  try {
-    return await c.req.json();
-  } catch {
-    return undefined;
-  }
 }
 
 async function hydrateList(repos: Repos, rows: OutboundOrderRecord[]) {

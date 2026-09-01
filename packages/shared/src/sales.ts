@@ -1,6 +1,8 @@
 // 销售单：来源、送货方式、状态、DTO。
 // 与 packages/db/src/enums.ts 的 pgEnum 保持一致（数据库层枚举）。
 
+import type { Paged } from './items';
+
 export const SALES_SOURCES = ['RETAILER_REQUEST', 'WAREHOUSE_INITIATED'] as const;
 export type SalesSource = (typeof SALES_SOURCES)[number];
 
@@ -76,7 +78,4 @@ export interface SalesOrderDetailDto extends SalesOrderDto {
   payment: PaymentDto | null;
 }
 
-export interface SalesListResult {
-  items: SalesOrderDto[];
-  total: number;
-}
+export type SalesListResult = Paged<SalesOrderDto>;

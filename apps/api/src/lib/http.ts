@@ -21,10 +21,6 @@ export function error(
   return c.json(body, status as 200);
 }
 
-export function unauthorized(c: Ctx, message = 'Unauthorized') {
-  return error(c, 401, ErrorCodes.UNAUTHORIZED, message);
-}
-
 export function forbidden(c: Ctx, message = 'Forbidden') {
   return error(c, 403, ErrorCodes.FORBIDDEN, message);
 }
@@ -39,4 +35,20 @@ export function validationError(c: Ctx, message: string, details?: unknown) {
 
 export function dbUnavailable(c: Ctx) {
   return error(c, 503, ErrorCodes.DATABASE_UNAVAILABLE, 'Database is not configured');
+}
+
+export function parsePositiveInt(raw: string | undefined, fallback: number, max?: number): number {
+  if (!raw) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) return fallback;
+  if (max !== undefined && n > max) return max;
+  return n;
+}
+
+export async function readJson(c: Ctx): Promise<unknown | undefined> {
+  try {
+    return await c.req.json();
+  } catch {
+    return undefined;
+  }
 }

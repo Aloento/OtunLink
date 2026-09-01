@@ -27,7 +27,14 @@ export function testEmailRouter(): Hono<AppEnv> {
       return ok(c, { ok: false, provider: status.provider, reason: '未配置 SMTP' });
     }
 
-    const from = c.env.MAIL_FROM?.trim() ?? 'otunlink@example.com';
+    const from = c.env.MAIL_FROM?.trim() ?? c.env.SMTP_USER?.trim();
+    if (!from) {
+      return ok(c, {
+        ok: false,
+        provider: status.provider,
+        reason: '未配置 MAIL_FROM / SMTP_USER',
+      });
+    }
     try {
       await mailer.send({
         to: from,

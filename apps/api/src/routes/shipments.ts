@@ -11,8 +11,6 @@ import {
   type ShipmentStatus,
 } from '@otunlink/shared';
 import { Hono } from 'hono';
-import type { Context } from 'hono';
-
 import { requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { recordAudit } from '../lib/audit';
 import { createMailer } from '../lib/email';
@@ -25,7 +23,16 @@ import {
   shipmentDto,
   shipmentItemDto,
 } from '../lib/dto';
-import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import {
+  dbUnavailable,
+  error,
+  forbidden,
+  notFound,
+  ok,
+  parsePositiveInt,
+  readJson,
+  validationError,
+} from '../lib/http';
 import { notify } from '../lib/notify';
 import type {
   AppEnv,
@@ -533,22 +540,6 @@ const SHIPMENT_STATUS_FILTER = new Set([
   'RETURN_PENDING',
   'RETURNED',
 ]);
-
-function parsePositiveInt(raw: string | undefined, fallback: number, max?: number): number {
-  if (!raw) return fallback;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1) return fallback;
-  if (max !== undefined && n > max) return max;
-  return n;
-}
-
-async function readJson(c: Context<AppEnv>): Promise<unknown | undefined> {
-  try {
-    return await c.req.json();
-  } catch {
-    return undefined;
-  }
-}
 
 // 写路径数据范围：ADMIN 全量（scope 为 null）；非 ADMIN（经 requireUnitScopeAssigned 保证 scope 非空）发货方必须等于本单元。
 function scopeAllowsWrite(scopeUnitId: string | null, shipperUnitId: string): boolean {

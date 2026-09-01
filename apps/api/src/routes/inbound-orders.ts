@@ -3,7 +3,16 @@ import { Hono } from 'hono';
 
 import { requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { inboundDto, inboundItemDto } from '../lib/dto';
-import { dbUnavailable, error, forbidden, notFound, ok, validationError } from '../lib/http';
+import {
+  dbUnavailable,
+  error,
+  forbidden,
+  notFound,
+  ok,
+  parsePositiveInt,
+  readJson,
+  validationError,
+} from '../lib/http';
 import { recordAudit } from '../lib/audit';
 import type { AppEnv, InboundOrderRecord, Repos } from '../types';
 
@@ -182,14 +191,6 @@ export function inboundOrdersRouter(): Hono<AppEnv> {
 
 const INBOUND_STATUS_FILTER = new Set(['DRAFT', 'POSTED']);
 
-function parsePositiveInt(raw: string | undefined, fallback: number, max?: number): number {
-  if (!raw) return fallback;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1) return fallback;
-  if (max !== undefined && n > max) return max;
-  return n;
-}
-
 function scopeAllows(scopeUnitId: string | null, warehouseUnitId: string): boolean {
   return !scopeUnitId || warehouseUnitId === scopeUnitId;
 }
@@ -242,12 +243,4 @@ async function detailOf(repos: Repos, inbound: InboundOrderRecord) {
 
 function isInboundStateConflict(cause: unknown): boolean {
   return cause instanceof Error && cause.message.includes('INBOUND_STATE_CONFLICT');
-}
-
-async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<unknown | undefined> {
-  try {
-    return await c.req.json();
-  } catch {
-    return undefined;
-  }
 }

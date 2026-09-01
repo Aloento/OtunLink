@@ -2,7 +2,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import { ErrorCodes, hasPermission, type Permission, type UserRole } from '@otunlink/shared';
 
 import type { AppEnv, AuthState, Repos, TokenClaims } from '../types';
-import { dbUnavailable, forbidden, unauthorized } from '../lib/http';
+import { dbUnavailable, forbidden } from '../lib/http';
 
 type Ctx = Context<AppEnv>;
 
@@ -11,10 +11,6 @@ export interface AuthDeps {
   verifyToken: (env: AppEnv['Bindings'], token: string) => Promise<TokenClaims>;
   /** 按需创建数据仓库；DB 不可达返回 null（调用方返回 503）。 */
   getRepos: (env: AppEnv['Bindings']) => Promise<Repos | null>;
-}
-
-export function authState(c: Ctx): AuthState {
-  return c.get('auth');
 }
 
 export function reposOf(c: Ctx): Repos | null {
@@ -158,29 +154,3 @@ export function requireUnitScopeAssigned(): MiddlewareHandler<AppEnv> {
     await next();
   };
 }
-
-/**
- * 数据范围校验中间件：当用户 scope_unit_id 非空时，目标单元必须等于其范围单元。
- * 用于后续业务路由（单据/库存等），本实现已落地并被单测覆盖。
- */
-export function requireUnitScope(
-  resolveUnitId: (c: Ctx) => string | null | undefined,
-): MiddlewareHandler<AppEnv> {
-  return async (c, next) => {
-    const user = c.get('auth').user;
-    if (!user) return notProvisioned(c);
-    if (user.status !== 'ACTIVE') {
-      return forbidden(c, '账号未激活，请联系管理员分配岗位');
-    }
-    const scope = user.scopeUnitId;
-    if (scope) {
-      const target = resolveUnitId(c);
-      if (target && target !== scope) {
-        return forbidden(c, '数据范围越界（scope_unit_id 不匹配）');
-      }
-    }
-    await next();
-  };
-}
-
-export { unauthorized };

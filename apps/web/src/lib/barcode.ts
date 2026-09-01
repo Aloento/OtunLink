@@ -48,10 +48,3 @@ export async function decodeFrameZxing(video: HTMLVideoElement): Promise<string 
     return null;
   }
 }
-
-/** 综合解码：原生优先，失败回退 zxing。 */
-export async function decodeFrame(video: HTMLVideoElement): Promise<string | null> {
-  const native = await decodeFrameNative(video);
-  if (native !== null) return native;
-  return decodeFrameZxing(video);
-}

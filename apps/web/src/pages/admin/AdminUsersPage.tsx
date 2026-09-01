@@ -23,11 +23,11 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import {
   createAdminUser,
   deleteAdminUser,
+  listAdminUnits,
   listAdminUsers,
   updateAdminUser,
   type AdminUserDto,
 } from '../../api/admin';
-import { listAdminUnits } from '../../api/admin';
 import { type UnitDto } from '../../api/units';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { formatDateTime } from '../../i18n/format';

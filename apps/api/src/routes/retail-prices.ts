@@ -1,10 +1,15 @@
 import { Permissions, retailPricePutSchema, type UserRole } from '@otunlink/shared';
 import { Hono } from 'hono';
-import type { Context } from 'hono';
-
 import { requirePermission, requireUnitScopeAssigned, unitScopeFilter } from '../auth/middleware';
 import { retailPriceDto, retailPriceHistoryDto } from '../lib/dto';
-import { dbUnavailable, forbidden, notFound, ok, validationError } from '../lib/http';
+import {
+  dbUnavailable,
+  forbidden,
+  notFound,
+  ok,
+  readJson,
+  validationError,
+} from '../lib/http';
 import { recordAudit } from '../lib/audit';
 import { resolvePartnerWarehouseScope } from '../lib/partnerships';
 import type { AppEnv } from '../types';
@@ -120,12 +125,4 @@ function writeScopeAllows(role: UserRole | null, scope: string | null, unitId: s
 function readScopeAllows(role: UserRole | null, scope: string | null, unitId: string): boolean {
   if (role === 'ADMIN' || role === 'RETAILER') return true;
   return !!scope && scope === unitId;
-}
-
-async function readJson(c: Context<AppEnv>): Promise<unknown | undefined> {
-  try {
-    return await c.req.json();
-  } catch {
-    return undefined;
-  }
 }

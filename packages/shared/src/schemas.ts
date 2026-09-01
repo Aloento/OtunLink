@@ -392,7 +392,7 @@ export const salesOrderLineSchema = z.object({
 });
 
 /**
- * 新建销售单（POST /sales-orders）：卖方=仓库业务单元，买方=零售业务单元（本期固定 RETAILER_UNIT）。
+ * 新建销售单（POST /sales-orders）：卖方=仓库业务单元，买方=零售业务单元。
  * 金额由服务端计算：行价（override 缺省零售价快照）× 数量，整单折扣后 + 运费，存快照。
  */
 export const salesOrderCreateSchema = z.object({

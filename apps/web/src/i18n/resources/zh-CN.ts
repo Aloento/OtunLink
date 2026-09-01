@@ -160,6 +160,7 @@ export const zhCN = {
     MIGRATION_UNAVAILABLE: '数据迁移暂不可用',
     MIGRATION_FAILED: '数据迁移失败',
     BARCODE_CONFLICT: '该条码已被其他启用中的物品占用',
+    ITEM_IN_USE: '该物品已被现有单据引用，无法删除',
     TRACKING_CONFLICT: '该物流单号已存在，请更换',
     SHIPMENT_STATE_CONFLICT: '仅草稿状态的发货单可编辑 / 转交',
     COUNTING_STATE_CONFLICT: '点货状态或版本已变化，请刷新后重试',

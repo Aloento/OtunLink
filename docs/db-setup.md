@@ -5,8 +5,8 @@
 ## 1. 当前验证结论（✅ 已连通）
 
 - 连接串已配置在 `apps/api/.dev.vars`（gitignored）：`postgresql://<user>:<pwd>@164.30.21.203:5432/otunlink`
-- `pnpm --filter db db:migrate` 已应用（`schema_migrations` 有记录、业务表存在）
-- `pnpm --filter db db:ping` 直连与经 relay 均 OK
+- `pnpm --filter @otunlink/db db:migrate` 已应用（`schema_migrations` 有记录、业务表存在）
+- `pnpm --filter @otunlink/db db:ping` 直连与经 relay 均 OK
 - Worker 内 `/api/v1/auth/me` 经 postgres.js（`cloudflare:sockets`）直连返回 **200 OK**（登录闭环实测，见 3.3b）
 - 本地直连未启用 SSL；生产 Hyperdrive 连接由 Cloudflare 隧道 + Hyperdrive 数据库配置（建议 SSL）承担
 
@@ -25,7 +25,7 @@ Worker (apps/api) ── 降级直连 ──► DATABASE_URL
 ```
 
 - **Worker（Cloudflare）**：优先使用 Hyperdrive binding（`env.HYPERDRIVE`），不存在时回退到 `DATABASE_URL` 直连（开发 / 降级）。
-- **本地开发**：`wrangler dev` 支持 `.dev.vars` 中写 `DATABASE_URL`（不入库），或在 `wrangler.toml`/`wrangler.jsonc` 配置 hyperdrive 绑定。
+- **本地开发**：`wrangler dev` 支持 `.dev.vars` 中写 `DATABASE_URL`（不入库），或在 `wrangler.toml` 配置 hyperdrive 绑定。
 - **CLI / 脚本**：`packages/db` 的 `migrate` / `seed` / `ping` 命令读取 `DATABASE_URL`（可选 `DB_SSL=true`）。
 
 ## 3. 待用户提供后执行的验证步骤
@@ -42,8 +42,10 @@ Worker (apps/api) ── 降级直连 ──► DATABASE_URL
 DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/otunlink?sslmode=require
 
 # Hyperdrive（在 Cloudflare 控制台创建绑定后自动获得）
-# wrangler.jsonc / wrangler.toml:
-#   hyperdrive = [{ binding = "HYPERDRIVE", id = "<hyperdrive-id>" }]
+# wrangler.toml:
+#   [[hyperdrive]]
+#   binding = "HYPERDRIVE"
+#   id = "<hyperdrive-id>"
 ```
 
 > 切勿把含密码的连接串提交进仓库；本地放入 `.dev.vars`（已被 gitignore），CI/生产使用 Secret。
@@ -102,15 +104,15 @@ curl -X POST http://localhost:8787/api/v1/admin/migrate \
 
 ## 5. 种子数据
 
-`pnpm --filter db seed` 幂等插入示例业务单元：
+`pnpm --filter @otunlink/db seed` 幂等插入示例业务单元：
 
-| code | name | type | region |
-| ---- | ---- | ---- | ------ |
-| SH-COLLECT | 上海集货 | COLLECTION | CN |
-| GZ-COLLECT | 广州集货 | COLLECTION | CN |
-| HU-WAREHOUSE | 匈牙利仓 | WAREHOUSE | HU |
-| AT-WAREHOUSE | 奥地利仓 | WAREHOUSE | AT |
-| XX-SUPERMARKET | XX超市 | RETAIL | XX |
-| YY-SUPERMARKET | YY超市 | RETAIL | YY |
+| code | name | type |
+| ---- | ---- | ---- |
+| SH-CN | 上海集货 | COLLECTOR |
+| GZ-CN | 广州集货 | COLLECTOR |
+| WH-HU | 匈牙利仓 | WAREHOUSE |
+| WH-AT | 奥地利仓 | WAREHOUSE |
+| ST-XX | XX超市 | RETAILER |
+| ST-YY | YY超市 | RETAILER |
 
 设置 `SEED_ADMIN=1` 可额外插入占位管理员用户（需先手动重置为可用凭证）。

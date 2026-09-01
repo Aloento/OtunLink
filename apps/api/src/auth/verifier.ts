@@ -87,11 +87,14 @@ function resolveAudience(env: Env): string[] {
   // 配置的 audience（发布者域形式，如 https://tenant.onmicrosoft.com/OtunLink/API）。
   if (typeof audience === 'string' && audience.length > 0) result.push(audience);
   if (typeof clientId === 'string' && clientId.length > 0) {
-    // 裸 client id（guid）与默认 App ID URI 形式 api://<client-id> 一并接受，
+    // 裸 client id（guid）、默认 App ID URI 形式 api://<client-id>，以及前端 MSAL
+    // 默认申请 scope 对应的 api://<client-id>/OtunLink.API 一并接受，
     // 覆盖「Expose an API」用默认 URI 或自定义 URI 两种 Azure 配置，避免改 Azure Portal。
     if (!result.includes(clientId)) result.push(clientId);
     const defaultAppIdUri = `api://${clientId}`;
     if (!result.includes(defaultAppIdUri)) result.push(defaultAppIdUri);
+    const msalDefaultScopeUri = `api://${clientId}/OtunLink.API`;
+    if (!result.includes(msalDefaultScopeUri)) result.push(msalDefaultScopeUri);
   }
   return result;
 }
@@ -138,30 +141,11 @@ export async function verifyEntraToken(env: Env, token: string): Promise<TokenCl
   const jwks = await getJwks(env, tenantId);
   const keySet = createLocalJWKSet(jwks);
 
-  let payload: Record<string, unknown>;
-  try {
-    const res = await jwtVerify(token, keySet, {
-      issuer,
-      audience,
-      algorithms: ['RS256', 'RS384', 'PS256', 'PS384'],
-    });
-    payload = res.payload as Record<string, unknown>;
-  } catch (error) {
-    // TODO(debug): 临时诊断，输出 token 声明的 aud/iss/scp/oid，定位 audience 不匹配。
-    try {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const json = Buffer.from(parts[1], 'base64url').toString('utf8');
-        const claims = JSON.parse(json) as Record<string, unknown>;
-        console.log(
-          '[auth-debug] aud=', claims.aud, 'iss=', claims.iss, 'scp=', claims.scp, 'oid=', claims.oid,
-        );
-      }
-    } catch {
-      // 解码失败忽略，保留原始错误。
-    }
-    throw error;
-  }
+  const { payload } = await jwtVerify(token, keySet, {
+    issuer,
+    audience,
+    algorithms: ['RS256', 'RS384', 'PS256', 'PS384'],
+  });
 
   return toClaims(payload as Record<string, unknown>);
 }

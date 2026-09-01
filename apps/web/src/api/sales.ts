@@ -1,8 +1,8 @@
 import type {
   PaymentDto,
+  SalesListResult,
   SalesOrderCreateInput,
   SalesOrderDetailDto,
-  SalesOrderDto,
   SalesOrderPatchInput,
   SalesOrderSendInput,
   SalesPaymentInput,
@@ -29,13 +29,8 @@ function toQuery(params: SalesOrderListQuery): string {
   return qs ? `?${qs}` : '';
 }
 
-export function listSalesOrders(params: SalesOrderListQuery = {}): Promise<{
-  items: SalesOrderDto[];
-  total: number;
-}> {
-  return apiGet<{ items: SalesOrderDto[]; total: number }>(
-    `/api/v1/sales-orders${toQuery(params)}`,
-  );
+export function listSalesOrders(params: SalesOrderListQuery = {}): Promise<SalesListResult> {
+  return apiGet<SalesListResult>(`/api/v1/sales-orders${toQuery(params)}`);
 }
 
 export function getSalesOrder(id: string): Promise<SalesOrderDetailDto> {
