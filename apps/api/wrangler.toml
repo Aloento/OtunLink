@@ -23,6 +23,12 @@ id = "<your-kv-id>"  # 真实 id 见 Cloudflare 控制台 KV 页面
 # Workers 无原生 S3 绑定，运行时经 aws4fetch（SigV4 签名）访问；
 # endpoint/bucket/region 为非敏感 vars，AccessKey 走 secrets（.dev.vars / wrangler secret put）。
 [vars]
+# Entra ID JWT 校验配置（公开应用标识，不是客户端密钥）
+ENTRA_TENANT_ID = "9ed42989-9bdb-439d-80e7-c709641d1f08"
+ENTRA_CLIENT_ID = "0edca98e-17df-41f2-b254-a579095ffcb7"
+ENTRA_AUDIENCE = "https://SoarCraft.onmicrosoft.com/OtunLink/API"
+ENTRA_ISSUER = "https://login.microsoftonline.com/9ed42989-9bdb-439d-80e7-c709641d1f08/v2.0"
+
 S3_ENDPOINT = "<your-obs-endpoint>"  # 部署前回填完整 URL（含 https://）
 S3_REGION = "eu-de"
 S3_BUCKET = "<your-bucket>"  # 部署前回填（见 docs/cloud-config.md）
