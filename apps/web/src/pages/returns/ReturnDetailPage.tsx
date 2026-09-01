@@ -16,12 +16,15 @@ import {
 } from '../../api/returns';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 // 退货单详情：发货退货（集货方 PENDING → accept/reject）；
 // 零售售后（仓库 REQUESTED → approve/reject，APPROVED → receive 闭环回补）。
 export function ReturnDetailPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const { me } = useSession();
   const params = useParams<{ id: string }>();
   const id = params.id!;
@@ -137,8 +140,8 @@ export function ReturnDetailPage() {
       `${data.fromUnitName ?? data.fromUnitId} → ${data.toUnitName ?? data.toUnitId}`,
     ],
     [t('returns.status'), t(`returns.statuses.${data.status}`)],
-    [t('returns.createdAt'), data.createdAt],
-    [t('returns.processedAt'), data.processedAt ?? '—'],
+    [t('returns.createdAt'), data.createdAt ? formatDateTime(data.createdAt, locale) : '—'],
+    [t('returns.processedAt'), data.processedAt ? formatDateTime(data.processedAt, locale) : '—'],
     ...(data.processedNote ? [[t('returns.processedNote'), data.processedNote] as [string, string]] : []),
   ];
 

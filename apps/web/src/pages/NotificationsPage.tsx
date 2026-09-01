@@ -8,6 +8,8 @@ import type { NotificationDto } from '@otunlink/shared';
 
 import { listNotifications, markNotificationsRead } from '../api/notifications';
 import { useSession } from '../auth/SessionProvider';
+import { useLocale } from '../i18n/LocaleProvider';
+import { formatDateTime } from '../i18n/format';
 
 const PAGE_SIZE = 20;
 
@@ -143,6 +145,7 @@ function NotificationItem({
   busy: boolean;
 }) {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const unread = item.readAt === null;
   return (
     <li className="flex items-start gap-3 rounded-lg border border-neutral-200 bg-white p-3">
@@ -152,7 +155,7 @@ function NotificationItem({
           <span className={unread ? 'font-semibold' : 'font-medium text-neutral-600'}>
             {item.title}
           </span>
-          <span className="text-xs text-neutral-400">{formatTime(item.createdAt)}</span>
+          <span className="text-xs text-neutral-400">{formatDateTime(item.createdAt, locale)}</span>
         </div>
         {item.content && (
           <Text size={200} className="mt-1 block text-neutral-600">
@@ -174,8 +177,3 @@ function NotificationItem({
   );
 }
 
-function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString();
-}

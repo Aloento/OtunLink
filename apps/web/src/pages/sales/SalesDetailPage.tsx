@@ -28,12 +28,15 @@ import { cancelSalesOrder, confirmSaleReceipt, getSalesOrder, sendSalesOrder, up
 import { listStockBatches } from '../../api/stock';
 import { useSession } from '../../auth/SessionProvider';
 import { ImageUpload } from '../../components/ImageUpload';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 // 销售单详情（状态机）：草稿可编辑/发送（FEFO 预览可覆盖），
 // 已发送后可取消（回补）、零售方上传支付并确认收货。
 export function SalesDetailPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const { id } = useParams<{ id: string }>();
   const { me } = useSession();
   const queryClient = useQueryClient();
@@ -189,18 +192,18 @@ export function SalesDetailPage() {
         </div>
         <div>
           <span className="text-neutral-500">{t('sales.createdAt')}：</span>
-          {order.createdAt}
+          {order.createdAt ? formatDateTime(order.createdAt, locale) : '—'}
         </div>
         {order.sentAt && (
           <div>
             <span className="text-neutral-500">{t('sales.sentAt')}：</span>
-            {order.sentAt}
+            {formatDateTime(order.sentAt, locale)}
           </div>
         )}
         {order.confirmedAt && (
           <div>
             <span className="text-neutral-500">{t('sales.confirmedAt')}：</span>
-            {order.confirmedAt}
+            {formatDateTime(order.confirmedAt, locale)}
           </div>
         )}
         {order.remark && (
@@ -267,7 +270,7 @@ export function SalesDetailPage() {
             )}
             <div>
               <span className="text-neutral-500">{t('sales.uploadedAt')}：</span>
-              {order.payment.uploadedAt ?? '—'}
+              {order.payment.uploadedAt ? formatDateTime(order.payment.uploadedAt, locale) : '—'}
             </div>
             {order.payment.refundNote && (
               <div className="text-red-600">
@@ -287,6 +290,7 @@ export function SalesDetailPage() {
 /** 售后面板：展示该销售单的售后记录；零售方可在已发送/已上传支付/已确认后发起退货。 */
 function AfterSaleSection({ order }: { order: SalesOrderDetailDto }) {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const { me } = useSession();
   const queryClient = useQueryClient();
 
@@ -324,7 +328,7 @@ function AfterSaleSection({ order }: { order: SalesOrderDetailDto }) {
             <Link key={r.id} to={`/returns/${r.id}`} className="flex flex-wrap items-center gap-2 text-blue-600 hover:underline">
               <span>{r.returnNo}</span>
               <span className="text-neutral-500">{t(`returns.statuses.${r.status}`)}</span>
-              <span className="text-neutral-500">{r.createdAt}</span>
+              <span className="text-neutral-500">{r.createdAt ? formatDateTime(r.createdAt, locale) : '—'}</span>
             </Link>
           ))}
         </div>

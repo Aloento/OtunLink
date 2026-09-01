@@ -2,8 +2,11 @@
 // 与 packages/db 的 spec_unit/item_status 枚举保持语义一致；shared 只放前端/后端共用的
 // 类型与判定逻辑，数据库层枚举在 packages/db/src/enums.ts 独立维护。
 
-export const SPEC_UNITS = ['PIECE', 'BAG', 'BOX', 'PACK', 'SET', 'OTHER'] as const;
+export const SPEC_UNITS = ['PIECE', 'BAG', 'BOX', 'PACK', 'SET', 'GRAIN', 'OTHER'] as const;
 export type SpecUnit = (typeof SPEC_UNITS)[number];
+
+export const CURRENCIES = ['CNY', 'EUR', 'HUF', 'USD', 'GBP'] as const;
+export type Currency = (typeof CURRENCIES)[number];
 
 export const ITEM_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
 export type ItemStatus = (typeof ITEM_STATUSES)[number];

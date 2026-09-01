@@ -7,6 +7,8 @@ import { Link } from 'react-router-dom';
 import { INBOUND_STATUSES, type InboundOrderDto, type InboundStatus } from '@otunlink/shared';
 
 import { listInbounds } from '../../api/inbound';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
@@ -14,6 +16,7 @@ const PAGE_SIZE = 20;
 // 入库单列表：确认收货自动建档的 DRAFT / POSTED。
 export function InboundListPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
 
   const [status, setStatus] = useState<InboundStatus | ''>('');
   const [page, setPage] = useState(1);
@@ -57,7 +60,7 @@ export function InboundListPage() {
     {
       key: 'createdAt',
       header: t('inbound.createdAt'),
-      render: (order) => order.createdAt,
+      render: (order) => (order.createdAt ? formatDateTime(order.createdAt, locale) : '—'),
     },
   ];
 

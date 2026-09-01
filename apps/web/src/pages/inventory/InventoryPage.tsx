@@ -19,6 +19,8 @@ import { listExpiredBatches, listStock, listStockMovements } from '../../api/sto
 import { listRetailPrices } from '../../api/retail-prices';
 import { listUnits } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
@@ -37,6 +39,7 @@ function expiryCell(expiryDate: string | null): ReactNode {
 // 库存台账：库存 / 流水 / 已过期批次视图 + 一键报损 + 零售价入口。
 export function InventoryPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const { me } = useSession();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -157,7 +160,11 @@ export function InventoryPage() {
   ];
 
   const movementColumns: ResponsiveTableColumn<StockMovementDto>[] = [
-    { key: 'createdAt', header: t('inventory.createdAt'), render: (row) => row.createdAt },
+    {
+      key: 'createdAt',
+      header: t('inventory.createdAt'),
+      render: (row) => (row.createdAt ? formatDateTime(row.createdAt, locale) : '—'),
+    },
     { key: 'type', header: t('inventory.moveType'), render: (row) => t(`inventory.moveTypes.${row.type}`) },
     { key: 'item', header: t('inventory.item'), render: (row) => row.itemName ?? row.itemId },
     { key: 'batchNo', header: t('inventory.batchNo'), render: (row) => row.batchNo ?? '—' },

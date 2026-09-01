@@ -16,6 +16,8 @@ import { Permissions, hasPermission, type ShipmentItemDto } from '@otunlink/shar
 import { useSession } from '../../auth/SessionProvider';
 import { errorI18nKey, isApiError } from '../../api/http';
 import { getShipment, sendShipment, startCounting } from '../../api/shipments';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { ConfirmReceiptPanel } from '../../components/shipments/ConfirmReceiptPanel';
 import { ReturnCreatePanel } from '../../components/shipments/ReturnCreatePanel';
@@ -26,6 +28,7 @@ import { ShipmentReviewsSection } from '../../components/shipments/ShipmentRevie
 // + 转交/编辑按钮 + 点货面板 + 差异修订审批。
 export function ShipmentDetailPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const { me } = useSession();
   const params = useParams<{ id: string }>();
   const id = params.id!;
@@ -109,8 +112,8 @@ export function ShipmentDetailPage() {
     [t('shipments.boxes'), String(data.boxesCount)],
     [t('shipments.currency'), data.currency],
     [t('shipments.expectedArrivalDate'), data.expectedArrivalDate ?? '—'],
-    [t('shipments.sentAt'), data.sentAt ?? '—'],
-    [t('shipments.createdAt'), data.createdAt],
+    [t('shipments.sentAt'), data.sentAt ? formatDateTime(data.sentAt, locale) : '—'],
+    [t('shipments.createdAt'), data.createdAt ? formatDateTime(data.createdAt, locale) : '—'],
   ];
 
   const itemColumns: ResponsiveTableColumn<ShipmentItemDto>[] = [

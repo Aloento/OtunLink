@@ -60,6 +60,17 @@ function emptyTracking(): TrackingLine {
   return { key: genKey('t'), carrier: '', trackingNo: '', note: '' };
 }
 
+function sanitizeIntegerInput(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+function sanitizeDecimalInput(value: string): string {
+  const sanitized = value.replace(/[^\d.]/g, '');
+  const [head, ...rest] = sanitized.split('.');
+  if (!head && sanitized.startsWith('.')) return `0.${rest.join('')}`;
+  return rest.length ? `${head}.${rest.join('').replace(/\./g, '')}` : head ?? '';
+}
+
 function emptyItem(item?: ItemDto): ItemLine {
   return {
     key: genKey('i'),
@@ -204,16 +215,23 @@ export function ShipmentFormPage() {
       setError(t('shipments.errors.unitRequired'));
       return null;
     }
-    if (!Number.isInteger(boxesCount) || boxesCount < 0) {
-      setError(t('shipments.errors.boxesInvalid'));
+    if (!Number.isInteger(boxesCount) || boxesCount < 1) {
+      setError(t('shipments.errors.boxesAtLeastOne'));
       return null;
     }
     if (trackings.some((tr) => !tr.carrier.trim() || !tr.trackingNo.trim())) {
       setError(t('shipments.errors.trackingRequired'));
       return null;
     }
-    if (lines.some((l) => !l.itemId || !l.expectedQty.trim())) {
-      setError(t('shipments.errors.itemRequired'));
+    const invalidItemLine = lines.findIndex((l) => !l.itemId || !l.expectedQty.trim());
+    if (invalidItemLine >= 0) {
+      const field = lines[invalidItemLine].itemId ? t('shipments.expectedQty') : t('shipments.itemName');
+      setError(t('shipments.errors.fieldRequired', { field }));
+      return null;
+    }
+    const invalidPriceLine = lines.findIndex((l) => l.unitPrice.trim() && Number.isNaN(Number(l.unitPrice.trim())));
+    if (invalidPriceLine >= 0) {
+      setError(t('shipments.errors.invalidField', { field: t('shipments.unitPrice') }));
       return null;
     }
     if (lines.some((l) => l.isPerishable && (!l.productionDate || !l.expiryDate))) {
@@ -301,9 +319,10 @@ export function ShipmentFormPage() {
         <Field label={t('shipments.boxes')} required>
           <Input
             type="number"
-            min={0}
+            min={1}
+            inputMode="numeric"
             value={form.boxesCount}
-            onChange={(_, d) => set('boxesCount', d.value)}
+            onChange={(_, d) => set('boxesCount', sanitizeIntegerInput(d.value))}
           />
         </Field>
         <Field label={t('shipments.currency')}>
@@ -374,7 +393,7 @@ export function ShipmentFormPage() {
               onChange={(_, d) => setItemSearch(d.value)}
               className="min-w-44"
             />
-            <Link to="/items/new">
+            <Link to="/items/new" target="_blank" rel="noopener noreferrer">
               <Button size="small" appearance="secondary">
                 {t('shipments.newItem')}
               </Button>
@@ -402,16 +421,26 @@ export function ShipmentFormPage() {
                   ))}
                 </Select>
               </Field>
-              <Field label={t('shipments.expectedQty')} required>
+              <Field
+                label={
+                  line.spec ? `${t('shipments.expectedQty')} ${t(`items.specUnits.${line.spec}`)}` : t('shipments.expectedQty')
+                }
+                required
+              >
                 <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
                   value={line.expectedQty}
-                  onChange={(_, d) => setLine(line.key, 'expectedQty', d.value)}
+                  onChange={(_, d) => setLine(line.key, 'expectedQty', sanitizeIntegerInput(d.value))}
                 />
               </Field>
               <Field label={t('shipments.unitPrice')}>
                 <Input
+                  type="number"
+                  inputMode="decimal"
                   value={line.unitPrice}
-                  onChange={(_, d) => setLine(line.key, 'unitPrice', d.value)}
+                  onChange={(_, d) => setLine(line.key, 'unitPrice', sanitizeDecimalInput(d.value))}
                 />
               </Field>
             </div>

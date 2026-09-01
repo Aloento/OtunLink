@@ -7,6 +7,8 @@ import { Link } from 'react-router-dom';
 import { SALES_STATUSES, type SalesOrderDto, type SalesStatus } from '@otunlink/shared';
 
 import { listSalesOrders } from '../../api/sales';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
@@ -14,6 +16,7 @@ const PAGE_SIZE = 20;
 // 销售单列表：门店请货 + 仓库主动送货，按状态筛选。
 export function SalesListPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
 
   const [status, setStatus] = useState<SalesStatus | ''>('');
   const [page, setPage] = useState(1);
@@ -62,7 +65,7 @@ export function SalesListPage() {
     {
       key: 'createdAt',
       header: t('sales.createdAt'),
-      render: (order) => order.createdAt,
+      render: (order) => (order.createdAt ? formatDateTime(order.createdAt, locale) : '—'),
     },
   ];
 

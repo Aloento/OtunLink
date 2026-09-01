@@ -55,6 +55,9 @@ export const zhCN = {
     title: '工作台',
     description: '按角色汇总的待办事项，点击卡片直达对应业务页。',
     empty: '暂无待办事项，一切正常。',
+    overview: '概览',
+    recentNotifications: '最近通知',
+    noRecentNotifications: '暂无最近通知',
   },
   notifications: {
     title: '通知中心',
@@ -219,6 +222,7 @@ export const zhCN = {
       BOX: '箱',
       PACK: '包',
       SET: '套',
+      GRAIN: '颗',
       OTHER: '其他',
     },
     upload: {
@@ -305,7 +309,11 @@ export const zhCN = {
     },
     errors: {
       unitRequired: '请选择发货方与收货方',
-      boxesInvalid: '箱数必须为非负整数',
+      boxesInvalid: '箱数必须至少为 1',
+      boxesAtLeastOne: '箱数必须至少为 1',
+      invalidNumber: '字段 {{field}} 必须为有效数字',
+      invalidField: '字段 {{field}} 无效',
+      fieldRequired: '字段 {{field}} 为必填项',
       trackingRequired: '每条物流单号需填写物流公司与单号',
       itemRequired: '每行清单需选择物品并填写应收数量',
       expiryRequired: '易腐物品必须填写生产日期与到期日',

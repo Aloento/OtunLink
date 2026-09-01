@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { UNIT_TYPES, USER_ROLES, USER_STATUSES } from './auth';
-import { ITEM_STATUSES, SPEC_UNITS } from './items';
+import { CURRENCIES, ITEM_STATUSES, SPEC_UNITS } from './items';
 import { OUTBOUND_TYPES } from './outbound';
 import { DELIVERY_METHODS, SALES_SOURCES } from './sales';
 
@@ -64,6 +64,7 @@ export const unitPatchSchema = z.object({
 });
 
 const specUnit = () => z.enum(SPEC_UNITS);
+const currency = () => z.enum(CURRENCIES);
 const itemStatus = () => z.enum(ITEM_STATUSES);
 
 const innerCountSchema = z
@@ -164,7 +165,7 @@ export const shipmentCreateSchema = z.object({
   shipperUnitId: z.uuid(),
   receiverUnitId: z.uuid(),
   boxesCount: z.number().int().nonnegative(),
-  currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional(),
+  currency: currency().optional(),
   expectedArrivalDate: dateOnly.optional().nullable(),
   remark: z.string().trim().max(4096).optional().nullable(),
   trackings: z.array(shipmentTrackingSchema).min(1).max(50),
@@ -281,7 +282,7 @@ export const retailPricePutSchema = z.object({
   unitId: z.uuid(),
   itemId: z.uuid(),
   price: shipmentMoney,
-  currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional(),
+  currency: currency().optional(),
 });
 
 // ── 确认入库与发货退货─────────────────────────────────────────────────
@@ -387,7 +388,7 @@ export const salesOrderCreateSchema = z.object({
   deliveryAddress: z.string().trim().max(1024).optional().nullable(),
   freight: shipmentMoney.optional().default('0'),
   discountPercent: discountPercent.optional().default('0'),
-  currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional(),
+  currency: currency().optional(),
   remark: z.string().trim().max(4096).optional().nullable(),
   lines: z.array(salesOrderLineSchema).min(1).max(500),
 });
@@ -398,7 +399,7 @@ export const salesOrderPatchSchema = z.object({
   deliveryAddress: z.string().trim().max(1024).optional().nullable(),
   freight: shipmentMoney.optional(),
   discountPercent: discountPercent.optional(),
-  currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional(),
+  currency: currency().optional(),
   remark: z.string().trim().max(4096).optional().nullable(),
   lines: z.array(salesOrderLineSchema).min(1).max(500).optional(),
 });
@@ -420,7 +421,7 @@ export const salesOrderSendSchema = z.object({
 /** 上传支付凭证（POST /sales-orders/:id/payments）：凭证图片走 files 管线预上传。 */
 export const salesPaymentSchema = z.object({
   amount: shipmentMoney,
-  currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional(),
+  currency: currency().optional(),
   methodNote: z.string().trim().max(256).optional().nullable(),
   proofFileId: z.uuid().optional().nullable(),
 });

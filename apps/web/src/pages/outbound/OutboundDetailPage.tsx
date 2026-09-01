@@ -10,11 +10,14 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import { getOutboundOrder, postOutboundOrder } from '../../api/outbound';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 // 出库单详情：批次分配结果 + 草稿过账（扣减库存 / 写台账流水）。
 export function OutboundDetailPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const { me } = useSession();
   const params = useParams<{ id: string }>();
   const id = params.id!;
@@ -62,8 +65,8 @@ export function OutboundDetailPage() {
     [t('outbound.warehouse'), data.warehouseName ?? data.warehouseUnitId],
     [t('outbound.counterparty'), data.counterpartyName ?? data.counterpartyUnitId ?? '—'],
     [t('outbound.status'), t(`outbound.statuses.${data.status}`)],
-    [t('outbound.createdAt'), data.createdAt],
-    [t('outbound.postedAt'), data.postedAt ?? '—'],
+    [t('outbound.createdAt'), data.createdAt ? formatDateTime(data.createdAt, locale) : '—'],
+    [t('outbound.postedAt'), data.postedAt ? formatDateTime(data.postedAt, locale) : '—'],
   ];
   if (data.type === 'LOSS') {
     rows.splice(4, 0, [t('outbound.lossReason'), data.lossReason ?? '—']);

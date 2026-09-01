@@ -298,7 +298,7 @@ class MemoryItemRepository implements ItemRepository {
     const now = new Date();
     const row: ItemRecord = {
       id: uuid(),
-      sku: normalizeEmpty(input.sku),
+      sku: generateItemSku(input.sku, input.name),
       name: input.name,
       barcode: normalizeEmpty(input.barcode),
       specUnit: input.specUnit ?? 'PIECE',
@@ -393,6 +393,20 @@ class MemoryFileRepository implements FileRepository {
     this.rows.set(row.id, cloneFile(row));
     return cloneFile(row);
   }
+}
+
+function generateItemSku(raw: string | null | undefined, name: string): string {
+  const candidate = raw?.trim();
+  if (candidate && candidate.length > 0) return candidate;
+  const safeName = name
+    .trim()
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase();
+  const base = safeName ? safeName.slice(0, 20) : 'ITEM';
+  const ts = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `SKU-${base}-${ts}-${random}`.slice(0, 64);
 }
 
 function normalizeEmpty<T extends string>(value: T | null | undefined): T | null {

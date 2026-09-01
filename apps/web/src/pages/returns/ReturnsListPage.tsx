@@ -12,6 +12,8 @@ import {
 } from '@otunlink/shared';
 
 import { listReturns } from '../../api/returns';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
@@ -29,6 +31,7 @@ type SourceTab = 'SHIPMENT' | 'SALES';
 // 退货单列表（发货退货 + 零售售后）：按来源 Tab 切换。
 export function ReturnsListPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
 
   const [source, setSource] = useState<SourceTab>('SHIPMENT');
   const [status, setStatus] = useState<ReturnStatus | ''>('');
@@ -94,7 +97,7 @@ export function ReturnsListPage() {
     {
       key: 'createdAt',
       header: t('returns.createdAt'),
-      render: (order) => order.createdAt,
+      render: (order) => (order.createdAt ? formatDateTime(order.createdAt, locale) : '—'),
     },
   ];
 

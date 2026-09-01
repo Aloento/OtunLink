@@ -9,11 +9,14 @@ import { Permissions, hasPermission, type InboundOrderItemDto } from '@otunlink/
 import { errorI18nKey, isApiError } from '../../api/http';
 import { getInbound, postInbound } from '../../api/inbound';
 import { useSession } from '../../auth/SessionProvider';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 // 入库单详情：批次清单 + 草稿过账（建档批次 / 写库存台账）。
 export function InboundDetailPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const { me } = useSession();
   const params = useParams<{ id: string }>();
   const id = params.id!;
@@ -62,8 +65,8 @@ export function InboundDetailPage() {
     [t('inbound.warehouse'), data.warehouseName ?? data.warehouseUnitId],
     [t('inbound.counterparty'), data.counterpartyName ?? data.counterpartyUnitId ?? '—'],
     [t('inbound.status'), t(`inbound.statuses.${data.status}`)],
-    [t('inbound.createdAt'), data.createdAt],
-    [t('inbound.postedAt'), data.postedAt ?? '—'],
+    [t('inbound.createdAt'), data.createdAt ? formatDateTime(data.createdAt, locale) : '—'],
+    [t('inbound.postedAt'), data.postedAt ? formatDateTime(data.postedAt, locale) : '—'],
   ];
 
   const columns: ResponsiveTableColumn<InboundOrderItemDto>[] = [

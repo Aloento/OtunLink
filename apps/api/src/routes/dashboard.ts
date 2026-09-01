@@ -67,29 +67,25 @@ async function collectTodos(
   }
 
   // WAREHOUSE / ADMIN（ADMIN 无 scope 时聚合全部）
-  const [toCount, toConfirm, inboundDraft, outboundDraft, expiring, salesToShip] = await Promise.all([
+  const [toCount, toConfirm, inboundDraft, outboundDraft, expiring, salesToShip, shipmentReturns, salesReturns] = await Promise.all([
     repos.shipments.list({ page: 1, size: 1, status: 'SENT', scopeUnitId: unit }),
     repos.shipments.list({ page: 1, size: 1, status: 'READY', scopeUnitId: unit }),
     repos.inbounds.list({ page: 1, size: 1, status: 'DRAFT', warehouseUnitId: unit }),
     repos.outbounds.list({ page: 1, size: 1, status: 'DRAFT', warehouseUnitId: unit }),
     countExpiringBatches(repos, unit),
     repos.sales.list({ page: 1, size: 1, status: 'DRAFT', unitId: unit }),
+    repos.returns.list({ page: 1, size: 1, status: 'PENDING', sourceType: 'SHIPMENT', scopeUnitId: unit }),
+    repos.returns.list({ page: 1, size: 1, status: 'REQUESTED', sourceType: 'SALES', scopeUnitId: unit }),
   ]);
   const items: DashboardTodoItem[] = [
     { key: 'shipments-to-count', label: '待点货', count: toCount.total, link: '/shipments?status=SENT' },
     { key: 'shipments-to-confirm', label: '待确认入库', count: toConfirm.total, link: '/shipments?status=READY' },
     { key: 'inbounds-to-post', label: '入库单待过账', count: inboundDraft.total, link: '/inbound?status=DRAFT' },
     { key: 'outbounds-to-post', label: '出库单待过账', count: outboundDraft.total, link: '/outbound?status=DRAFT' },
+    { key: 'returns-to-process', label: '退货单待处理', count: shipmentReturns.total + salesReturns.total, link: '/returns' },
+    { key: 'sales-draft-to-send', label: '销售单待发送', count: salesToShip.total, link: '/sales?status=DRAFT' },
     { key: 'expiring-batches', label: '效期预警（7 天内到期）', count: expiring, link: '/inventory?tab=expiring' },
   ];
-  if (role === 'WAREHOUSE' && scopeUnitId) {
-    items.push({
-      key: 'sales-draft-to-send',
-      label: '销售单待发送',
-      count: salesToShip.total,
-      link: '/sales?status=DRAFT',
-    });
-  }
   return items;
 }
 

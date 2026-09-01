@@ -113,6 +113,23 @@ const inClause = (column: string, values: string[]): string =>
 
 const col = (name: string, value: unknown): string => `${name} = ${quote(value)}`;
 
+function generateItemSku(name: string, fallback?: string): string {
+  const safeName = (fallback ?? name ?? 'ITEM')
+    .trim()
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase();
+  const base = safeName ? safeName.slice(0, 20) : 'ITEM';
+  const ts = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `SKU-${base}-${ts}-${random}`.slice(0, 64);
+}
+
+function ensureItemSku(raw: string | null | undefined, name: string): string {
+  const candidate = raw?.trim();
+  return candidate && candidate.length > 0 ? candidate : generateItemSku(name);
+}
+
 /** uuid[] 列参数（PostgreSQL 数组字面量）。 */
 const photoArray = (ids: string[]): string =>
   ids.length > 0 ? `ARRAY[${ids.map((id) => quote(id)).join(', ')}]::uuid[]` : `ARRAY[]::uuid[]`;
@@ -838,11 +855,12 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       return { items: rows.map(mapItem), total, page, size };
     },
     async create(input: CreateItemInput): Promise<ItemRecord> {
+      const sku = ensureItemSku(input.sku, input.name);
       const { rows } = await exec.query(
         `INSERT INTO items
            (sku, name, barcode, spec_unit, inner_unit, inner_count, is_perishable,
             category, description, status, created_by)
-         VALUES (${quote(nn(input.sku))}, ${quote(input.name)}, ${quote(nn(input.barcode))},
+         VALUES (${quote(sku)}, ${quote(input.name)}, ${quote(nn(input.barcode))},
                  ${quote(input.specUnit ?? 'PIECE')}, ${quote(input.innerUnit ?? null)},
                  ${quote(input.innerCount ?? null)}, ${quote(input.isPerishable ?? false)},
                  ${quote(nn(input.category))}, ${quote(nn(input.description))},

@@ -5,7 +5,7 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 export const unitTypeEnum = pgEnum('unit_type', ['COLLECTOR', 'WAREHOUSE', 'RETAILER']);
 export const userRoleEnum = pgEnum('user_role', ['ADMIN', 'COLLECTOR', 'WAREHOUSE', 'RETAILER']);
 export const userStatusEnum = pgEnum('user_status', ['ACTIVE', 'PENDING', 'DISABLED']);
-export const specUnitEnum = pgEnum('spec_unit', ['PIECE', 'BAG', 'BOX', 'PACK', 'SET', 'OTHER']);
+export const specUnitEnum = pgEnum('spec_unit', ['PIECE', 'BAG', 'BOX', 'PACK', 'SET', 'GRAIN', 'OTHER']);
 export const itemStatusEnum = pgEnum('item_status', ['ACTIVE', 'INACTIVE']);
 
 export const shipmentStatusEnum = pgEnum('shipment_status', [

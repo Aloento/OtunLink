@@ -58,6 +58,9 @@ export const en: TranslationSchema = {
     title: 'Dashboard',
     description: 'Todos aggregated by role; click a card to jump to the business page.',
     empty: 'No pending todos. All good.',
+    overview: 'Overview',
+    recentNotifications: 'Recent notifications',
+    noRecentNotifications: 'No recent notifications',
   },
   notifications: {
     title: 'Notifications',
@@ -222,6 +225,7 @@ export const en: TranslationSchema = {
       BOX: 'Box',
       PACK: 'Pack',
       SET: 'Set',
+      GRAIN: 'Grain',
       OTHER: 'Other',
     },
     upload: {
@@ -308,7 +312,11 @@ export const en: TranslationSchema = {
     },
     errors: {
       unitRequired: 'Please select shipper and receiver',
-      boxesInvalid: 'Boxes must be a non-negative integer',
+      boxesInvalid: 'Boxes must be at least 1',
+      boxesAtLeastOne: 'Boxes must be at least 1',
+      invalidNumber: 'Field {{field}} must be a valid number',
+      invalidField: 'Field {{field}} is invalid',
+      fieldRequired: 'Field {{field}} is required',
       trackingRequired: 'Each tracking number needs a carrier and number',
       itemRequired: 'Each line needs an item and expected quantity',
       expiryRequired: 'Perishable items require production and expiry dates',

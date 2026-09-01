@@ -13,6 +13,8 @@ import {
 } from '@otunlink/shared';
 
 import { listOutboundOrders } from '../../api/outbound';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
@@ -20,6 +22,7 @@ const PAGE_SIZE = 20;
 // 出库单列表：手工出库（NORMAL），草稿可过账。
 export function OutboundListPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
 
   const [status, setStatus] = useState<OutboundStatus | ''>('');
   const [type, setType] = useState<OutboundType | ''>('');
@@ -65,7 +68,7 @@ export function OutboundListPage() {
     {
       key: 'createdAt',
       header: t('outbound.createdAt'),
-      render: (order) => order.createdAt,
+      render: (order) => (order.createdAt ? formatDateTime(order.createdAt, locale) : '—'),
     },
   ];
 

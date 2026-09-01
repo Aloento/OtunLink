@@ -18,6 +18,8 @@ import type { DiscrepancyReviewDto, ShipmentDetailDto } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { approveReview, rejectReview } from '../../api/shipments';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { FileImage } from '../FileImage';
 
 // 差异修订记录区：仓库提交后在此展示；集货方在此审批（同意/拒绝）。
@@ -33,6 +35,7 @@ export function ShipmentReviewsSection({
   onRefresh: () => void;
 }) {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -95,7 +98,7 @@ export function ShipmentReviewsSection({
                   {t(`reviews.statuses.${review.status}`)}
                 </Badge>
                 <Text size={200} className="text-neutral-500">
-                  {review.createdAt}
+                  {review.createdAt ? formatDateTime(review.createdAt, locale) : '—'}
                 </Text>
               </div>
               {review.status === 'PENDING' && canApproveReview && (

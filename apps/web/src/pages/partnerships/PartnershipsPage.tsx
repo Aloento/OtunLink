@@ -26,12 +26,15 @@ import {
 } from '../../api/partnerships';
 import { listUnits } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 // 可售客户（零售合作方）管理：仓库把零售加入自己的「可售客户」列表即签约生效。
 // 仅 WAREHOUSE（自己仓库）/ ADMIN（全量）可见；签约无需零售同意、无状态字段。
 export function PartnershipsPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const { me } = useSession();
   const queryClient = useQueryClient();
 
@@ -127,7 +130,11 @@ export function PartnershipsPage() {
       header: t('partnerships.retailer'),
       render: (row: PartnershipDto) => row.retailerUnitName ?? row.retailerUnitId,
     },
-    { key: 'createdAt', header: t('partnerships.createdAt'), render: (row: PartnershipDto) => row.createdAt },
+    {
+      key: 'createdAt',
+      header: t('partnerships.createdAt'),
+      render: (row: PartnershipDto) => (row.createdAt ? formatDateTime(row.createdAt, locale) : '—'),
+    },
   ];
 
   return (
