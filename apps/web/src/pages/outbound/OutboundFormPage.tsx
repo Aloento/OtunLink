@@ -24,6 +24,7 @@ import { listStock } from '../../api/stock';
 import { listUnits } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
 import { ImageUpload } from '../../components/ImageUpload';
+import { RefreshButton } from '../../components/RefreshButton';
 
 interface ItemLine {
   key: string;
@@ -348,6 +349,10 @@ export function OutboundFormPage() {
             {t('outbound.items')}
           </Text>
           <div className="flex items-center gap-2">
+            <RefreshButton
+              queryKey={['items', 'picker']}
+              additionalKeys={[['stock', 'batchPicker'], ['units', 'list']]}
+            />
             <Input
               value={itemSearch}
               placeholder={t('items.itemSearchPlaceholder')}

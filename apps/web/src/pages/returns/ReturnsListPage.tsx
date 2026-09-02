@@ -14,6 +14,7 @@ import {
 import { listReturns } from '../../api/returns';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
+import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
@@ -114,22 +115,25 @@ export function ReturnsListPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('returns.title')}</Title1>
-        <Select
-          value={status}
-          onChange={(_, d) => {
-            setStatus(d.value as ReturnStatus | '');
-            setPage(1);
-          }}
-          className="min-w-40"
-          aria-label={t('returns.status')}
-        >
-          <option value="">{t('returns.allStatuses')}</option>
-          {statuses.map((s) => (
-            <option key={s} value={s}>
-              {t(`returns.statuses.${s}`)}
-            </option>
-          ))}
-        </Select>
+        <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['return-orders', 'list']} />
+          <Select
+            value={status}
+            onChange={(_, d) => {
+              setStatus(d.value as ReturnStatus | '');
+              setPage(1);
+            }}
+            className="min-w-40"
+            aria-label={t('returns.status')}
+          >
+            <option value="">{t('returns.allStatuses')}</option>
+            {statuses.map((s) => (
+              <option key={s} value={s}>
+                {t(`returns.statuses.${s}`)}
+              </option>
+            ))}
+          </Select>
+        </div>
       </div>
 
       <TabList selectedValue={source} onTabSelect={(_, d) => switchSource(d.value as SourceTab)}>

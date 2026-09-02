@@ -14,6 +14,7 @@ import {
   type AuditLogDto,
   type AuditLogListQuery,
 } from '../../api/admin';
+import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { formatDateTime } from '../../i18n/format';
 import { useLocale } from '../../i18n/LocaleProvider';
@@ -103,9 +104,7 @@ export function AuditLogsPage() {
             setPage(1);
           }}
         />
-        <Button appearance="secondary" onClick={() => setPage(1)}>
-          {t('common.refresh')}
-        </Button>
+        <RefreshButton queryKey={['admin', 'audit-logs']} />
       </div>
 
       {isLoading ? (

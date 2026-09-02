@@ -9,6 +9,7 @@ import { INBOUND_STATUSES, type InboundOrderDto, type InboundStatus } from '@otu
 import { listInbounds } from '../../api/inbound';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
+import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
@@ -72,6 +73,7 @@ export function InboundListPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('inbound.title')}</Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['inbound-orders', 'list']} />
           <Select
             value={status}
             onChange={(_, d) => {

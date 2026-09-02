@@ -10,6 +10,7 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import { deleteOutboundOrder, getOutboundOrder, postOutboundOrder } from '../../api/outbound';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
+import { RefreshButton } from '../../components/RefreshButton';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
@@ -113,6 +114,7 @@ export function OutboundDetailPage() {
           {t('outbound.detail')} · {data.outboundNo}
         </Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['outbound-orders', id]} />
           <Link to="/outbound">
             <Button appearance="secondary">{t('outbound.back')}</Button>
           </Link>

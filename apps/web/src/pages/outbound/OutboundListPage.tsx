@@ -15,6 +15,7 @@ import {
 import { listOutboundOrders } from '../../api/outbound';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
+import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
@@ -80,6 +81,7 @@ export function OutboundListPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('outbound.title')}</Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['outbound-orders', 'list']} />
           <TabList
             selectedValue={type || 'all'}
             onTabSelect={(_, d) => {

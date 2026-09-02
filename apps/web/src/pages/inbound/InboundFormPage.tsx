@@ -10,6 +10,7 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import { createManualInbound, postInbound } from '../../api/inbound';
 import { listItems } from '../../api/items';
 import { listUnits } from '../../api/units';
+import { RefreshButton } from '../../components/RefreshButton';
 import { useSession } from '../../auth/SessionProvider';
 
 interface ItemLine {
@@ -199,6 +200,7 @@ export function InboundFormPage() {
             {t('inbound.items')}
           </Text>
           <div className="flex items-center gap-2">
+            <RefreshButton queryKey={['items', 'picker']} additionalKeys={[['units', 'list']]} />
             <Input
               value={itemSearch}
               placeholder={t('items.itemSearchPlaceholder')}

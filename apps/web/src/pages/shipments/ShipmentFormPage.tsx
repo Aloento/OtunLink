@@ -16,6 +16,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CURRENCIES, type ItemDto } from '@otunlink/shared';
 
 import { useSession } from '../../auth/SessionProvider';
+import { RefreshButton } from '../../components/RefreshButton';
 import { errorI18nKey, isApiError } from '../../api/http';
 import { listItems } from '../../api/items';
 import { createShipment, getShipment, updateShipment, type ShipmentCreateInput } from '../../api/shipments';
@@ -396,6 +397,7 @@ export function ShipmentFormPage() {
             {t('shipments.items')}
           </Text>
           <div className="flex items-center gap-2">
+            <RefreshButton queryKey={['items', 'picker']} additionalKeys={[['units', 'list']]} />
             <Input
               value={itemSearch}
               placeholder={t('shipments.itemSearchPlaceholder')}

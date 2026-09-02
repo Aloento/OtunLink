@@ -10,6 +10,7 @@ import { Permissions, hasPermission } from '@otunlink/shared';
 import { errorI18nKey, isApiError } from '../../api/http';
 import { getItemByBarcode, listItemCategories, listItems } from '../../api/items';
 import { useSession } from '../../auth/SessionProvider';
+import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { ScannerDialog } from '../../components/ScannerDialog';
 
@@ -105,6 +106,7 @@ export function ItemsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('items.title')}</Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['items', 'list']} additionalKeys={[['items', 'categories']]} />
           <Input
             value={q}
             placeholder={t('items.searchPlaceholder')}

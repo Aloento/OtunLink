@@ -28,6 +28,7 @@ import { listUnits } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
+import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 // 可售客户（零售合作方）管理：仓库把零售加入自己的「可售客户」列表即签约生效。
@@ -141,9 +142,15 @@ export function PartnershipsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('partnerships.title')}</Title1>
-        <Button appearance="primary" onClick={openAdd}>
-          {t('partnerships.add')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <RefreshButton
+            queryKey={['partnerships', 'list']}
+            additionalKeys={[['partnerships', 'candidates'], ['units', 'list']]}
+          />
+          <Button appearance="primary" onClick={openAdd}>
+            {t('partnerships.add')}
+          </Button>
+        </div>
       </div>
 
       {partnershipsQuery.isLoading ? (

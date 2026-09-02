@@ -32,6 +32,7 @@ import {
 } from '../../api/admin';
 import { type UnitDto } from '../../api/units';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { RefreshButton } from '../../components/RefreshButton';
 import { formatDateTime } from '../../i18n/format';
 import { useLocale } from '../../i18n/LocaleProvider';
 
@@ -102,7 +103,16 @@ export function AdminUsersPage() {
         locale: draft.locale || undefined,
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (saved) => {
+      // 先本地更新缓存，避免保存后列表“不立刻更新”。
+      queryClient.setQueryData<AdminUserDto[]>(['admin', 'users'], (prev) => {
+        if (!prev) return prev;
+        const index = prev.findIndex((u) => u.id === saved.id);
+        if (index === -1) return [saved, ...prev];
+        const next = [...prev];
+        next[index] = saved;
+        return next;
+      });
       await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
       setDraft(null);
     },
@@ -113,7 +123,10 @@ export function AdminUsersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteAdminUser(id),
-    onSuccess: async () => {
+    onSuccess: async (res) => {
+      queryClient.setQueryData<AdminUserDto[]>(['admin', 'users'], (prev) =>
+        prev?.filter((u) => u.id !== res.id),
+      );
       await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
       setSaving(null);
       setDeleting(null);
@@ -186,9 +199,12 @@ export function AdminUsersPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('admin.users.title')}</Title1>
-        <Button appearance="primary" onClick={openCreate}>
-          {t('admin.users.newUser')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['admin', 'users']} additionalKeys={[['admin', 'units']]} />
+          <Button appearance="primary" onClick={openCreate}>
+            {t('admin.users.newUser')}
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (

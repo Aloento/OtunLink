@@ -10,6 +10,7 @@ import { deleteItem, getItem } from '../../api/items';
 import { isApiError } from '../../api/http';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
+import { RefreshButton } from '../../components/RefreshButton';
 
 // 物品详情：字段 + 图片（预签名 URL 展示）。
 export function ItemDetailPage() {
@@ -77,6 +78,7 @@ export function ItemDetailPage() {
           {t('items.detail')} · {data.name}
         </Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['items', id]} />
           <Link to="/items">
             <Button appearance="secondary">{t('items.back')}</Button>
           </Link>

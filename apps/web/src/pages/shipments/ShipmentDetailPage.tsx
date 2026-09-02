@@ -19,6 +19,7 @@ import { deleteShipment, getShipment, sendShipment, startCounting } from '../../
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { RefreshButton } from '../../components/RefreshButton';
 import { ConfirmReceiptPanel } from '../../components/shipments/ConfirmReceiptPanel';
 import { ReturnCreatePanel } from '../../components/shipments/ReturnCreatePanel';
 import { ShipmentCountPanel } from '../../components/shipments/ShipmentCountPanel';
@@ -173,6 +174,7 @@ export function ShipmentDetailPage() {
           {t('shipments.detail')} · {data.shipmentNo}
         </Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['shipments', id]} />
           <Link to="/shipments">
             <Button appearance="secondary">{t('shipments.back')}</Button>
           </Link>

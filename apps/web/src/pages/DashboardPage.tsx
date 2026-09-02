@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import type { DashboardTodoItem } from '@otunlink/shared';
 
 import { getDashboardTodos, listNotifications } from '../api/notifications';
+import { RefreshButton } from '../components/RefreshButton';
 import { useLocale } from '../i18n/LocaleProvider';
 import { formatDateTime } from '../i18n/format';
 
@@ -33,9 +34,15 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <Title1 as="h1">{t('dashboard.title')}</Title1>
-        <Body1>{t('dashboard.description')}</Body1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-2">
+          <Title1 as="h1">{t('dashboard.title')}</Title1>
+          <Body1>{t('dashboard.description')}</Body1>
+        </div>
+        <RefreshButton
+          queryKey={['dashboard', 'todos']}
+          additionalKeys={[['notifications', 'dashboard']]}
+        />
       </div>
 
       {isLoading ? (

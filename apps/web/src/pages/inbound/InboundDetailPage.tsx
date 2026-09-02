@@ -12,6 +12,7 @@ import { useSession } from '../../auth/SessionProvider';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { RefreshButton } from '../../components/RefreshButton';
 
 // 入库单详情：批次清单 + 草稿过账（建档批次 / 写库存台账）。
 export function InboundDetailPage() {
@@ -109,6 +110,7 @@ export function InboundDetailPage() {
           {t('inbound.detail')} · {data.inboundNo}
         </Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['inbound-orders', id]} />
           <Link to="/inbound">
             <Button appearance="secondary">{t('inbound.back')}</Button>
           </Link>

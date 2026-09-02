@@ -21,6 +21,7 @@ import { listUnits } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
+import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
@@ -199,6 +200,9 @@ export function InventoryPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('inventory.title')}</Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton
+            queryKey={view === 'stock' ? ['stock', 'list'] : view === 'movements' ? ['stock', 'movements'] : ['stock', 'expired']}
+          />
           {canReadRetailPrices && (
             <Link to="/retail-prices">
               <Button appearance="secondary">{t('retailPrices.title')}</Button>

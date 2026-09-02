@@ -29,6 +29,7 @@ import { createSalesOrder, getSalesOrder, updateSalesOrder } from '../../api/sal
 import { listStockBatches } from '../../api/stock';
 import { listUnits, type UnitDto } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
+import { RefreshButton } from '../../components/RefreshButton';
 
 interface LineState {
   key: string;
@@ -362,6 +363,10 @@ export function SalesFormPage() {
             {t('sales.items')}
           </Text>
           <div className="flex items-center gap-2">
+            <RefreshButton
+              queryKey={['items', 'picker']}
+              additionalKeys={[['stock', 'batches'], ['units', 'list'], ['partnerships', 'list']]}
+            />
             <Input
               value={itemSearch}
               placeholder={t('items.itemSearchPlaceholder')}

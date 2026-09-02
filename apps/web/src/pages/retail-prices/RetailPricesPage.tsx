@@ -30,6 +30,7 @@ import { listPartnerships } from '../../api/partnerships';
 import { listRetailPriceHistory, listRetailPrices, putRetailPrice } from '../../api/retail-prices';
 import { listUnits } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
+import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const CURRENCIES = ['CNY', 'USD', 'EUR'] as const;
@@ -185,6 +186,10 @@ export function RetailPricesPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('retailPrices.title')}</Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton
+            queryKey={['retail-prices']}
+            additionalKeys={[['items', 'picker'], ['units', 'list'], ['partnerships', 'list']]}
+          />
           <Text size={200} className="text-neutral-500">
             {t('retailPrices.unitCostHint')}
           </Text>

@@ -27,6 +27,7 @@ import {
 } from '../../api/admin';
 import { type UnitDto } from '../../api/units';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { RefreshButton } from '../../components/RefreshButton';
 
 const UNIT_TYPE_LABEL_KEY: Record<UnitType, string> = {
   COLLECTOR: 'admin.units.typeCollector',
@@ -99,7 +100,15 @@ export function AdminUnitsPage() {
         isActive,
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (saved) => {
+      queryClient.setQueryData<UnitDto[]>(['admin', 'units'], (prev) => {
+        if (!prev) return prev;
+        const index = prev.findIndex((u) => u.id === saved.id);
+        if (index === -1) return [saved, ...prev];
+        const next = [...prev];
+        next[index] = saved;
+        return next;
+      });
       await queryClient.invalidateQueries({ queryKey: ['admin', 'units'] });
       setDraft(null);
     },
@@ -160,9 +169,12 @@ export function AdminUnitsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('admin.units.title')}</Title1>
-        <Button appearance="primary" onClick={openCreate}>
-          {t('admin.units.newUnit')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['admin', 'units']} />
+          <Button appearance="primary" onClick={openCreate}>
+            {t('admin.units.newUnit')}
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (

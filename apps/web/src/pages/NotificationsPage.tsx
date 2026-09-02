@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import type { NotificationDto } from '@otunlink/shared';
 
 import { listNotifications, markNotificationsRead } from '../api/notifications';
+import { RefreshButton } from '../components/RefreshButton';
 import { useSession } from '../auth/SessionProvider';
 import { useLocale } from '../i18n/LocaleProvider';
 import { formatDateTime } from '../i18n/format';
@@ -58,6 +59,10 @@ export function NotificationsPage() {
           </Text>
         </div>
         <div className="flex items-center gap-2">
+          <RefreshButton
+            queryKey={['notifications', 'list']}
+            additionalKeys={[['notifications', 'unread-count'], ['notifications', 'dashboard']]}
+          />
           <Button
             size="small"
             appearance={filter === 'all' ? 'primary' : 'secondary'}

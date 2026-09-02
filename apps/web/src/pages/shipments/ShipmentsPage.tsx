@@ -8,6 +8,7 @@ import { Permissions, SHIPMENT_STATUSES, hasPermission, type ShipmentDto, type S
 
 import { useSession } from '../../auth/SessionProvider';
 import { listShipments } from '../../api/shipments';
+import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 const PAGE_SIZE = 20;
@@ -78,6 +79,7 @@ export function ShipmentsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Title1 as="h1">{t('shipments.title')}</Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['shipments', 'list']} />
           <Select
             value={status}
             onChange={(_, d) => {

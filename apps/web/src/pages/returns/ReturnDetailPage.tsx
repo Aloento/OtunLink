@@ -17,6 +17,7 @@ import {
 } from '../../api/returns';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
+import { RefreshButton } from '../../components/RefreshButton';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
@@ -203,6 +204,7 @@ export function ReturnDetailPage() {
           {t('returns.detail')} · {data.returnNo}
         </Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['return-orders', id]} />
           {canDelete && (
             <Button appearance="secondary" disabled={deleting} onClick={() => void handleDelete()}>
               {deleting ? <Spinner size="tiny" /> : t('returns.delete')}

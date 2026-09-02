@@ -28,6 +28,7 @@ import { cancelSalesOrder, confirmSaleReceipt, deleteSalesOrder, getSalesOrder, 
 import { listStockBatches } from '../../api/stock';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
+import { RefreshButton } from '../../components/RefreshButton';
 import { ImageUpload } from '../../components/ImageUpload';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
@@ -124,6 +125,7 @@ export function SalesDetailPage() {
           {t('sales.detail')} · {order.salesNo}
         </Title1>
         <div className="flex items-center gap-2">
+          <RefreshButton queryKey={['sales-orders', id]} />
           {canSend && (
             <Link to={`/sales/${order.id}/edit`}>
               <Button appearance="secondary">{t('sales.editTitle')}</Button>
