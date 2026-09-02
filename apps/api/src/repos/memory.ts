@@ -171,6 +171,13 @@ class MemoryUserRepository implements UserRepository {
     }
     return this.rows.delete(id);
   }
+
+  referencesUnit(unitId: string): boolean {
+    for (const row of this.rows.values()) {
+      if (row.scopeUnitId === unitId) return true;
+    }
+    return false;
+  }
 }
 
 class MemoryUnitRepository implements UnitRepository {
@@ -231,6 +238,21 @@ class MemoryUnitRepository implements UnitRepository {
     };
     this.rows.set(id, cloneUnit(next));
     return cloneUnit(next);
+  }
+
+  private referenceCheckers: ((unitId: string) => boolean)[] = [];
+
+  addReferenceChecker(checker: (unitId: string) => boolean): void {
+    this.referenceCheckers.push(checker);
+  }
+
+  async hasReferences(unitId: string): Promise<boolean> {
+    if (!this.rows.has(unitId)) return false;
+    return this.referenceCheckers.some((checker) => checker(unitId));
+  }
+
+  async delete(unitId: string): Promise<boolean> {
+    return this.rows.delete(unitId);
   }
 }
 
@@ -974,6 +996,13 @@ class MemoryShipmentRepository implements ShipmentRepository {
     return false;
   }
 
+  referencesUnit(unitId: string): boolean {
+    for (const row of this.rows.values()) {
+      if (row.shipperUnitId === unitId || row.receiverUnitId === unitId) return true;
+    }
+    return false;
+  }
+
   async delete(id: string): Promise<boolean> {
     const existing = this.rows.get(id);
     if (!existing) return false;
@@ -1548,6 +1577,13 @@ class MemoryInboundRepository implements InboundRepository {
     return false;
   }
 
+  referencesUnit(unitId: string): boolean {
+    for (const row of this.rows.values()) {
+      if (row.warehouseUnitId === unitId || row.counterpartyUnitId === unitId) return true;
+    }
+    return false;
+  }
+
   async delete(id: string): Promise<boolean> {
     const existing = this.rows.get(id);
     if (!existing) return false;
@@ -2056,6 +2092,13 @@ class MemoryReturnRepository implements ReturnRepository {
     return false;
   }
 
+  referencesUnit(unitId: string): boolean {
+    for (const row of this.rows.values()) {
+      if (row.fromUnitId === unitId || row.toUnitId === unitId) return true;
+    }
+    return false;
+  }
+
   async delete(id: string): Promise<boolean> {
     const order = this.rows.get(id);
     if (!order) return false;
@@ -2241,6 +2284,13 @@ class MemoryOutboundRepository implements OutboundRepository {
   referencesItem(itemId: string): boolean {
     for (const rows of this.items.values()) {
       if (rows.some((row) => row.itemId === itemId)) return true;
+    }
+    return false;
+  }
+
+  referencesUnit(unitId: string): boolean {
+    for (const row of this.rows.values()) {
+      if (row.warehouseUnitId === unitId || row.counterpartyUnitId === unitId) return true;
     }
     return false;
   }
@@ -2495,6 +2545,13 @@ class MemoryRetailPriceRepository implements RetailPriceRepository {
     }
     return false;
   }
+
+  referencesUnit(unitId: string): boolean {
+    for (const row of this.prices.values()) {
+      if (row.unitId === unitId) return true;
+    }
+    return false;
+  }
 }
 
 /** 内存站内通知仓储（只写； 通知中心使用）。 */
@@ -2522,6 +2579,10 @@ class MemoryNotificationRepository implements NotificationRepository {
     };
     this.rows.push(row);
     return { ...row };
+  }
+
+  referencesUnit(unitId: string): boolean {
+    return this.rows.some((row) => row.unitId === unitId);
   }
 
   async list(query?: { unitId?: string; userId?: string }): Promise<NotificationRecord[]> {
@@ -3221,6 +3282,13 @@ class MemorySalesRepository implements SalesRepository {
     return false;
   }
 
+  referencesUnit(unitId: string): boolean {
+    for (const row of this.rows.values()) {
+      if (row.sellerUnitId === unitId || row.buyerUnitId === unitId) return true;
+    }
+    return false;
+  }
+
   async delete(id: string): Promise<boolean> {
     const existing = this.rows.get(id);
     if (!existing) return false;
@@ -3309,6 +3377,13 @@ class MemoryPartnershipRepository implements PartnershipRepository {
   async delete(id: string): Promise<boolean> {
     return this.rows.delete(id);
   }
+
+  referencesUnit(unitId: string): boolean {
+    for (const row of this.rows.values()) {
+      if (row.warehouseUnitId === unitId || row.retailerUnitId === unitId) return true;
+    }
+    return false;
+  }
 }
 
 function round2(value: number): number {
@@ -3377,6 +3452,8 @@ export function createMemoryRepos(seed?: {
     outbounds: seed?.outbounds,
     outboundItems: seed?.outboundItems,
   });
+  const partnershipRepo = new MemoryPartnershipRepository(unitRepo, seed?.partnerships);
+  const notificationRepo = new MemoryNotificationRepository();
 
   // 物品删除前的引用检查：任一单据/库存/零售价引用该物品即视为占用。
   itemRepo.addReferenceChecker((itemId) => shipmentRepo.referencesItem(itemId));
@@ -3395,6 +3472,23 @@ export function createMemoryRepos(seed?: {
     stockLedger.movements.some((row) => row.itemId === itemId),
   );
 
+  // 单元删除前的引用检查：任一单据/库存/价格/签约/通知/用户范围引用该单元即视为占用。
+  unitRepo.addReferenceChecker((unitId) => shipmentRepo.referencesUnit(unitId));
+  unitRepo.addReferenceChecker((unitId) => inboundRepo.referencesUnit(unitId));
+  unitRepo.addReferenceChecker((unitId) => outboundRepo.referencesUnit(unitId));
+  unitRepo.addReferenceChecker((unitId) => salesRepo.referencesUnit(unitId));
+  unitRepo.addReferenceChecker((unitId) => returnRepo.referencesUnit(unitId));
+  unitRepo.addReferenceChecker((unitId) => retailPriceRepo.referencesUnit(unitId));
+  unitRepo.addReferenceChecker((unitId) => partnershipRepo.referencesUnit(unitId));
+  unitRepo.addReferenceChecker((unitId) => notificationRepo.referencesUnit(unitId));
+  unitRepo.addReferenceChecker((unitId) => userRepo.referencesUnit(unitId));
+  unitRepo.addReferenceChecker((unitId) =>
+    [...stockLedger.stock.values()].some((row) => row.unitId === unitId),
+  );
+  unitRepo.addReferenceChecker((unitId) =>
+    stockLedger.movements.some((row) => row.unitId === unitId),
+  );
+
   return {
     users: userRepo,
     units: unitRepo,
@@ -3407,8 +3501,8 @@ export function createMemoryRepos(seed?: {
     stock: new MemoryStockRepository(stockLedger, unitRepo, itemRepo),
     retailPrices: retailPriceRepo,
     sales: salesRepo,
-    partnerships: new MemoryPartnershipRepository(unitRepo, seed?.partnerships),
-    notifications: new MemoryNotificationRepository(),
+    partnerships: partnershipRepo,
+    notifications: notificationRepo,
     emailLogs: new MemoryEmailLogRepository(),
     auditLogs: new MemoryAuditLogRepository(),
   };

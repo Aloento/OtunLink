@@ -844,6 +844,34 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       );
       return rows[0] ? mapUnit(rows[0]) : null;
     },
+    async hasReferences(id: string): Promise<boolean> {
+      // SET NULL / CASCADE 外键（用户范围、签约、通知）也视为引用：保留历史与范围绑定不被静默清除。
+      const checks = [
+        `SELECT 1 FROM shipments WHERE shipper_unit_id = ${quote(id)} OR receiver_unit_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM inbound_orders WHERE warehouse_unit_id = ${quote(id)} OR counterparty_unit_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM outbound_orders WHERE warehouse_unit_id = ${quote(id)} OR counterparty_unit_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM sales_orders WHERE seller_unit_id = ${quote(id)} OR buyer_unit_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM return_orders WHERE from_unit_id = ${quote(id)} OR to_unit_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM retail_prices WHERE unit_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM stock WHERE unit_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM stock_movements WHERE unit_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM retail_price_history WHERE unit_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM retail_partnerships WHERE warehouse_unit_id = ${quote(id)} OR retailer_unit_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM notifications WHERE unit_id = ${quote(id)} LIMIT 1`,
+        `SELECT 1 FROM users WHERE scope_unit_id = ${quote(id)} LIMIT 1`,
+      ];
+      for (const sql of checks) {
+        const { rows } = await exec.query(sql);
+        if (rows.length > 0) return true;
+      }
+      return false;
+    },
+    async delete(id: string): Promise<boolean> {
+      const { rows } = await exec.query(
+        `DELETE FROM business_units WHERE id = ${quote(id)} RETURNING id`,
+      );
+      return rows.length > 0;
+    },
   };
 
   const items = {

@@ -10,6 +10,8 @@ import {
   Input,
   Select,
   Spinner,
+  Tab,
+  TabList,
   Text,
   Title1,
 } from '@fluentui/react-components';
@@ -22,6 +24,7 @@ import { UNIT_TYPES, type UnitType } from '@otunlink/shared';
 import { errorI18nKey, isApiError } from '../../api/http';
 import {
   createAdminUnit,
+  deleteAdminUnit,
   listAdminUnits,
   updateAdminUnit,
 } from '../../api/admin';
@@ -67,6 +70,9 @@ export function AdminUnitsPage() {
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState<{ error?: string } | null>(null);
+  const [view, setView] = useState<'all' | UnitType>('all');
+  const [deleting, setDeleting] = useState<UnitDto | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: units, isLoading, isError } = useQuery({
     queryKey: ['admin', 'units'],
@@ -138,6 +144,28 @@ export function AdminUnitsPage() {
     });
   };
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteAdminUnit(id),
+    onSuccess: async (res) => {
+      queryClient.setQueryData<UnitDto[]>(['admin', 'units'], (prev) =>
+        prev?.filter((u) => u.id !== res.id),
+      );
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'units'] });
+      setDeleteError(null);
+      setDeleting(null);
+    },
+    onError: (cause) => {
+      setDeleteError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
+    },
+  });
+
+  const openDelete = (row: UnitDto) => {
+    setDeleteError(null);
+    setDeleting(row);
+  };
+
+  const filtered = (units ?? []).filter((u) => view === 'all' || u.type === view);
+
   const submit = () => {
     if (!draft) return;
     if (!draft.code.trim() || !draft.name.trim()) {
@@ -182,17 +210,32 @@ export function AdminUnitsPage() {
       ) : isError ? (
         <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
       ) : (
-        <ResponsiveTable
-          columns={columns}
-          items={units ?? []}
-          rowKey={(u) => u.id}
-          emptyText={t('admin.units.empty')}
-          actions={(u) => (
-            <Button size="small" appearance="secondary" onClick={() => openEdit(u)}>
-              {t('admin.units.edit')}
-            </Button>
-          )}
-        />
+        <>
+          <TabList selectedValue={view} onTabSelect={(_, d) => setView(d.value as 'all' | UnitType)}>
+            <Tab value="all">{t('admin.units.tabAll')}</Tab>
+            {UNIT_TYPES.map((typ) => (
+              <Tab key={typ} value={typ}>
+                {t(UNIT_TYPE_LABEL_KEY[typ])}
+              </Tab>
+            ))}
+          </TabList>
+          <ResponsiveTable
+            columns={columns}
+            items={filtered}
+            rowKey={(u) => u.id}
+            emptyText={t('admin.units.empty')}
+            actions={(u) => (
+              <div className="flex items-center gap-2">
+                <Button size="small" appearance="secondary" onClick={() => openEdit(u)}>
+                  {t('admin.units.edit')}
+                </Button>
+                <Button size="small" appearance="outline" onClick={() => openDelete(u)}>
+                  {t('admin.units.delete')}
+                </Button>
+              </div>
+            )}
+          />
+        </>
       )}
 
       <Dialog open={draft !== null} onOpenChange={(_, d) => !d.open && setDraft(null)}>
@@ -279,6 +322,36 @@ export function AdminUnitsPage() {
               </Button>
               <Button appearance="primary" onClick={submit} disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? t('common.loading') : t('common.confirm')}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+
+      <Dialog open={deleting !== null} onOpenChange={(_, d) => !d.open && setDeleting(null)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>{t('admin.units.deleteTitle')}</DialogTitle>
+            <DialogContent>
+              <Text>{t('admin.units.deleteConfirm', { name: deleting?.name ?? '' })}</Text>
+              {deleteError && (
+                <Text className="mt-2 block text-red-600">{deleteError}</Text>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="secondary"
+                onClick={() => setDeleting(null)}
+                disabled={deleteMutation.isPending}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                appearance="primary"
+                onClick={() => deleting && deleteMutation.mutate(deleting.id)}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? t('common.loading') : t('admin.units.deleteConfirmBtn')}
               </Button>
             </DialogActions>
           </DialogBody>

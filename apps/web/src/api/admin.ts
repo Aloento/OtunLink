@@ -129,6 +129,10 @@ export function updateAdminUnit(
   return apiPatch<import('./units').UnitDto>(`/api/v1/admin/units/${encodeURIComponent(id)}`, input);
 }
 
+export function deleteAdminUnit(id: string): Promise<{ id: string }> {
+  return apiDelete<{ id: string }>(`/api/v1/admin/units/${encodeURIComponent(id)}`);
+}
+
 export function listAuditLogs(params: AuditLogListQuery = {}): Promise<Paged<AuditLogDto>> {
   return apiGet<Paged<AuditLogDto>>(`/api/v1/admin/audit-logs${toQuery(params)}`);
 }

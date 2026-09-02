@@ -1,9 +1,9 @@
-import { Permissions, unitCreateSchema, unitPatchSchema } from '@otunlink/shared';
+import { ErrorCodes, Permissions, unitCreateSchema, unitPatchSchema } from '@otunlink/shared';
 import { Hono } from 'hono';
 
 import { requirePermission } from '../auth/middleware';
 import { unitDto } from '../lib/dto';
-import { dbUnavailable, notFound, ok, validationError } from '../lib/http';
+import { dbUnavailable, error, notFound, ok, validationError } from '../lib/http';
 import type { AppEnv } from '../types';
 
 // 管理端业务单元 CRUD。
@@ -57,6 +57,24 @@ export function adminUnitsRouter(): Hono<AppEnv> {
     const updated = await repos.units.update(id, parsed.data);
     if (!updated) return notFound(c, '业务单元不存在');
     return ok(c, unitDto(updated));
+  });
+
+  router.delete('/:id', async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const id = c.req.param('id');
+    const unit = await repos.units.findById(id);
+    if (!unit) return notFound(c, '业务单元不存在');
+
+    const hasReferences = await repos.units.hasReferences(id);
+    if (hasReferences) {
+      return error(c, 409, ErrorCodes.UNIT_IN_USE, '该业务单元已被单据/库存/用户范围引用，无法删除');
+    }
+
+    const deleted = await repos.units.delete(id);
+    if (!deleted) return notFound(c, '业务单元不存在');
+    return ok(c, { id });
   });
 
   return router;

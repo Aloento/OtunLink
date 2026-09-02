@@ -108,6 +108,7 @@ const CODE_TO_I18N_KEY: Record<string, string> = {
   [ErrorCodes.MIGRATION_FAILED]: 'errors.MIGRATION_FAILED',
   [ErrorCodes.BARCODE_CONFLICT]: 'errors.BARCODE_CONFLICT',
   [ErrorCodes.ITEM_IN_USE]: 'errors.ITEM_IN_USE',
+  [ErrorCodes.UNIT_IN_USE]: 'errors.UNIT_IN_USE',
   [ErrorCodes.TRACKING_CONFLICT]: 'errors.TRACKING_CONFLICT',
   [ErrorCodes.SHIPMENT_STATE_CONFLICT]: 'errors.SHIPMENT_STATE_CONFLICT',
   [ErrorCodes.COUNTING_STATE_CONFLICT]: 'errors.COUNTING_STATE_CONFLICT',

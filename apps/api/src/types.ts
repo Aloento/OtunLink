@@ -240,6 +240,10 @@ export interface UnitRepository {
   list(opts?: { includeInactive?: boolean; scopeUnitId?: string; type?: UnitType }): Promise<UnitRecord[]>;
   create(input: CreateUnitInput): Promise<UnitRecord>;
   update(id: string, patch: UpdateUnitInput): Promise<UnitRecord | null>;
+  /** 任一单据/库存/范围绑定引用该单元时返回 true（删除前检查）。 */
+  hasReferences(id: string): Promise<boolean>;
+  /** 删除业务单元（无引用时调用）。返回是否删除成功。 */
+  delete(id: string): Promise<boolean>;
 }
 
 export interface ItemRepository {

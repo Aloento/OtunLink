@@ -60,6 +60,10 @@ curl http://localhost:8787/api/v1/health   # => {"ok":true}
   `POST /api/v1/admin/test-email` 可测试连通性。
 - **审计日志**：`audit_logs` 记录关键写操作的 actor/entity/before/after，
   管理员经 `GET /api/v1/admin/audit-logs` 分页筛选查询。
+- **业务单元管理**：管理员在 `/admin/units` 维护集货/仓库/零售单元（`business_units`）
+  的增删改查与启停；列表可按类型筛选。删除受引用保护——已被单据、库存、签约或用户
+  数据范围（`users.scope_unit_id`）引用的单元返回 `409 UNIT_IN_USE`，仅可停用。
+  用户数据范围在 `/admin/users` 绑定具体单元，API 侧经 `unitScopeFilter` 中间件生效。
 
 ## 部署与上线
 
