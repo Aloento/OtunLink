@@ -1040,6 +1040,18 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
           }
           if (targetBatchId) {
             await exec.query(
+              `UPDATE stock source
+                  SET item_id = ${quote(targetId)}, batch_id = ${quote(targetBatchId)}
+                WHERE source.item_id = ${quote(sourceId)}
+                  AND source.batch_id = ${quote(sourceBatchId)}
+                  AND NOT EXISTS (
+                    SELECT 1 FROM stock target
+                     WHERE target.unit_id = source.unit_id
+                       AND target.item_id = ${quote(targetId)}
+                       AND target.batch_id = ${quote(targetBatchId)}
+                  )`,
+            );
+            await exec.query(
               `UPDATE stock target
                   SET qty = target.qty + source.qty,
                       avg_cost = CASE WHEN target.qty + source.qty = 0 THEN 0
@@ -1055,17 +1067,25 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
                  AND source.batch_id = ${quote(sourceBatchId)}`,
             );
             await exec.query(
-              `DELETE FROM stock source
-                USING stock target
-               WHERE source.unit_id = target.unit_id
-                 AND source.item_id = ${quote(sourceId)}
-                 AND source.batch_id = ${quote(sourceBatchId)}
-                 AND target.item_id = ${quote(targetId)}
-                 AND target.batch_id = ${quote(targetBatchId)}`,
+              `DELETE FROM stock
+                WHERE item_id = ${quote(sourceId)} AND batch_id = ${quote(sourceBatchId)}`,
             );
             await exec.query(
-              `UPDATE stock SET item_id = ${quote(targetId)}, batch_id = ${quote(targetBatchId)}
-                WHERE item_id = ${quote(sourceId)} AND batch_id = ${quote(sourceBatchId)}`,
+              `UPDATE sales_batch_allocations target
+                  SET qty = target.qty + source.qty
+                 FROM sales_batch_allocations source
+                WHERE source.order_item_id = target.order_item_id
+                  AND source.batch_id = ${quote(sourceBatchId)}
+                  AND target.batch_id = ${quote(targetBatchId)}`,
+            );
+            await exec.query(
+              `DELETE FROM sales_batch_allocations source
+               WHERE source.batch_id = ${quote(sourceBatchId)}
+                 AND EXISTS (
+                   SELECT 1 FROM sales_batch_allocations target
+                    WHERE target.order_item_id = source.order_item_id
+                      AND target.batch_id = ${quote(targetBatchId)}
+                 )`,
             );
             for (const table of [
               'inbound_order_items',

@@ -31,6 +31,8 @@ jobs:
 
       - name: Build web
         run: pnpm --filter @otunlink/web build
+        env:
+          VITE_GIT_SHA: ${{ github.sha }}
 
       - name: Deploy to Cloudflare Pages
         run: npx wrangler pages deploy apps/web/dist --project-name otunlink --branch main

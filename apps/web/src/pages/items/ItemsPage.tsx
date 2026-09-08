@@ -1,5 +1,18 @@
-import { Button, Input, Select, Spinner, Text, Title1 } from '@fluentui/react-components';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Input,
+  Select,
+  Spinner,
+  Text,
+  Title1,
+} from '@fluentui/react-components';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -8,7 +21,7 @@ import type { ItemDto } from '@otunlink/shared';
 import { Permissions, hasPermission } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
-import { getItemByBarcode, listItemCategories, listItems } from '../../api/items';
+import { getItemByBarcode, listItemCategories, listItems, mergeItem } from '../../api/items';
 import { useSession } from '../../auth/SessionProvider';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
@@ -29,6 +42,13 @@ export function ItemsPage() {
   const [category, setCategory] = useState('');
   const [scanOpen, setScanOpen] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState('');
+  const [mergeSourceId, setMergeSourceId] = useState('');
+  const [mergeQuery, setMergeQuery] = useState('');
+  const [merging, setMerging] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -50,6 +70,29 @@ export function ItemsPage() {
       listItems({ q: debouncedQ || undefined, page, size: PAGE_SIZE, category: category || undefined }),
     placeholderData: keepPreviousData,
   });
+  const mergeCandidates = useQuery({
+    queryKey: ['items', 'merge-candidates', mergeQuery],
+    queryFn: () => listItems({ q: mergeQuery || undefined, size: 50 }),
+    enabled: mergeOpen,
+  });
+
+  const handleMerge = async () => {
+    if (!mergeTargetId || !mergeSourceId) return;
+    if (!window.confirm(t('items.mergeConfirm'))) return;
+    setMerging(true);
+    setMergeError(null);
+    try {
+      await mergeItem(mergeTargetId, mergeSourceId);
+      await queryClient.invalidateQueries({ queryKey: ['items'] });
+      setMergeOpen(false);
+      setMergeTargetId('');
+      setMergeSourceId('');
+    } catch (cause) {
+      setMergeError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));
+    } finally {
+      setMerging(false);
+    }
+  };
 
   const handleScan = useCallback(
     async (code: string) => {
@@ -137,6 +180,11 @@ export function ItemsPage() {
               <Button appearance="primary" className="w-full">{t('items.newItem')}</Button>
             </Link>
           )}
+          {canWrite && (
+            <Button appearance="secondary" className="col-span-2 w-full sm:col-span-1 sm:w-auto" onClick={() => setMergeOpen(true)}>
+              {t('items.merge')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -184,6 +232,57 @@ export function ItemsPage() {
       )}
 
       <ScannerDialog open={scanOpen} onClose={() => setScanOpen(false)} onScan={handleScan} />
+      <Dialog open={mergeOpen} onOpenChange={(_, state) => !state.open && setMergeOpen(false)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>{t('items.mergeTitle')}</DialogTitle>
+            <DialogContent className="flex flex-col gap-3">
+              <Text>{t('items.mergeCatalogHint')}</Text>
+              <Input
+                value={mergeQuery}
+                onChange={(_, option) => setMergeQuery(option.value)}
+                placeholder={t('items.mergeSearch')}
+                aria-label={t('items.mergeSearch')}
+              />
+              <Select
+                value={mergeTargetId}
+                onChange={(_, option) => setMergeTargetId(option.value)}
+                aria-label={t('items.mergeTarget')}
+              >
+                <option value="">{t('items.mergeTarget')}</option>
+                {(mergeCandidates.data?.items ?? []).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} · {item.sku ?? item.id}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                value={mergeSourceId}
+                onChange={(_, option) => setMergeSourceId(option.value)}
+                aria-label={t('items.mergeSource')}
+              >
+                <option value="">{t('items.mergeSource')}</option>
+                {(mergeCandidates.data?.items ?? [])
+                  .filter((item) => item.id !== mergeTargetId)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} · {item.sku ?? item.id}
+                    </option>
+                  ))}
+              </Select>
+              {mergeError && <Text className="text-red-600">{mergeError}</Text>}
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="secondary" onClick={() => setMergeOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button appearance="primary" disabled={!mergeTargetId || !mergeSourceId || merging} onClick={() => void handleMerge()}>
+                {merging ? <Spinner size="tiny" /> : t('items.merge')}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </div>
   );
 }

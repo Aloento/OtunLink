@@ -1,14 +1,6 @@
 import {
   Body1,
   Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  Input,
-  DialogTitle,
-  Select,
   Spinner,
   Text,
   Title1,
@@ -20,7 +12,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Permissions, hasPermission } from '@otunlink/shared';
 
-import { deleteItem, getItem, listItems, mergeItem } from '../../api/items';
+import { deleteItem, getItem } from '../../api/items';
 import { isApiError } from '../../api/http';
 import { useSession } from '../../auth/SessionProvider';
 import { ImagePreview } from '../../components/ImagePreview';
@@ -37,21 +29,12 @@ export function ItemDetailPage() {
   const canWrite = hasPermission(me?.role, Permissions.ITEMS_WRITE);
 
   const [deleting, setDeleting] = useState(false);
-  const [mergeOpen, setMergeOpen] = useState(false);
-  const [mergeId, setMergeId] = useState('');
-  const [mergeQuery, setMergeQuery] = useState('');
-  const [merging, setMerging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['items', id],
     queryFn: () => getItem(id),
     staleTime: 30_000,
-  });
-  const mergeCandidates = useQuery({
-    queryKey: ['items', 'merge-candidates', mergeQuery],
-    queryFn: () => listItems({ q: mergeQuery || undefined, size: 50 }),
-    enabled: mergeOpen,
   });
 
   const handleDelete = async () => {
@@ -65,23 +48,6 @@ export function ItemDetailPage() {
     } catch (cause) {
       setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));
       setDeleting(false);
-    }
-  };
-
-  const handleMerge = async () => {
-    if (!mergeId) return;
-    if (!window.confirm(t('items.mergeConfirm'))) return;
-    setMerging(true);
-    setError(null);
-    try {
-      await mergeItem(id, mergeId);
-      void queryClient.invalidateQueries({ queryKey: ['items'] });
-      setMergeOpen(false);
-      setMergeId('');
-    } catch (cause) {
-      setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));
-    } finally {
-      setMerging(false);
     }
   };
 
@@ -132,11 +98,6 @@ export function ItemDetailPage() {
               {deleting ? <Spinner size="tiny" /> : t('items.delete')}
             </Button>
           )}
-          {canWrite && (
-            <Button appearance="secondary" onClick={() => setMergeOpen(true)}>
-              {t('items.merge')}
-            </Button>
-          )}
         </div>
       </div>
 
@@ -172,44 +133,6 @@ export function ItemDetailPage() {
           </div>
         )}
       </div>
-      <Dialog open={mergeOpen} onOpenChange={(_, state) => !state.open && setMergeOpen(false)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>{t('items.mergeTitle')}</DialogTitle>
-            <DialogContent className="flex flex-col gap-3">
-              <Text>{t('items.mergeHint', { name: data.name })}</Text>
-              <Input
-                value={mergeQuery}
-                onChange={(_, option) => setMergeQuery(option.value)}
-                placeholder={t('items.mergeSearch')}
-                aria-label={t('items.mergeSearch')}
-              />
-              <Select
-                value={mergeId}
-                onChange={(_, option) => setMergeId(option.value)}
-                aria-label={t('items.mergeSource')}
-              >
-                <option value="">{t('items.mergeSelect')}</option>
-                {(mergeCandidates.data?.items ?? [])
-                  .filter((item) => item.id !== id)
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} · {item.sku ?? item.id}
-                    </option>
-                  ))}
-              </Select>
-            </DialogContent>
-            <DialogActions>
-              <Button appearance="secondary" onClick={() => setMergeOpen(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button appearance="primary" disabled={!mergeId || merging} onClick={() => void handleMerge()}>
-                {merging ? <Spinner size="tiny" /> : t('items.merge')}
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
     </div>
   );
 }
