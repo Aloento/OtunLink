@@ -1123,6 +1123,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
           'outbound_order_items',
           'sales_order_items',
           'return_order_items',
+          'stock',
           'stock_movements',
           'retail_prices',
           'retail_price_history',
