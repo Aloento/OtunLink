@@ -16,7 +16,20 @@ function createClient(env: Env): AwsClient {
   const endpoint = env.S3_ENDPOINT;
   const region = env.S3_REGION;
   const bucket = env.S3_BUCKET;
-  if (!accessKeyId || !secretAccessKey || !endpoint || !region || !bucket) {
+  if (
+    !accessKeyId ||
+    !secretAccessKey ||
+    !endpoint ||
+    !region ||
+    !bucket ||
+    endpoint.includes('<') ||
+    bucket.includes('<')
+  ) {
+    throw new Error(ErrorCodes.STORAGE_UNAVAILABLE);
+  }
+  try {
+    new URL(endpoint);
+  } catch {
     throw new Error(ErrorCodes.STORAGE_UNAVAILABLE);
   }
   return new AwsClient({

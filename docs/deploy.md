@@ -99,7 +99,7 @@ curl -X POST https://api.otun.musi.land/api/v1/admin/migrate -H "X-Admin-Secret:
 | `ENTRA_AUDIENCE` | 可选：token `aud` 校验值（默认接受 client id / `api://<client-id>` 及 MSAL 默认 scope） | `https://<TENANT_DOMAIN>.onmicrosoft.com/OtunLink/API` |
 | `ENTRA_ISSUER` | 可选：JWT issuer 覆盖（默认 `https://login.microsoftonline.com/<TENANT_ID>/v2.0`） | — |
 | `JWKS_CACHE` | KV binding（wrangler.toml `[[kv_namespaces]]` 声明，非环境变量） | `JWKS_CACHE` |
-| `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` | 华为云 OBS 非敏感配置（[vars]） | `<OBS_ENDPOINT>` |
+| `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` | 华为云 OBS 配置；生产 CI 通过 `S3_ENDPOINT` / `S3_BUCKET` secrets 替换 `wrangler.toml` 占位符，`S3_REGION` 保留为 `eu-de` | `<OBS_ENDPOINT>` |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | OBS 凭据（**secret**，`wrangler secret put`） | — |
 | `MAIL_PROVIDER` | `smtp`（默认）/ `api`（预留，[vars]） | `smtp` |
 | `MAIL_FROM` | 发件地址（[vars]） | `<MAIL_FROM>` |
