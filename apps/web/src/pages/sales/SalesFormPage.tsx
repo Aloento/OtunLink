@@ -150,11 +150,11 @@ export function SalesFormPage() {
       setLines(
         order.items.length > 0
           ? order.items.map((line) => ({
-              key: genKey(),
-              itemId: line.itemId,
-              qty: line.qty,
-              unitPriceOverride: line.listPrice !== null && line.listPrice === line.price ? '' : line.price ?? '',
-            }))
+            key: genKey(),
+            itemId: line.itemId,
+            qty: line.qty,
+            unitPriceOverride: line.listPrice !== null && line.listPrice === line.price ? '' : line.price ?? '',
+          }))
           : [emptyLine()],
       );
     }
@@ -383,7 +383,7 @@ export function SalesFormPage() {
         </Text>
         {lines.map((line) => (
           <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 [&>*]:min-w-0 [&_.fui-Input]:w-full [&_.fui-Select]:w-full [&_.fui-Select__select]:h-8 [&_.fui-Input__input]:h-8">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 *:min-w-0 [&_.fui-Input]:w-full [&_.fui-Input__input]:min-w-0 [&_.fui-Select]:w-full [&_.fui-Select]:min-w-0 [&_.fui-Select__select]:w-full [&_.fui-Select__select]:min-w-0 [&_.fui-Select__select]:h-8 [&_.fui-Input__input]:h-8">
               <Field className="min-w-0" label={t('sales.itemName')} required>
                 <Select className="w-full" value={line.itemId} onChange={(_, d) => setLine(line.key, 'itemId', d.value)}>
                   <option value="">—</option>
@@ -397,8 +397,7 @@ export function SalesFormPage() {
               </Field>
               <Field
                 className="min-w-0"
-                label={`${t('sales.qty')}${
-                  (() => {
+                label={`${t('sales.qty')}${(() => {
                     const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
                     if (!item) return '';
                     const unit = item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit;
@@ -406,7 +405,7 @@ export function SalesFormPage() {
                       ? ` (${t(`items.${item.minSaleUnit === 'INNER' ? 'innerUnits' : 'specUnits'}.${unit}`)})`
                       : '';
                   })()
-                }`}
+                  }`}
                 required
               >
                 <Input
