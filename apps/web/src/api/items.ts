@@ -1,4 +1,4 @@
-import type { FileDto, ItemDto, ItemImageDto, Paged, SpecUnit, ItemStatus } from '@otunlink/shared';
+import type { FileDto, ItemDto, ItemImageDto, Paged, SpecUnit, ItemStatus, MinSaleUnit } from '@otunlink/shared';
 
 import { apiDelete, apiGet, apiPatch, apiPost, apiRequest } from './http';
 
@@ -22,6 +22,7 @@ export interface CreateItemInput {
   specUnit?: SpecUnit;
   innerUnit?: SpecUnit;
   innerCount?: number | string;
+  minSaleUnit?: MinSaleUnit;
   isPerishable?: boolean;
   category?: string;
   description?: string;
@@ -36,6 +37,7 @@ export interface UpdateItemInput {
   specUnit?: SpecUnit;
   innerUnit?: SpecUnit | null;
   innerCount?: number | string | null;
+  minSaleUnit?: MinSaleUnit;
   isPerishable?: boolean;
   category?: string | null;
   description?: string | null;

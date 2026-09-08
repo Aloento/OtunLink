@@ -21,6 +21,7 @@ import { listUnits } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
+import { ItemLink } from '../../components/ItemLink';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
@@ -135,7 +136,11 @@ export function InventoryPage() {
 
   const stockColumns: ResponsiveTableColumn<StockRowDto>[] = [
     { key: 'unit', header: t('inventory.unit'), render: (row) => row.unitName ?? row.unitId },
-    { key: 'item', header: t('inventory.item'), render: (row) => row.itemName ?? row.itemId },
+    {
+      key: 'item',
+      header: t('inventory.item'),
+      render: (row) => <ItemLink itemId={row.itemId} itemName={row.itemName} />,
+    },
     { key: 'spec', header: t('inventory.spec'), render: (row) => row.spec ?? '—' },
     { key: 'batchNo', header: t('inventory.batchNo'), render: (row) => row.batchNo ?? '—' },
     { key: 'expiry', header: t('inventory.expiry'), render: (row) => expiryCell(row.expiryDate) },
@@ -148,7 +153,11 @@ export function InventoryPage() {
 
   const expiredColumns: ResponsiveTableColumn<StockBatchDto>[] = [
     { key: 'unit', header: t('inventory.unit'), render: (row) => row.unitName ?? row.unitId },
-    { key: 'item', header: t('inventory.item'), render: (row) => row.itemName ?? row.itemId },
+    {
+      key: 'item',
+      header: t('inventory.item'),
+      render: (row) => <ItemLink itemId={row.itemId} itemName={row.itemName} />,
+    },
     { key: 'batchNo', header: t('inventory.batchNo'), render: (row) => row.batchNo ?? '—' },
     { key: 'expiry', header: t('inventory.expiry'), render: (row) => expiryCell(row.expiryDate) },
     {
@@ -167,7 +176,11 @@ export function InventoryPage() {
       render: (row) => (row.createdAt ? formatDateTime(row.createdAt, locale) : '—'),
     },
     { key: 'type', header: t('inventory.moveType'), render: (row) => t(`inventory.moveTypes.${row.type}`) },
-    { key: 'item', header: t('inventory.item'), render: (row) => row.itemName ?? row.itemId },
+    {
+      key: 'item',
+      header: t('inventory.item'),
+      render: (row) => <ItemLink itemId={row.itemId} itemName={row.itemName} />,
+    },
     { key: 'batchNo', header: t('inventory.batchNo'), render: (row) => row.batchNo ?? '—' },
     { key: 'delta', header: t('inventory.delta'), render: (row) => row.qtyDelta },
     { key: 'after', header: t('inventory.after'), render: (row) => row.qtyAfter },

@@ -216,6 +216,7 @@ export const en: TranslationSchema = {
     specUnit: 'Unit',
     innerUnit: 'Inner unit',
     innerCount: 'Inner count',
+    minSaleUnit: 'Minimum sale unit',
     isPerishable: 'Has shelf life',
     status: 'Status',
     description: 'Description',
@@ -266,6 +267,10 @@ export const en: TranslationSchema = {
       SET: 'set',
       GRAIN: 'grain',
       OTHER: 'other',
+    },
+    minSaleUnits: {
+      SPEC: 'Specification unit',
+      INNER: 'Inner unit',
     },
     upload: {
       add: 'Upload image',

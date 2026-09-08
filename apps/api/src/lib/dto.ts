@@ -97,6 +97,7 @@ export function itemDto(item: ItemRecord) {
     specUnit: item.specUnit,
     innerUnit: item.innerUnit,
     innerCount: item.innerCount,
+    minSaleUnit: item.minSaleUnit ?? 'SPEC',
     isPerishable: item.isPerishable,
     category: item.category,
     description: item.description,

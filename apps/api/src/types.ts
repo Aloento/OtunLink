@@ -3,6 +3,7 @@ import type {
   InboundSourceType,
   InboundStatus,
   ItemStatus,
+  MinSaleUnit,
   OutboundStatus,
   OutboundType,
   ReturnSourceType,
@@ -144,6 +145,7 @@ export interface ItemRecord {
   specUnit: SpecUnit;
   innerUnit: SpecUnit | null;
   innerCount: string | null;
+  minSaleUnit?: MinSaleUnit;
   isPerishable: boolean;
   category: string | null;
   description: string | null;
@@ -182,6 +184,7 @@ export interface CreateItemInput {
   specUnit?: SpecUnit;
   innerUnit?: SpecUnit | null;
   innerCount?: string | null;
+  minSaleUnit?: MinSaleUnit;
   isPerishable?: boolean;
   category?: string | null;
   description?: string | null;
@@ -196,6 +199,7 @@ export interface UpdateItemInput {
   specUnit?: SpecUnit;
   innerUnit?: SpecUnit | null;
   innerCount?: string | null;
+  minSaleUnit?: MinSaleUnit;
   isPerishable?: boolean;
   category?: string | null;
   description?: string | null;

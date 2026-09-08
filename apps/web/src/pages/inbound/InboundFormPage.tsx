@@ -230,7 +230,17 @@ export function InboundFormPage() {
                   ))}
                 </Select>
               </Field>
-              <Field label={t('inbound.qty')} required>
+              <Field
+                label={`${t('inbound.qty')}${
+                  (() => {
+                    const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
+                    if (!item) return '';
+                    const unit = item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit;
+                    return unit ? ` (${t(`items.${item.minSaleUnit === 'INNER' ? 'innerUnits' : 'specUnits'}.${unit}`)})` : '';
+                  })()
+                }`}
+                required
+              >
                 <Input
                   type="number"
                   min={0}

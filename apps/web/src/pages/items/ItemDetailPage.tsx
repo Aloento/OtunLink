@@ -70,6 +70,7 @@ export function ItemDetailPage() {
     [t('items.specUnit'), t(`items.specUnits.${data.specUnit}`)],
     [t('items.innerUnit'), data.innerUnit ? t(`items.innerUnits.${data.innerUnit}`) : '—'],
     [t('items.innerCount'), data.innerCount ?? '—'],
+    [t('items.minSaleUnit'), t(`items.minSaleUnits.${data.minSaleUnit}`)],
     [
       t('items.status'),
       data.status === 'ACTIVE' ? t('items.statusActive') : t('items.statusInactive'),

@@ -213,6 +213,7 @@ export const zhCN = {
     specUnit: '规格单位',
     innerUnit: '内装单位',
     innerCount: '内装数量',
+    minSaleUnit: '最小销售单位',
     isPerishable: '有保质期',
     status: '状态',
     description: '描述',
@@ -263,6 +264,10 @@ export const zhCN = {
       SET: '套',
       GRAIN: '颗',
       OTHER: '其他',
+    },
+    minSaleUnits: {
+      SPEC: '规格单位',
+      INNER: '内装单位',
     },
     upload: {
       add: '上传图片',

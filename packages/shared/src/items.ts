@@ -4,6 +4,8 @@
 
 export const SPEC_UNITS = ['PIECE', 'BAG', 'BOX', 'PACK', 'SET', 'GRAIN', 'OTHER'] as const;
 export type SpecUnit = (typeof SPEC_UNITS)[number];
+export const MIN_SALE_UNITS = ['SPEC', 'INNER'] as const;
+export type MinSaleUnit = (typeof MIN_SALE_UNITS)[number];
 
 export const CURRENCIES = ['CNY', 'EUR', 'HUF', 'USD', 'GBP'] as const;
 export type Currency = (typeof CURRENCIES)[number];
@@ -20,6 +22,7 @@ export interface ItemDto {
   specUnit: SpecUnit;
   innerUnit: SpecUnit | null;
   innerCount: string | null;
+  minSaleUnit: MinSaleUnit;
   isPerishable: boolean;
   category: string | null;
   description: string | null;

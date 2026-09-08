@@ -388,7 +388,19 @@ export function OutboundFormPage() {
                     ))}
                   </Select>
                 </Field>
-                <Field label={t('outbound.qty')} required>
+                <Field
+                  label={`${t('outbound.qty')}${
+                    (() => {
+                      const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
+                      if (!item) return '';
+                      const unit = item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit;
+                      return unit
+                        ? ` (${t(`items.${item.minSaleUnit === 'INNER' ? 'innerUnits' : 'specUnits'}.${unit}`)})`
+                        : '';
+                    })()
+                  }`}
+                  required
+                >
                   <Input
                     type="number"
                     min={0}

@@ -18,8 +18,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import {
   SPEC_UNITS,
+  MIN_SALE_UNITS,
   type FileDto,
   type ItemStatus,
+  type MinSaleUnit,
   type SpecUnit,
 } from '@otunlink/shared';
 
@@ -44,6 +46,7 @@ interface FormState {
   specUnit: SpecUnit;
   innerUnit: SpecUnit | '';
   innerCount: string;
+  minSaleUnit: MinSaleUnit;
   isPerishable: boolean;
   status: ItemStatus;
 }
@@ -57,6 +60,7 @@ const EMPTY_FORM: FormState = {
   specUnit: 'PIECE',
   innerUnit: '',
   innerCount: '',
+  minSaleUnit: 'SPEC',
   isPerishable: false,
   status: 'ACTIVE',
 };
@@ -100,6 +104,7 @@ export function ItemFormPage() {
       specUnit: detail.specUnit,
       innerUnit: detail.innerUnit ?? '',
       innerCount: detail.innerCount ?? '',
+      minSaleUnit: detail.minSaleUnit,
       isPerishable: detail.isPerishable,
       status: detail.status,
     });
@@ -134,6 +139,7 @@ export function ItemFormPage() {
           specUnit: form.specUnit,
           innerUnit: form.innerUnit || null,
           innerCount: form.innerCount.trim() ? form.innerCount.trim() : null,
+          minSaleUnit: form.minSaleUnit,
           isPerishable: form.isPerishable,
           status: form.status,
         });
@@ -150,6 +156,7 @@ export function ItemFormPage() {
           specUnit: form.specUnit,
           innerUnit: form.innerUnit || undefined,
           innerCount: form.innerCount.trim() || undefined,
+          minSaleUnit: form.minSaleUnit,
           isPerishable: form.isPerishable,
           status: form.status,
           fileIds: files.map((file) => file.id),
@@ -230,7 +237,11 @@ export function ItemFormPage() {
         <Field label={t('items.innerUnit')}>
           <Select
             value={form.innerUnit}
-            onChange={(_, d) => set('innerUnit', d.value as SpecUnit | '')}
+            onChange={(_, d) => {
+              const value = d.value as SpecUnit | '';
+              set('innerUnit', value);
+              if (!value && form.minSaleUnit === 'INNER') set('minSaleUnit', 'SPEC');
+            }}
           >
             <option value="">—</option>
             {SPEC_UNITS.map((unit) => (
@@ -242,6 +253,15 @@ export function ItemFormPage() {
         </Field>
         <Field label={t('items.innerCount')}>
           <Input value={form.innerCount} onChange={(_, d) => set('innerCount', d.value)} />
+        </Field>
+        <Field label={t('items.minSaleUnit')}>
+          <Select value={form.minSaleUnit} onChange={(_, d) => set('minSaleUnit', d.value as MinSaleUnit)}>
+            {MIN_SALE_UNITS.map((unit) => (
+              <option key={unit} value={unit} disabled={unit === 'INNER' && !form.innerUnit}>
+                {t(`items.minSaleUnits.${unit}`)}
+              </option>
+            ))}
+          </Select>
         </Field>
         <Field label={t('items.status')}>
           <Select value={form.status} onChange={(_, d) => set('status', d.value as ItemStatus)}>

@@ -15,6 +15,13 @@
       "when": 1788250831223,
       "tag": "0001_add_grain_spec_unit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788870701961,
+      "tag": "0002_unknown_silver_sable",
+      "breakpoints": true
     }
   ]
 }

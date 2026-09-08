@@ -6,6 +6,7 @@ export const unitTypeEnum = pgEnum('unit_type', ['COLLECTOR', 'WAREHOUSE', 'RETA
 export const userRoleEnum = pgEnum('user_role', ['ADMIN', 'COLLECTOR', 'WAREHOUSE', 'RETAILER']);
 export const userStatusEnum = pgEnum('user_status', ['ACTIVE', 'PENDING', 'DISABLED']);
 export const specUnitEnum = pgEnum('spec_unit', ['PIECE', 'BAG', 'BOX', 'PACK', 'SET', 'GRAIN', 'OTHER']);
+export const minSaleUnitEnum = pgEnum('min_sale_unit', ['SPEC', 'INNER']);
 export const itemStatusEnum = pgEnum('item_status', ['ACTIVE', 'INACTIVE']);
 
 export const shipmentStatusEnum = pgEnum('shipment_status', [
@@ -101,6 +102,7 @@ export type UnitType = (typeof unitTypeEnum.enumValues)[number];
 export type UserRole = (typeof userRoleEnum.enumValues)[number];
 export type UserStatus = (typeof userStatusEnum.enumValues)[number];
 export type SpecUnit = (typeof specUnitEnum.enumValues)[number];
+export type MinSaleUnit = (typeof minSaleUnitEnum.enumValues)[number];
 export type ItemStatus = (typeof itemStatusEnum.enumValues)[number];
 export type ShipmentStatus = (typeof shipmentStatusEnum.enumValues)[number];
 export type ReviewStatus = (typeof reviewStatusEnum.enumValues)[number];

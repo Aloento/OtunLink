@@ -364,6 +364,7 @@ class MemoryItemRepository implements ItemRepository {
       specUnit: input.specUnit ?? 'PIECE',
       innerUnit: input.innerUnit ?? null,
       innerCount: normalizeEmpty(input.innerCount),
+      minSaleUnit: input.minSaleUnit ?? 'SPEC',
       isPerishable: input.isPerishable ?? false,
       category: normalizeEmpty(input.category),
       description: normalizeEmpty(input.description),
@@ -392,6 +393,7 @@ class MemoryItemRepository implements ItemRepository {
       ...(patch.specUnit !== undefined ? { specUnit: patch.specUnit } : {}),
       ...(patch.innerUnit !== undefined ? { innerUnit: normalizeEmpty(patch.innerUnit) } : {}),
       ...(patch.innerCount !== undefined ? { innerCount: normalizeEmpty(patch.innerCount) } : {}),
+      ...(patch.minSaleUnit !== undefined ? { minSaleUnit: patch.minSaleUnit } : {}),
       ...(patch.isPerishable !== undefined ? { isPerishable: patch.isPerishable } : {}),
       ...(patch.category !== undefined ? { category: normalizeEmpty(patch.category) } : {}),
       ...(patch.description !== undefined ? { description: normalizeEmpty(patch.description) } : {}),
@@ -2360,7 +2362,7 @@ class MemoryStockRepository implements StockRepository {
       unitName: unit?.name ?? null,
       itemId: row.itemId,
       itemName: item?.name ?? null,
-      spec: item?.specUnit ?? null,
+      spec: item ? (item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit) : null,
       batchId: row.batchId,
       batchNo: batch?.batchNo ?? null,
       productionDate: batch?.productionDate ?? null,
@@ -2459,7 +2461,7 @@ class MemoryStockRepository implements StockRepository {
         unitName: unit?.name ?? null,
         itemId: row.itemId,
         itemName: item?.name ?? null,
-        spec: item?.specUnit ?? null,
+        spec: item ? (item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit) : null,
         batchId: row.batchId,
         batchNo: batch?.batchNo ?? null,
         type: row.type as StockMovementRecord['type'],
@@ -2546,7 +2548,7 @@ class MemoryRetailPriceRepository implements RetailPriceRepository {
       unitName: unit?.name ?? null,
       itemId: input.itemId,
       itemName: item?.name ?? null,
-      spec: item?.specUnit ?? null,
+      spec: item ? (item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit) : null,
       price: input.price,
       currency: input.currency,
       unitCost: this.unitCostOf(input.unitId, input.itemId),
@@ -2890,7 +2892,7 @@ class MemorySalesRepository implements SalesRepository {
       hydrated.push({
         ...row,
         itemName: row.itemName ?? item?.name ?? null,
-        spec: row.spec ?? item?.specUnit ?? null,
+        spec: row.spec ?? (item ? (item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit) : null),
       });
     }
     return hydrated;

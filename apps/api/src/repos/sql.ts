@@ -219,6 +219,7 @@ function mapItem(row: Record<string, unknown>): ItemRecord {
     specUnit: (row.spec_unit as ItemRecord['specUnit']) ?? 'PIECE',
     innerUnit: row.inner_unit ? (row.inner_unit as ItemRecord['innerUnit']) : null,
     innerCount: row.inner_count != null ? String(row.inner_count) : null,
+    minSaleUnit: (row.min_sale_unit as ItemRecord['minSaleUnit']) ?? 'SPEC',
     isPerishable: row.is_perishable === true || row.is_perishable === 'true' || row.is_perishable === 't',
     category: row.category ? String(row.category) : null,
     description: row.description ? String(row.description) : null,
@@ -930,11 +931,12 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       }
       const { rows } = await exec.query(
         `INSERT INTO items
-           (sku, name, barcode, spec_unit, inner_unit, inner_count, is_perishable,
+           (sku, name, barcode, spec_unit, inner_unit, inner_count, min_sale_unit, is_perishable,
             category, description, status, created_by)
          VALUES (${quote(sku)}, ${quote(input.name)}, ${quote(nn(input.barcode))},
                  ${quote(input.specUnit ?? 'PIECE')}, ${quote(input.innerUnit ?? null)},
-                 ${quote(input.innerCount ?? null)}, ${quote(input.isPerishable ?? false)},
+                 ${quote(input.innerCount ?? null)}, ${quote(input.minSaleUnit ?? 'SPEC')},
+                 ${quote(input.isPerishable ?? false)},
                  ${quote(nn(input.category))}, ${quote(nn(input.description))},
                  ${quote(input.status ?? 'ACTIVE')}, ${quote(input.createdBy)})
          RETURNING *`,
@@ -949,6 +951,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       if (patch.specUnit !== undefined) sets.push(col('spec_unit', patch.specUnit));
       if (patch.innerUnit !== undefined) sets.push(col('inner_unit', patch.innerUnit));
       if (patch.innerCount !== undefined) sets.push(col('inner_count', patch.innerCount));
+      if (patch.minSaleUnit !== undefined) sets.push(col('min_sale_unit', patch.minSaleUnit));
       if (patch.isPerishable !== undefined) sets.push(col('is_perishable', patch.isPerishable));
       if (patch.category !== undefined) sets.push(col('category', patch.category));
       if (patch.description !== undefined) sets.push(col('description', patch.description));
@@ -1811,7 +1814,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
     async listItems(inboundOrderId: string): Promise<InboundOrderItemRecord[]> {
       const { rows } = await exec.query(
-        `SELECT ioi.*, i.name AS item_name, i.spec_unit AS spec
+        `SELECT ioi.*, i.name AS item_name,
+                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec
          FROM inbound_order_items ioi
          LEFT JOIN items i ON i.id = ioi.item_id
          WHERE ioi.inbound_order_id = ${quote(inboundOrderId)}
@@ -2575,7 +2579,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
     async listItems(outboundOrderId: string): Promise<OutboundOrderItemRecord[]> {
       const { rows } = await exec.query(
-        `SELECT ooi.*, i.name AS item_name, i.spec_unit AS spec, b.batch_no
+        `SELECT ooi.*, i.name AS item_name,
+                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec, b.batch_no
          FROM outbound_order_items ooi
          LEFT JOIN items i ON i.id = ooi.item_id
          LEFT JOIN batches b ON b.id = ooi.batch_id
@@ -2674,7 +2679,9 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         if (outbound.status !== 'DRAFT') throw new Error(OUTBOUND_STATE_CONFLICT);
 
         const { rows: itemRows } = await exec.query(
-          `SELECT ooi.*, i.spec_unit AS spec FROM outbound_order_items ooi
+          `SELECT ooi.*,
+                  CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec
+            FROM outbound_order_items ooi
            LEFT JOIN items i ON i.id = ooi.item_id
            WHERE ooi.outbound_order_id = ${quote(id)}
            ORDER BY ooi.created_at ASC, ooi.id ASC`,
@@ -2809,7 +2816,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       );
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(
-        `SELECT s.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+        `SELECT s.*, bu.name AS unit_name, i.name AS item_name,
+                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
                 b.batch_no, b.production_date, b.expiry_date
          FROM stock s
          JOIN business_units bu ON bu.id = s.unit_id
@@ -2840,7 +2848,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       );
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(
-        `SELECT m.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+        `SELECT m.*, bu.name AS unit_name, i.name AS item_name,
+                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
                 b.batch_no
          FROM stock_movements m
          LEFT JOIN business_units bu ON bu.id = m.unit_id
@@ -2861,7 +2870,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         return ` WHERE ${parts.join(' AND ')}`;
       };
       const { rows } = await exec.query(
-        `SELECT s.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+        `SELECT s.*, bu.name AS unit_name, i.name AS item_name,
+                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
                 b.batch_no, b.production_date, b.expiry_date
          FROM stock s
          JOIN business_units bu ON bu.id = s.unit_id
@@ -2884,7 +2894,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         return ` WHERE ${parts.join(' AND ')}`;
       };
       const { rows } = await exec.query(
-        `SELECT s.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+        `SELECT s.*, bu.name AS unit_name, i.name AS item_name,
+                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
                 b.batch_no, b.production_date, b.expiry_date
          FROM stock s
          JOIN business_units bu ON bu.id = s.unit_id
@@ -2909,7 +2920,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
       };
       const { rows } = await exec.query(
-        `SELECT rp.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+        `SELECT rp.*, bu.name AS unit_name, i.name AS item_name,
+                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
                 bu2.name AS updated_by_name,
                 (SELECT CASE WHEN SUM(s.qty) > 0
                         THEN ROUND(SUM(s.qty * s.avg_cost) / SUM(s.qty), 2)
@@ -2952,7 +2964,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
     async listHistory(unitId: string, itemId: string): Promise<RetailPriceHistoryRecord[]> {
       const { rows } = await exec.query(
-        `SELECT h.*, bu.name AS unit_name, i.name AS item_name, i.spec_unit AS spec,
+        `SELECT h.*, bu.name AS unit_name, i.name AS item_name,
+                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
                 u.name AS updated_by_name
          FROM retail_price_history h
          JOIN business_units bu ON bu.id = h.unit_id
@@ -3210,7 +3223,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
     async listItems(salesOrderId: string): Promise<SalesOrderItemRecord[]> {
       const { rows } = await exec.query(
-        `SELECT oi.*, i.name AS item_name, i.spec_unit AS spec
+        `SELECT oi.*, i.name AS item_name,
+                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec
          FROM sales_order_items oi
          LEFT JOIN items i ON i.id = oi.item_id
          WHERE oi.sales_order_id = ${quote(salesOrderId)}

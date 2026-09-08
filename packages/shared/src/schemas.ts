@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { UNIT_TYPES, USER_ROLES, USER_STATUSES } from './auth';
-import { CURRENCIES, ITEM_STATUSES, SPEC_UNITS } from './items';
+import { CURRENCIES, ITEM_STATUSES, MIN_SALE_UNITS, SPEC_UNITS } from './items';
 import { OUTBOUND_TYPES } from './outbound';
 import { DELIVERY_METHODS, SALES_SOURCES } from './sales';
 
@@ -64,6 +64,7 @@ export const unitPatchSchema = z.object({
 });
 
 const specUnit = () => z.enum(SPEC_UNITS);
+const minSaleUnit = () => z.enum(MIN_SALE_UNITS);
 const currency = () => z.enum(CURRENCIES);
 const itemStatus = () => z.enum(ITEM_STATUSES);
 
@@ -106,6 +107,7 @@ export const itemCreateSchema = z.object({
   specUnit: specUnit().optional(),
   innerUnit: specUnit().optional(),
   innerCount: innerCountSchema.optional(),
+  minSaleUnit: minSaleUnit().optional(),
   isPerishable: z.boolean().optional(),
   category: z.string().trim().max(128).optional(),
   description: z.string().trim().max(4096).optional(),
@@ -127,6 +129,7 @@ export const itemPatchSchema = z.object({
   specUnit: specUnit().optional(),
   innerUnit: specUnit().optional().nullable(),
   innerCount: innerCountSchema.optional().nullable(),
+  minSaleUnit: minSaleUnit().optional(),
   isPerishable: z.boolean().optional(),
   category: z.string().trim().max(128).optional().nullable(),
   description: z.string().trim().max(4096).optional().nullable(),

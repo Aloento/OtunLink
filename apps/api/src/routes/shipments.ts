@@ -592,7 +592,7 @@ async function buildLines(repos: Repos, lines: ShipmentItemCreateInput[]): Promi
     items.push({
       itemId: item.id,
       name: item.name,
-      spec: item.specUnit,
+      spec: item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit,
       expectedQty: line.expectedQty,
       unitPrice: line.unitPrice ?? null,
       productionDate,
