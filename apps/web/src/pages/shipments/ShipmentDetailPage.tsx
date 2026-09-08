@@ -18,6 +18,7 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import { deleteShipment, getShipment, sendShipment, startCounting } from '../../api/shipments';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
+import { ItemLink } from '../../components/ItemLink';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ConfirmReceiptPanel } from '../../components/shipments/ConfirmReceiptPanel';
@@ -134,7 +135,11 @@ export function ShipmentDetailPage() {
   ];
 
   const itemColumns: ResponsiveTableColumn<ShipmentItemDto>[] = [
-    { key: 'name', header: t('shipments.itemName'), render: (item) => item.name },
+    {
+      key: 'name',
+      header: t('shipments.itemName'),
+      render: (item) => <ItemLink itemId={item.itemId} itemName={item.name} />,
+    },
     { key: 'spec', header: t('shipments.itemSpec'), render: (item) => item.spec ?? '—' },
     { key: 'qty', header: t('shipments.expectedQty'), render: (item) => item.expectedQty },
     {

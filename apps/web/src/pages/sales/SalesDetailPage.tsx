@@ -23,6 +23,7 @@ import {
 
 import { errorI18nKey, extractSalesLineErrors, isApiError, type ExtractedSalesLineError } from '../../api/http';
 import { listItems } from '../../api/items';
+import { ItemLink } from '../../components/ItemLink';
 import { createSalesReturn, listReturns } from '../../api/returns';
 import { cancelSalesOrder, confirmSaleReceipt, deleteSalesOrder, getSalesOrder, sendSalesOrder, uploadSalePayment } from '../../api/sales';
 import { listStockBatches } from '../../api/stock';
@@ -103,7 +104,11 @@ export function SalesDetailPage() {
     hasPermission(me?.role, Permissions.SALES_CONFIRM_RECEIPT) && order.status === 'PAYMENT_UPLOADED';
 
   const itemColumns: ResponsiveTableColumn<SalesOrderItemDto>[] = [
-    { key: 'itemName', header: t('sales.itemName'), render: (l) => l.itemName ?? l.itemId },
+    {
+      key: 'itemName',
+      header: t('sales.itemName'),
+      render: (l) => <ItemLink itemId={l.itemId} itemName={l.itemName} />,
+    },
     { key: 'spec', header: t('inventory.spec'), render: (l) => l.spec ?? '—' },
     { key: 'qty', header: t('sales.qty'), render: (l) => l.qty },
     { key: 'listPrice', header: t('sales.listPrice'), render: (l) => l.listPrice ?? '—' },
@@ -112,7 +117,11 @@ export function SalesDetailPage() {
   ];
 
   const allocColumns: ResponsiveTableColumn<SalesBatchAllocationDto>[] = [
-    { key: 'itemName', header: t('sales.itemName'), render: (l) => l.itemName ?? l.itemId },
+    {
+      key: 'itemName',
+      header: t('sales.itemName'),
+      render: (l) => <ItemLink itemId={l.itemId} itemName={l.itemName} />,
+    },
     { key: 'batchNo', header: t('sales.batchNo'), render: (l) => l.batchNo ?? l.batchId },
     { key: 'expiry', header: t('sales.expiry'), render: (l) => l.expiryDate ?? '—' },
     { key: 'qty', header: t('sales.allocatedQty'), render: (l) => l.qty },

@@ -10,6 +10,7 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import { deleteOutboundOrder, getOutboundOrder, postOutboundOrder } from '../../api/outbound';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
+import { ItemLink } from '../../components/ItemLink';
 import { RefreshButton } from '../../components/RefreshButton';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
@@ -90,7 +91,11 @@ export function OutboundDetailPage() {
   }
 
   const columns: ResponsiveTableColumn<OutboundOrderItemDto>[] = [
-    { key: 'itemName', header: t('outbound.itemName'), render: (item) => item.itemName ?? item.itemId },
+    {
+      key: 'itemName',
+      header: t('outbound.itemName'),
+      render: (item) => <ItemLink itemId={item.itemId} itemName={item.itemName} />,
+    },
     {
       key: 'batchNo',
       header: t('outbound.batchNo'),

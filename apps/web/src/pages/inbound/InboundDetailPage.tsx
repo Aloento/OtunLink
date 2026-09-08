@@ -11,6 +11,7 @@ import { deleteInbound, getInbound, postInbound } from '../../api/inbound';
 import { useSession } from '../../auth/SessionProvider';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
+import { ItemLink } from '../../components/ItemLink';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { RefreshButton } from '../../components/RefreshButton';
 
@@ -87,7 +88,11 @@ export function InboundDetailPage() {
   ];
 
   const columns: ResponsiveTableColumn<InboundOrderItemDto>[] = [
-    { key: 'name', header: t('inbound.itemName'), render: (item) => item.itemName ?? item.itemId },
+    {
+      key: 'name',
+      header: t('inbound.itemName'),
+      render: (item) => <ItemLink itemId={item.itemId} itemName={item.itemName} />,
+    },
     {
       key: 'batchNo',
       header: t('inbound.batchNo'),

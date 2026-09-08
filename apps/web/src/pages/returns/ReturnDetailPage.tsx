@@ -17,6 +17,7 @@ import {
 } from '../../api/returns';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
+import { ItemLink } from '../../components/ItemLink';
 import { RefreshButton } from '../../components/RefreshButton';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
@@ -173,7 +174,11 @@ export function ReturnDetailPage() {
   ];
 
   const columns: ResponsiveTableColumn<ReturnOrderItemDto>[] = [
-    { key: 'name', header: t('returns.itemName'), render: (item) => item.itemName ?? item.itemId },
+    {
+      key: 'name',
+      header: t('returns.itemName'),
+      render: (item) => <ItemLink itemId={item.itemId} itemName={item.itemName} />,
+    },
     { key: 'qty', header: t('returns.qty'), render: (item) => item.qty },
     ...(isSales
       ? [
