@@ -211,5 +211,31 @@ export function itemsRouter(): Hono<AppEnv> {
     return ok(c, images.map(itemImageDto));
   });
 
+  router.post('/:id/merge', write, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+    const body = await readJson(c);
+    if (body === undefined || typeof body !== 'object' || body === null) {
+      return validationError(c, '请求体不是合法 JSON');
+    }
+    const sourceItemId = (body as { sourceItemId?: unknown }).sourceItemId;
+    if (typeof sourceItemId !== 'string' || sourceItemId.length === 0) {
+      return validationError(c, '缺少被合并物品 sourceItemId');
+    }
+    if (sourceItemId === c.req.param('id')) {
+      return validationError(c, '主物品与被合并物品不能相同');
+    }
+    try {
+      const merged = await repos.items.merge(sourceItemId, c.req.param('id'));
+      if (!merged) return notFound(c, '物品不存在');
+      return ok(c, itemDto(merged));
+    } catch (cause) {
+      if (cause instanceof Error && cause.message === ErrorCodes.ITEM_MERGE_CONFLICT) {
+        return error(c, 409, ErrorCodes.ITEM_MERGE_CONFLICT, '物品存在无法自动合并的数据冲突');
+      }
+      throw cause;
+    }
+  });
+
   return router;
 }

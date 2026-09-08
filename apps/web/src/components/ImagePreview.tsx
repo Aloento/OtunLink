@@ -44,7 +44,7 @@ export function ImagePreview({
     <>
       <button
         type="button"
-        className="cursor-zoom-in rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+        className="m-0 cursor-zoom-in rounded border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
         onClick={() => setOpen(true)}
         aria-label={t('items.imagePreview.open')}
       >
@@ -57,7 +57,7 @@ export function ImagePreview({
             <DialogContent className="flex max-h-[80vh] max-w-[90vw] items-center justify-center overflow-auto p-0">
               <button
                 type="button"
-                className="cursor-zoom-in"
+                className="m-0 cursor-zoom-in border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                 onClick={() => setZoomed((value) => !value)}
                 aria-label={t(zoomed ? 'items.imagePreview.zoomOut' : 'items.imagePreview.zoomIn')}
               >

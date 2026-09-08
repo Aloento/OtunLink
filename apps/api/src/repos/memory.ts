@@ -448,6 +448,24 @@ class MemoryItemRepository implements ItemRepository {
     this.images.delete(id);
     return this.rows.delete(id);
   }
+
+  async merge(sourceId: string, targetId: string): Promise<ItemRecord | null> {
+    if (sourceId === targetId) return null;
+    const source = this.rows.get(sourceId);
+    const target = this.rows.get(targetId);
+    if (!source || !target) return null;
+    const targetImages = this.images.get(targetId) ?? [];
+    const sourceImages = this.images.get(sourceId) ?? [];
+    this.images.set(
+      targetId,
+      [...targetImages, ...sourceImages.map((image) => ({ ...image, itemId: targetId }))].map(
+        cloneItemImage,
+      ),
+    );
+    this.images.delete(sourceId);
+    this.rows.delete(sourceId);
+    return cloneItem(target);
+  }
 }
 
 class MemoryFileRepository implements FileRepository {

@@ -1,4 +1,4 @@
-import { expiryRemainingDays, type UnitType } from '@otunlink/shared';
+import { ErrorCodes, expiryRemainingDays, type UnitType } from '@otunlink/shared';
 import type { SqlExecutor } from '@otunlink/db';
 
 import type {
@@ -1007,6 +1007,120 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         return this.listImages(itemId);
       } catch (err) {
         await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
+    async merge(sourceId: string, targetId: string): Promise<ItemRecord | null> {
+      await exec.query('BEGIN');
+      try {
+        const locked = await exec.query(
+          `SELECT id FROM items WHERE id IN (${quote(sourceId)}, ${quote(targetId)}) FOR UPDATE`,
+        );
+        if (locked.rows.length !== 2) {
+          await exec.query('ROLLBACK');
+          return null;
+        }
+
+        // Merge batches first. A matching batch number is one logical batch; its
+        // references and stock are redirected to the target batch.
+        const sourceBatches = await exec.query(
+          `SELECT id, batch_no FROM batches WHERE item_id = ${quote(sourceId)}`,
+        );
+        for (const batch of sourceBatches.rows) {
+          const sourceBatchId = String(batch.id);
+          const batchNo = batch.batch_no == null ? null : String(batch.batch_no);
+          let targetBatchId: string | null = null;
+          if (batchNo !== null) {
+            const targetBatch = await exec.query(
+              `SELECT id FROM batches
+                 WHERE item_id = ${quote(targetId)} AND batch_no = ${quote(batchNo)}
+                 LIMIT 1`,
+            );
+            targetBatchId = targetBatch.rows[0] ? String(targetBatch.rows[0].id) : null;
+          }
+          if (targetBatchId) {
+            await exec.query(
+              `UPDATE stock target
+                  SET qty = target.qty + source.qty,
+                      avg_cost = CASE WHEN target.qty + source.qty = 0 THEN 0
+                                      ELSE (target.avg_cost * target.qty + source.avg_cost * source.qty)
+                                           / (target.qty + source.qty) END,
+                      version = GREATEST(target.version, source.version) + 1,
+                      updated_at = now()
+                FROM stock source
+               WHERE target.unit_id = source.unit_id
+                 AND target.item_id = ${quote(targetId)}
+                 AND target.batch_id = ${quote(targetBatchId)}
+                 AND source.item_id = ${quote(sourceId)}
+                 AND source.batch_id = ${quote(sourceBatchId)}`,
+            );
+            await exec.query(
+              `DELETE FROM stock source
+                USING stock target
+               WHERE source.unit_id = target.unit_id
+                 AND source.item_id = ${quote(sourceId)}
+                 AND source.batch_id = ${quote(sourceBatchId)}
+                 AND target.item_id = ${quote(targetId)}
+                 AND target.batch_id = ${quote(targetBatchId)}`,
+            );
+            await exec.query(
+              `UPDATE stock SET item_id = ${quote(targetId)}, batch_id = ${quote(targetBatchId)}
+                WHERE item_id = ${quote(sourceId)} AND batch_id = ${quote(sourceBatchId)}`,
+            );
+            for (const table of [
+              'inbound_order_items',
+              'outbound_order_items',
+              'return_order_items',
+              'stock_movements',
+            ]) {
+              const column = table === 'return_order_items' ? 'original_batch_id' : 'batch_id';
+              await exec.query(
+                `UPDATE ${table} SET ${column} = ${quote(targetBatchId)}
+                  WHERE ${column} = ${quote(sourceBatchId)}`,
+              );
+            }
+            await exec.query(`DELETE FROM batches WHERE id = ${quote(sourceBatchId)}`);
+          } else {
+            await exec.query(
+              `UPDATE batches SET item_id = ${quote(targetId)}
+                WHERE id = ${quote(sourceBatchId)}`,
+            );
+          }
+        }
+
+        // Unique retail price rows keep the target item's price; history is retained.
+        await exec.query(
+          `DELETE FROM retail_prices source
+            USING retail_prices target
+           WHERE source.item_id = ${quote(sourceId)}
+             AND target.item_id = ${quote(targetId)}
+             AND source.unit_id = target.unit_id`,
+        );
+        for (const table of [
+          'item_images',
+          'shipment_items',
+          'inbound_order_items',
+          'outbound_order_items',
+          'sales_order_items',
+          'return_order_items',
+          'stock_movements',
+          'retail_prices',
+          'retail_price_history',
+        ]) {
+          await exec.query(
+            `UPDATE ${table} SET item_id = ${quote(targetId)}
+              WHERE item_id = ${quote(sourceId)}`,
+          );
+        }
+        await exec.query(`DELETE FROM items WHERE id = ${quote(sourceId)}`);
+        const result = await exec.query(`SELECT * FROM items WHERE id = ${quote(targetId)}`);
+        await exec.query('COMMIT');
+        return result.rows[0] ? mapItem(result.rows[0]) : null;
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        if (err instanceof Error && /duplicate|unique|constraint/i.test(err.message)) {
+          throw new Error(ErrorCodes.ITEM_MERGE_CONFLICT);
+        }
         throw err;
       }
     },

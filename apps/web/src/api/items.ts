@@ -99,6 +99,10 @@ export function replaceItemImages(id: string, fileIds: string[]): Promise<ItemIm
   });
 }
 
+export function mergeItem(targetId: string, sourceItemId: string): Promise<ItemDto> {
+  return apiPost<ItemDto>(`/api/v1/items/${targetId}/merge`, { sourceItemId });
+}
+
 /** multipart 上传压缩后的展示图 + 可选缩略图，返回文件 DTO。 */
 export function uploadItemImage(input: { image: Blob; thumb?: Blob }): Promise<FileDto> {
   const form = new FormData();

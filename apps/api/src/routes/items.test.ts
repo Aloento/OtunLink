@@ -435,4 +435,24 @@ describe('items 物品目录 API', () => {
     });
     expect(res.status).toBe(403);
   });
+
+  it('合并物品后保留主物品并删除被合并物品', async () => {
+    const { app } = makeApp({
+      users: [collector],
+      items: [
+        item({ id: 'main', name: '主物品', sku: 'MAIN' }),
+        item({ id: 'source', name: '重复物品', sku: 'SOURCE' }),
+      ],
+    });
+    const res = await app.request('/api/v1/items/main/merge', {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify({ sourceItemId: 'source' }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ data: { id: 'main', name: '主物品' } });
+
+    const deleted = await app.request('/api/v1/items/source', { headers: auth('collector') });
+    expect(deleted.status).toBe(404);
+  });
 });
