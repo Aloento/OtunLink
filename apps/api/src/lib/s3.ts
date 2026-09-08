@@ -60,3 +60,11 @@ export async function putObject(
     throw new Error(ErrorCodes.STORAGE_UNAVAILABLE);
   }
 }
+
+export async function deleteObject(env: Env, key: string): Promise<void> {
+  const client = createClient(env);
+  const response = await client.fetch(objectUrl(env, key), { method: 'DELETE' });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(ErrorCodes.STORAGE_UNAVAILABLE);
+  }
+}

@@ -993,6 +993,23 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       }
       return this.listImages(itemId);
     },
+    async replaceImages(itemId: string, fileIds: string[]): Promise<ItemImageRecord[]> {
+      await exec.query('BEGIN');
+      try {
+        await exec.query(`DELETE FROM item_images WHERE item_id = ${quote(itemId)}`);
+        for (const [index, fileId] of fileIds.entries()) {
+          await exec.query(
+            `INSERT INTO item_images (item_id, file_id, is_primary, sort_order)
+             VALUES (${quote(itemId)}, ${quote(fileId)}, ${quote(index === 0)}, ${quote(index + 1)})`,
+          );
+        }
+        await exec.query('COMMIT');
+        return this.listImages(itemId);
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    },
     async hasReferences(id: string): Promise<boolean> {
       // shipment_items.item_id 是 SET NULL 外键，但历史发货单仍引用该物品，也必须检查。
       const checks = [
@@ -1041,6 +1058,20 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
          RETURNING *`,
       );
       return mapFile(rows[0]);
+    },
+    async deleteIfUnreferenced(id: string): Promise<FileRecord | null> {
+      const { rows } = await exec.query(
+        `DELETE FROM files
+         WHERE id = ${quote(id)}
+           AND NOT EXISTS (SELECT 1 FROM item_images WHERE file_id = ${quote(id)})
+           AND NOT EXISTS (SELECT 1 FROM payments WHERE proof_file_id = ${quote(id)})
+           AND NOT EXISTS (SELECT 1 FROM discrepancy_reviews WHERE ${quote(id)} = ANY(photo_file_ids))
+           AND NOT EXISTS (SELECT 1 FROM inbound_orders WHERE ${quote(id)} = ANY(photo_file_ids))
+           AND NOT EXISTS (SELECT 1 FROM outbound_orders WHERE ${quote(id)} = ANY(photo_file_ids))
+           AND NOT EXISTS (SELECT 1 FROM return_orders WHERE ${quote(id)} = ANY(photo_file_ids))
+         RETURNING *`,
+      );
+      return rows[0] ? mapFile(rows[0]) : null;
     },
   };
 

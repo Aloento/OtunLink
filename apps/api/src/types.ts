@@ -255,6 +255,7 @@ export interface ItemRepository {
   update(id: string, patch: UpdateItemInput): Promise<ItemRecord | null>;
   listImages(itemId: string): Promise<ItemImageRecord[]>;
   attachImages(itemId: string, fileIds: string[]): Promise<ItemImageRecord[]>;
+  replaceImages(itemId: string, fileIds: string[]): Promise<ItemImageRecord[]>;
   /** 任一单据/库存/零售价表引用该物品时返回 true（删除前检查）。 */
   hasReferences(id: string): Promise<boolean>;
   /** 删除物品及其 item_images（无引用时调用）。返回是否删除成功。 */
@@ -264,6 +265,7 @@ export interface ItemRepository {
 export interface FileRepository {
   findById(id: string): Promise<FileRecord | null>;
   create(input: CreateFileInput): Promise<FileRecord>;
+  deleteIfUnreferenced(id: string): Promise<FileRecord | null>;
 }
 
 // ── 发货单────────────────────────────────────────────────────────

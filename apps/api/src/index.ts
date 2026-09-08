@@ -110,7 +110,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.route('/api/v1/partnerships', partnershipsRouter());
 
   // 图片上传 / 预签名 URL（登录用户，RBAC 见各路由）
-  app.use('/api/v1/files/*', requireToken);
+  app.use('/api/v1/files', requireToken);
   app.route('/api/v1/files', filesRouter());
 
   // 管理端用户 / 业务单元（JWT + RBAC）

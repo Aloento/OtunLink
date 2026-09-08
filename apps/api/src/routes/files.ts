@@ -5,7 +5,7 @@ import { requirePermission } from '../auth/middleware';
 import { fileDto } from '../lib/dto';
 import { dbUnavailable, error, notFound, ok, validationError } from '../lib/http';
 import { sniffImage, type SniffedImage } from '../lib/image';
-import { presignedGetUrl, putObject } from '../lib/s3';
+import { deleteObject, presignedGetUrl, putObject } from '../lib/s3';
 import type { AppEnv } from '../types';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -114,6 +114,7 @@ export function filesRouter(deps: FilesDeps = {}): Hono<AppEnv> {
         ...(thumbnailUrl ? { thumbnailUrl } : {}),
         expiresInSeconds: 15 * 60,
       });
+
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       if (message === ErrorCodes.STORAGE_UNAVAILABLE) {
@@ -121,6 +122,16 @@ export function filesRouter(deps: FilesDeps = {}): Hono<AppEnv> {
       }
       throw cause;
     }
+  });
+
+  router.delete('/:id', requirePermission(Permissions.ITEMS_WRITE), async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+    const record = await repos.files.deleteIfUnreferenced(c.req.param('id'));
+    if (!record) return notFound(c, '文件不存在或仍被业务数据引用');
+    await deleteObject(c.env, record.key);
+    if (record.thumbnailKey) await deleteObject(c.env, record.thumbnailKey);
+    return ok(c, { id: record.id });
   });
 
   return router;

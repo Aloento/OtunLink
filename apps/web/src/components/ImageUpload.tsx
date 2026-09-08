@@ -10,7 +10,7 @@ import { compressImageFile, makeThumbnailBlob } from '../lib/image-compress';
 import { FileImage } from './FileImage';
 
 // 图片上传：浏览器 Canvas 压缩（最长边 1600px / ≤2MB）+ 320px 缩略图，
-// 随后 multipart 上传 POST /files，返回的文件 DTO 由父级持有（新建随物品提交 / 编辑时补挂）。
+// 随后 multipart 上传 POST /files，返回的文件 DTO 由父级持有并在提交时关联。
 type BusyState = 'compressing' | 'uploading' | null;
 
 export function ImageUpload({

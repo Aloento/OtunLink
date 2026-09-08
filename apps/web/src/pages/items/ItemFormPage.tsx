@@ -24,7 +24,13 @@ import {
 } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
-import { attachItemImages, createItem, getItem, listItemCategories, updateItem } from '../../api/items';
+import {
+  createItem,
+  getItem,
+  listItemCategories,
+  replaceItemImages,
+  updateItem,
+} from '../../api/items';
 import { ImageUpload } from '../../components/ImageUpload';
 import { ScannerDialog } from '../../components/ScannerDialog';
 import { isGtin } from '../../lib/gtin';
@@ -56,7 +62,7 @@ const EMPTY_FORM: FormState = {
 };
 
 // 物品新建/编辑表单。图片经 ImageUpload 先压缩上传，新建时随物品提交，
-// 编辑时在保存后补挂新增图片。
+// 编辑时保存图片关联的完整集合。
 export function ItemFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -66,7 +72,6 @@ export function ItemFormPage() {
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [files, setFiles] = useState<FileDto[]>([]);
-  const [initialFileIds, setInitialFileIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
@@ -99,7 +104,6 @@ export function ItemFormPage() {
       status: detail.status,
     });
     setFiles(detail.images.map((image) => image.file!).filter(Boolean));
-    setInitialFileIds(detail.images.map((image) => image.fileId));
   }, [detail]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -133,10 +137,7 @@ export function ItemFormPage() {
           isPerishable: form.isPerishable,
           status: form.status,
         });
-        const newFiles = files.filter((file) => !initialFileIds.includes(file.id));
-        if (newFiles.length > 0) {
-          await attachItemImages(id, newFiles.map((file) => file.id));
-        }
+        await replaceItemImages(id, files.map((file) => file.id));
         void queryClient.invalidateQueries({ queryKey: ['items'] });
         navigate(`/items/${id}`);
       } else {
@@ -166,7 +167,6 @@ export function ItemFormPage() {
     if (isEdit) return;
     setForm(EMPTY_FORM);
     setFiles([]);
-    setInitialFileIds([]);
   }, [isEdit]);
 
   if (isEdit && isLoading) {

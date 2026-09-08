@@ -426,6 +426,19 @@ class MemoryItemRepository implements ItemRepository {
     return (this.images.get(itemId) ?? []).map(cloneItemImage);
   }
 
+  async replaceImages(itemId: string, fileIds: string[]): Promise<ItemImageRecord[]> {
+    const next: ItemImageRecord[] = fileIds.map((fileId, index) => ({
+      id: uuid(),
+      itemId,
+      fileId,
+      isPrimary: index === 0,
+      sortOrder: index + 1,
+      createdAt: new Date(),
+    }));
+    this.images.set(itemId, next);
+    return next.map(cloneItemImage);
+  }
+
   async hasReferences(id: string): Promise<boolean> {
     return this.referenceCheckers.some((check) => check(id));
   }
@@ -461,6 +474,13 @@ class MemoryFileRepository implements FileRepository {
       createdAt: new Date(),
     };
     this.rows.set(row.id, cloneFile(row));
+    return cloneFile(row);
+  }
+
+  async deleteIfUnreferenced(id: string): Promise<FileRecord | null> {
+    const row = this.rows.get(id);
+    if (!row) return null;
+    this.rows.delete(id);
     return cloneFile(row);
   }
 }

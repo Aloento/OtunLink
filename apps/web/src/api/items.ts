@@ -92,6 +92,13 @@ export function attachItemImages(id: string, fileIds: string[]): Promise<ItemIma
   return apiPost<ItemImageDto[]>(`/api/v1/items/${id}/images`, { fileIds });
 }
 
+export function replaceItemImages(id: string, fileIds: string[]): Promise<ItemImageDto[]> {
+  return apiRequest<ItemImageDto[]>(`/api/v1/items/${id}/images`, {
+    method: 'PUT',
+    body: JSON.stringify({ fileIds }),
+  });
+}
+
 /** multipart 上传压缩后的展示图 + 可选缩略图，返回文件 DTO。 */
 export function uploadItemImage(input: { image: Blob; thumb?: Blob }): Promise<FileDto> {
   const form = new FormData();

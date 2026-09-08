@@ -18,6 +18,7 @@ import {
   validationError,
 } from '../lib/http';
 import type { AppEnv, CreateItemInput, UpdateItemInput } from '../types';
+import { deleteObject } from '../lib/s3';
 
 function isBarcodeConflict(cause: unknown): boolean {
   if (cause instanceof Error) {
@@ -153,8 +154,16 @@ export function itemsRouter(): Hono<AppEnv> {
       return error(c, 409, ErrorCodes.ITEM_IN_USE, '该物品已被单据/库存引用，无法删除');
     }
 
+    const images = await repos.items.listImages(id);
     const deleted = await repos.items.delete(id);
     if (!deleted) return notFound(c, '物品不存在');
+    for (const image of images) {
+      const file = await repos.files.deleteIfUnreferenced(image.fileId);
+      if (file) {
+        await deleteObject(c.env, file.key);
+        if (file.thumbnailKey) await deleteObject(c.env, file.thumbnailKey);
+      }
+    }
     return ok(c, { id });
   });
 
@@ -172,6 +181,33 @@ export function itemsRouter(): Hono<AppEnv> {
     if (!parsed.success) return validationError(c, '参数不合法', parsed.error.flatten());
 
     const images = await repos.items.attachImages(item.id, parsed.data.fileIds);
+    return ok(c, images.map(itemImageDto));
+  });
+
+  router.put('/:id/images', write, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+    const item = await repos.items.findById(c.req.param('id'));
+    if (!item) return notFound(c, '物品不存在');
+    const body = await readJson(c);
+    if (body === undefined || typeof body !== 'object' || body === null) {
+      return validationError(c, '请求体不是合法 JSON');
+    }
+    const fileIds = (body as { fileIds?: unknown }).fileIds;
+    if (!Array.isArray(fileIds) || fileIds.length > 20 || fileIds.some((id) => typeof id !== 'string')) {
+      return validationError(c, '参数不合法');
+    }
+    const previous = await repos.items.listImages(item.id);
+    const images = await repos.items.replaceImages(item.id, fileIds);
+    const retained = new Set(fileIds);
+    for (const image of previous) {
+      if (retained.has(image.fileId)) continue;
+      const file = await repos.files.deleteIfUnreferenced(image.fileId);
+      if (file) {
+        await deleteObject(c.env, file.key);
+        if (file.thumbnailKey) await deleteObject(c.env, file.thumbnailKey);
+      }
+    }
     return ok(c, images.map(itemImageDto));
   });
 
