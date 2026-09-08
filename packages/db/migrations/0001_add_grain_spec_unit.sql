@@ -1,1 +1,0 @@
-ALTER TYPE "public"."spec_unit" ADD VALUE IF NOT EXISTS 'GRAIN';

@@ -41,7 +41,6 @@ export interface CreateUnitInput {
   type: UnitType;
   address?: string;
   contact?: string;
-  timezone?: string;
   baseCurrency?: string;
   isActive?: boolean;
 }
@@ -52,7 +51,6 @@ export interface PatchUnitInput {
   type?: UnitType;
   address?: string | null;
   contact?: string | null;
-  timezone?: string;
   baseCurrency?: string;
   isActive?: boolean;
 }

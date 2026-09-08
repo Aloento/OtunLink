@@ -1,5 +1,5 @@
 {
-  "id": "2830b51d-eeec-419f-80ba-87f5e9ab63b9",
+  "id": "7252d064-acf6-4c96-939f-4a0928abd37c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -331,13 +331,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "timezone": {
-          "name": "timezone",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'UTC'"
         },
         "base_currency": {
           "name": "base_currency",
@@ -1282,6 +1275,14 @@
           "type": "numeric(12, 2)",
           "primaryKey": false,
           "notNull": false
+        },
+        "min_sale_unit": {
+          "name": "min_sale_unit",
+          "type": "min_sale_unit",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'SPEC'"
         },
         "is_perishable": {
           "name": "is_perishable",
@@ -4175,6 +4176,14 @@
         "INACTIVE"
       ]
     },
+    "public.min_sale_unit": {
+      "name": "min_sale_unit",
+      "schema": "public",
+      "values": [
+        "SPEC",
+        "INNER"
+      ]
+    },
     "public.notification_type": {
       "name": "notification_type",
       "schema": "public",
@@ -4294,6 +4303,7 @@
         "BOX",
         "PACK",
         "SET",
+        "GRAIN",
         "OTHER"
       ]
     },

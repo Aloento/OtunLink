@@ -4,6 +4,7 @@ CREATE TYPE "public"."email_log_status" AS ENUM('PENDING', 'SENT', 'FAILED');-->
 CREATE TYPE "public"."inbound_source_type" AS ENUM('SHIPMENT', 'MANUAL');--> statement-breakpoint
 CREATE TYPE "public"."inbound_status" AS ENUM('DRAFT', 'POSTED');--> statement-breakpoint
 CREATE TYPE "public"."item_status" AS ENUM('ACTIVE', 'INACTIVE');--> statement-breakpoint
+CREATE TYPE "public"."min_sale_unit" AS ENUM('SPEC', 'INNER');--> statement-breakpoint
 CREATE TYPE "public"."notification_type" AS ENUM('SHIPMENT_TRANSFER', 'DISCREPANCY', 'RETURN', 'AFTER_SALE', 'SALES', 'INBOUND', 'OUTBOUND', 'EXPIRY_ALERT', 'PAYMENT', 'SYSTEM', 'SHIPMENT_SENT', 'INBOUND_CONFIRMED', 'SHIPMENT_RETURN_PENDING', 'REVIEW_PENDING', 'REVIEW_APPROVED', 'REVIEW_REJECTED', 'SALES_SENT', 'SALES_CANCELLED', 'SALES_PAYMENT_UPLOADED', 'SALES_CONFIRMED', 'AFTER_SALE_REQUESTED', 'RETURN_ACCEPTED', 'AFTER_SALE_APPROVED', 'AFTER_SALE_RETURNED');--> statement-breakpoint
 CREATE TYPE "public"."outbound_status" AS ENUM('DRAFT', 'POSTED');--> statement-breakpoint
 CREATE TYPE "public"."outbound_type" AS ENUM('NORMAL', 'LOSS');--> statement-breakpoint
@@ -13,7 +14,7 @@ CREATE TYPE "public"."discrepancy_review_status" AS ENUM('PENDING', 'APPROVED', 
 CREATE TYPE "public"."sales_source" AS ENUM('RETAILER_REQUEST', 'WAREHOUSE_INITIATED');--> statement-breakpoint
 CREATE TYPE "public"."sales_status" AS ENUM('DRAFT', 'SENT', 'PAYMENT_UPLOADED', 'CONFIRMED', 'CANCELLED');--> statement-breakpoint
 CREATE TYPE "public"."shipment_status" AS ENUM('DRAFT', 'SENT', 'COUNTING', 'READY', 'DISCREPANCY', 'REVIEW_PENDING', 'INBOUNDED', 'RETURN_PENDING', 'RETURNED');--> statement-breakpoint
-CREATE TYPE "public"."spec_unit" AS ENUM('PIECE', 'BAG', 'BOX', 'PACK', 'SET', 'OTHER');--> statement-breakpoint
+CREATE TYPE "public"."spec_unit" AS ENUM('PIECE', 'BAG', 'BOX', 'PACK', 'SET', 'GRAIN', 'OTHER');--> statement-breakpoint
 CREATE TYPE "public"."stock_movement_type" AS ENUM('INBOUND_SHIPMENT', 'INBOUND_MANUAL', 'OUTBOUND_NORMAL', 'OUTBOUND_LOSS', 'OUTBOUND_SALE', 'OUTBOUND_SALE_REVERSAL', 'RETURN_IN', 'RETURN_OUT');--> statement-breakpoint
 CREATE TYPE "public"."unit_type" AS ENUM('COLLECTOR', 'WAREHOUSE', 'RETAILER');--> statement-breakpoint
 CREATE TYPE "public"."user_role" AS ENUM('ADMIN', 'COLLECTOR', 'WAREHOUSE', 'RETAILER');--> statement-breakpoint
@@ -49,7 +50,6 @@ CREATE TABLE "business_units" (
 	"type" "unit_type" NOT NULL,
 	"address" text,
 	"contact" text,
-	"timezone" varchar(64) DEFAULT 'UTC' NOT NULL,
 	"base_currency" varchar(3) DEFAULT 'CNY' NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -153,6 +153,7 @@ CREATE TABLE "items" (
 	"spec_unit" "spec_unit" DEFAULT 'PIECE' NOT NULL,
 	"inner_unit" "spec_unit",
 	"inner_count" numeric(12, 2),
+	"min_sale_unit" "min_sale_unit" DEFAULT 'SPEC' NOT NULL,
 	"is_perishable" boolean DEFAULT false NOT NULL,
 	"category" varchar(128),
 	"description" text,

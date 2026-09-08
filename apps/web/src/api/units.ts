@@ -11,7 +11,6 @@ export interface UnitDto {
   type: UnitType;
   address: string | null;
   contact: string | null;
-  timezone: string;
   baseCurrency: string;
   isActive: boolean;
   createdAt: string;

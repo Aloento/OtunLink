@@ -46,7 +46,6 @@ export const unitCreateSchema = z.object({
   type: unitType(),
   address: z.string().trim().max(1024).optional(),
   contact: z.string().trim().max(512).optional(),
-  timezone: z.string().trim().min(1).max(64).optional(),
   baseCurrency: z.string().trim().length(3).optional(),
   isActive: z.boolean().optional(),
 });
@@ -58,7 +57,6 @@ export const unitPatchSchema = z.object({
   type: unitType().optional(),
   address: z.string().trim().max(1024).nullable().optional(),
   contact: z.string().trim().max(512).nullable().optional(),
-  timezone: z.string().trim().min(1).max(64).optional(),
   baseCurrency: z.string().trim().length(3).optional(),
   isActive: z.boolean().optional(),
 });

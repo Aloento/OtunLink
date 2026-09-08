@@ -35,7 +35,6 @@ function unit(partial: Partial<UnitRecord> & { id: string }): UnitRecord {
     type: 'COLLECTOR',
     address: null,
     contact: null,
-    timezone: 'UTC',
     baseCurrency: 'CNY',
     isActive: true,
     createdAt: now,

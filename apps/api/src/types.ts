@@ -88,7 +88,6 @@ export interface UnitRecord {
   type: UnitType;
   address: string | null;
   contact: string | null;
-  timezone: string;
   baseCurrency: string;
   isActive: boolean;
   createdAt: Date;
@@ -119,7 +118,6 @@ export interface CreateUnitInput {
   type: UnitType;
   address?: string | null;
   contact?: string | null;
-  timezone?: string;
   baseCurrency?: string;
   isActive?: boolean;
 }
@@ -130,7 +128,6 @@ export interface UpdateUnitInput {
   type?: UnitType;
   address?: string | null;
   contact?: string | null;
-  timezone?: string;
   baseCurrency?: string;
   isActive?: boolean;
 }

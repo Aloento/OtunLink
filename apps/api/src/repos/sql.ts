@@ -202,7 +202,6 @@ function mapUnit(row: Record<string, unknown>): UnitRecord {
     type: row.type as UnitRecord['type'],
     address: row.address ? String(row.address) : null,
     contact: row.contact ? String(row.contact) : null,
-    timezone: String(row.timezone ?? 'UTC'),
     baseCurrency: String(row.base_currency ?? 'CNY'),
     isActive: row.is_active === true || row.is_active === 'true' || row.is_active === 't',
     createdAt: new Date(String(row.created_at)),
@@ -816,10 +815,10 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
     async create(input: CreateUnitInput): Promise<UnitRecord> {
       const { rows } = await exec.query(
-        `INSERT INTO business_units (code, name, type, address, contact, timezone, base_currency, is_active)
+        `INSERT INTO business_units (code, name, type, address, contact, base_currency, is_active)
          VALUES (${quote(input.code)}, ${quote(input.name)}, ${quote(input.type)},
                  ${quote(input.address ?? null)}, ${quote(input.contact ?? null)},
-                 ${quote(input.timezone ?? 'UTC')}, ${quote(input.baseCurrency ?? 'CNY')},
+                 ${quote(input.baseCurrency ?? 'CNY')},
                  ${quote(input.isActive ?? true)})
          RETURNING *`,
       );
@@ -832,7 +831,6 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       if (patch.type !== undefined) sets.push(col('type', patch.type));
       if (patch.address !== undefined) sets.push(col('address', patch.address));
       if (patch.contact !== undefined) sets.push(col('contact', patch.contact));
-      if (patch.timezone !== undefined) sets.push(col('timezone', patch.timezone));
       if (patch.baseCurrency !== undefined) sets.push(col('base_currency', patch.baseCurrency));
       if (patch.isActive !== undefined) sets.push(col('is_active', patch.isActive));
       if (sets.length === 0) {

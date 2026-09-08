@@ -1,7 +1,7 @@
 import type { AppLocale } from '@otunlink/shared';
 
 // 日期/金额/数字格式化。
-// 时间存储为 UTC ISO；渲染时按业务单元时区（unit.timezone）换算。
+// 时间存储为 UTC ISO；全站统一按中欧时间（Europe/Berlin）显示。
 // 金额不做汇率换算，仅按单元本位币（unit.baseCurrency，CNY/EUR/USD）格式化。
 
 const INTL_LOCALE: Record<AppLocale, string> = {
@@ -14,38 +14,37 @@ function toDate(value: Date | string | number): Date {
   return new Date(value);
 }
 
-function dateOptions(timezone?: string): Intl.DateTimeFormatOptions {
-  const base: Intl.DateTimeFormatOptions = {
+function dateOptions(): Intl.DateTimeFormatOptions {
+  return {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     // 全站日期时间统一附带时区偏移后缀（如 GMT+2 / GMT+8），便于跨时区协作。
     timeZoneName: 'shortOffset',
+    timeZone: 'Europe/Berlin',
   };
-  return timezone ? { ...base, timeZone: timezone } : base;
 }
 
-function dateTimeOptions(timezone?: string): Intl.DateTimeFormatOptions {
+function dateTimeOptions(): Intl.DateTimeFormatOptions {
   return {
-    ...dateOptions(timezone),
+    ...dateOptions(),
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   };
 }
 
-/** 日期（按 locale）；timezone 为空时用运行环境时区。 */
-export function formatDate(value: Date | string | number, locale: AppLocale, timezone?: string): string {
-  return new Intl.DateTimeFormat(INTL_LOCALE[locale], dateOptions(timezone)).format(toDate(value));
+/** 日期（按 locale），统一使用中欧时间。 */
+export function formatDate(value: Date | string | number, locale: AppLocale): string {
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], dateOptions()).format(toDate(value));
 }
 
 /** 日期 + 时间。 */
 export function formatDateTime(
   value: Date | string | number,
   locale: AppLocale,
-  timezone?: string,
 ): string {
-  return new Intl.DateTimeFormat(INTL_LOCALE[locale], dateTimeOptions(timezone)).format(toDate(value));
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], dateTimeOptions()).format(toDate(value));
 }
 
 /** 金额（币种符号 + 千分位 + 两位小数）；未知币种回退为普通小数。 */

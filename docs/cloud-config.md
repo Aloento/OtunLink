@@ -28,7 +28,7 @@
 | 数据库         | `otunlink`（**专用库**；原因：账号 `<DB_USER>` 对 `postgres` 默认库无 public 建表权限，PG15+ public schema 归 `pg_database_owner`，故以 `CREATE DATABASE otunlink OWNER <DB_USER>` 解决） |
 | 用户           | `<DB_USER>`（非超级用户，拥有 otunlink 库）                                                                                                                                      |
 | 连接串（本地） | 见 `apps/api/.dev.vars` 与根 `.dev.vars`（gitignored，含密码）                                                                                                                  |
-| 迁移           | `pnpm --filter @otunlink/db db:migrate`（本地已验证：20 个枚举 / 29 表 / 276 列）                                                                                               |
+| 迁移           | `pnpm --filter @otunlink/db db:migrate`（本地已验证：21 个枚举 / 29 表 / 293 列）                                                                                               |
 
 ## 3. 对象存储（S3 兼容，不使用 R2）
 

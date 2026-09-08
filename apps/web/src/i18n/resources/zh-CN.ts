@@ -118,7 +118,6 @@ export const zhCN = {
       typeRetailer: '零售',
       address: '地址',
       contact: '联系方式',
-      timezone: '时区',
       baseCurrency: '本位币',
       isActive: '启用',
       edit: '编辑',

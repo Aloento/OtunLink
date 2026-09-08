@@ -61,7 +61,6 @@ export const businessUnits = pgTable('business_units', {
   type: unitTypeEnum('type').notNull(),
   address: text('address'),
   contact: text('contact'),
-  timezone: varchar('timezone', { length: 64 }).notNull().default('UTC'),
   baseCurrency: varchar('base_currency', { length: 3 }).notNull().default('CNY'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: createdAt(),

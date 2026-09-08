@@ -383,9 +383,9 @@ export function SalesFormPage() {
         </Text>
         {lines.map((line) => (
           <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 [&_.fui-Select__select]:h-8 [&_.fui-Input__input]:h-8">
-              <Field label={t('sales.itemName')} required>
-                <Select value={line.itemId} onChange={(_, d) => setLine(line.key, 'itemId', d.value)}>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 [&>*]:min-w-0 [&_.fui-Input]:w-full [&_.fui-Select]:w-full [&_.fui-Select__select]:h-8 [&_.fui-Input__input]:h-8">
+              <Field className="min-w-0" label={t('sales.itemName')} required>
+                <Select className="w-full" value={line.itemId} onChange={(_, d) => setLine(line.key, 'itemId', d.value)}>
                   <option value="">—</option>
                   {(itemPage?.items ?? []).map((item) => (
                     <option key={item.id} value={item.id}>
@@ -396,6 +396,7 @@ export function SalesFormPage() {
                 </Select>
               </Field>
               <Field
+                className="min-w-0"
                 label={`${t('sales.qty')}${
                   (() => {
                     const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
@@ -409,14 +410,16 @@ export function SalesFormPage() {
                 required
               >
                 <Input
+                  className="w-full"
                   type="number"
                   min={0}
                   value={line.qty}
                   onChange={(_, d) => setLine(line.key, 'qty', d.value)}
                 />
               </Field>
-              <Field label={t('sales.unitPriceOverride')}>
+              <Field className="min-w-0" label={t('sales.unitPriceOverride')}>
                 <Input
+                  className="w-full"
                   type="number"
                   min={0}
                   value={line.unitPriceOverride}

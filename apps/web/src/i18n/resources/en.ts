@@ -121,7 +121,6 @@ export const en: TranslationSchema = {
       typeRetailer: 'Retailer',
       address: 'Address',
       contact: 'Contact',
-      timezone: 'Timezone',
       baseCurrency: 'Base currency',
       isActive: 'Active',
       edit: 'Edit',

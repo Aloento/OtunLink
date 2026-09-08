@@ -19,7 +19,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { UNIT_TYPES, type UnitType } from '@otunlink/shared';
+import { CURRENCIES, UNIT_TYPES, type UnitType } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import {
@@ -46,7 +46,6 @@ interface Draft {
   type: UnitType;
   address: string;
   contact: string;
-  timezone: string;
   baseCurrency: string;
   isActive: string;
 }
@@ -58,7 +57,6 @@ const emptyDraft = (): Draft => ({
   type: 'WAREHOUSE',
   address: '',
   contact: '',
-  timezone: 'Asia/Shanghai',
   baseCurrency: 'CNY',
   isActive: 'true',
 });
@@ -90,7 +88,6 @@ export function AdminUnitsPage() {
           type: draft.type,
           address: draft.address.trim() || undefined,
           contact: draft.contact.trim() || undefined,
-          timezone: draft.timezone.trim() || undefined,
           baseCurrency: draft.baseCurrency.trim() || undefined,
           isActive,
         });
@@ -101,7 +98,6 @@ export function AdminUnitsPage() {
         type: draft.type,
         address: draft.address.trim() || null,
         contact: draft.contact.trim() || null,
-        timezone: draft.timezone.trim() || undefined,
         baseCurrency: draft.baseCurrency.trim() || undefined,
         isActive,
       });
@@ -138,7 +134,6 @@ export function AdminUnitsPage() {
       type: row.type,
       address: row.address ?? '',
       contact: row.contact ?? '',
-      timezone: row.timezone ?? '',
       baseCurrency: row.baseCurrency ?? '',
       isActive: row.isActive ? 'true' : 'false',
     });
@@ -286,19 +281,18 @@ export function AdminUnitsPage() {
                   disabled={saveMutation.isPending}
                 />
               </Field>
-              <Field label={t('admin.units.timezone')}>
-                <Input
-                  value={draft?.timezone ?? ''}
-                  onChange={(_, d) => setDraft({ ...draft!, timezone: d.value })}
-                  disabled={saveMutation.isPending}
-                />
-              </Field>
               <Field label={t('admin.units.baseCurrency')}>
-                <Input
+                <Select
                   value={draft?.baseCurrency ?? ''}
                   onChange={(_, d) => setDraft({ ...draft!, baseCurrency: d.value })}
                   disabled={saveMutation.isPending}
-                />
+                >
+                  {CURRENCIES.map((currency) => (
+                    <option key={currency} value={currency}>
+                      {currency}
+                    </option>
+                  ))}
+                </Select>
               </Field>
               <Field label={t('admin.units.isActive')}>
                 <Select

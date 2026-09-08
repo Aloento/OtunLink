@@ -68,7 +68,6 @@ export function unitDto(unit: UnitRecord) {
     type: unit.type,
     address: unit.address,
     contact: unit.contact,
-    timezone: unit.timezone,
     baseCurrency: unit.baseCurrency,
     isActive: unit.isActive,
     createdAt: unit.createdAt.toISOString(),

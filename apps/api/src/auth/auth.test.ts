@@ -32,7 +32,6 @@ function unit(partial: Partial<UnitRecord> & { id: string; code: string }): Unit
     type: partial.type ?? 'WAREHOUSE',
     address: partial.address ?? null,
     contact: partial.contact ?? null,
-    timezone: partial.timezone ?? 'UTC',
     baseCurrency: partial.baseCurrency ?? 'CNY',
     isActive: partial.isActive ?? true,
     createdAt: partial.createdAt ?? now,
