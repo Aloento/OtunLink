@@ -9,7 +9,7 @@ import { Permissions, hasPermission } from '@otunlink/shared';
 import { deleteItem, getItem } from '../../api/items';
 import { isApiError } from '../../api/http';
 import { useSession } from '../../auth/SessionProvider';
-import { FileImage } from '../../components/FileImage';
+import { ImagePreview } from '../../components/ImagePreview';
 import { RefreshButton } from '../../components/RefreshButton';
 
 // 物品详情：字段 + 图片（预签名 URL 展示）。
@@ -117,7 +117,7 @@ export function ItemDetailPage() {
         ) : (
           <div className="flex flex-wrap gap-3">
             {data.images.map((image) => (
-              <FileImage
+              <ImagePreview
                 key={image.id}
                 fileId={image.fileId}
                 className="h-32 w-32 rounded object-cover"

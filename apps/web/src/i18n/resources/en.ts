@@ -226,6 +226,12 @@ export const en: TranslationSchema = {
     back: 'Back to list',
     images: 'Images',
     noImages: 'No images',
+    imagePreview: {
+      open: 'Open image preview',
+      title: 'Image preview',
+      zoomIn: 'Zoom in',
+      zoomOut: 'Zoom out',
+    },
     createTitle: 'New item',
     editTitle: 'Edit item',
     save: 'Save',

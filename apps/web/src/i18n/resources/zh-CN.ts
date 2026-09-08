@@ -223,6 +223,12 @@ export const zhCN = {
     back: '返回列表',
     images: '图片',
     noImages: '暂无图片',
+    imagePreview: {
+      open: '查看大图',
+      title: '图片预览',
+      zoomIn: '放大',
+      zoomOut: '缩小',
+    },
     createTitle: '新建物品',
     editTitle: '编辑物品',
     save: '保存',
