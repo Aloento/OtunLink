@@ -47,9 +47,9 @@ export function ResponsiveTable<T>({
         {items.map((item) => (
           <Card key={rowKey(item)} className="p-4">
             {columns.map((col) => (
-              <div key={col.key} className="mb-2 flex items-baseline justify-between gap-3">
-                <Caption1 className="text-neutral-500">{col.header}</Caption1>
-                <div className="text-right">{col.render(item)}</div>
+              <div key={col.key} className="mb-2 flex min-w-0 items-baseline gap-3">
+                <Caption1 className="shrink-0 text-neutral-500">{col.header}</Caption1>
+                <div className="min-w-0 flex-1 wrap-break-word text-right">{col.render(item)}</div>
               </div>
             ))}
             {actions && <div className="flex items-center justify-end gap-2">{actions(item)}</div>}

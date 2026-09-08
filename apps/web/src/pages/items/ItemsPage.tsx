@@ -103,15 +103,15 @@ export function ItemsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <Title1 as="h1">{t('items.title')}</Title1>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
           <RefreshButton queryKey={['items', 'list']} additionalKeys={[['items', 'categories']]} />
           <Input
             value={q}
             placeholder={t('items.searchPlaceholder')}
             onChange={(_, d) => setQ(d.value)}
-            className="min-w-52"
+            className="col-span-2 w-full sm:col-span-1 sm:min-w-52 sm:w-auto"
           />
           <Select
             value={category}
@@ -119,7 +119,7 @@ export function ItemsPage() {
               setCategory(d.value);
               setPage(1);
             }}
-            className="min-w-36"
+            className="w-full sm:min-w-36 sm:w-auto"
             aria-label={t('items.category')}
           >
             <option value="">{t('items.categoryAll')}</option>
@@ -129,12 +129,12 @@ export function ItemsPage() {
               </option>
             ))}
           </Select>
-          <Button appearance="secondary" onClick={() => setScanOpen(true)}>
+          <Button appearance="secondary" className="w-full sm:w-auto" onClick={() => setScanOpen(true)}>
             {t('items.scan')}
           </Button>
           {canWrite && (
             <Link to="/items/new">
-              <Button appearance="primary">{t('items.newItem')}</Button>
+              <Button appearance="primary" className="w-full">{t('items.newItem')}</Button>
             </Link>
           )}
         </div>
