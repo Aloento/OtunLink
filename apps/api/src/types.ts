@@ -421,7 +421,6 @@ export interface SaveCountResult {
 
 export interface ShipmentRepository {
   findById(id: string): Promise<ShipmentRecord | null>;
-  findByNo(no: string): Promise<ShipmentRecord | null>;
   list(query: ShipmentListQuery): Promise<ShipmentListResult>;
   create(input: CreateShipmentInput): Promise<ShipmentRecord>;
   update(id: string, patch: UpdateShipmentInput): Promise<ShipmentRecord | null>;
@@ -1288,7 +1287,7 @@ export interface CreatePartnershipInput {
   createdBy: string;
 }
 
-/** 幂等创建签约的结果：created=false 表示命中已有签约（返回现有记录）。 */
+/** 幂等创建的结果：created=true 表示本次真正插入，false 表示签约已存在。 */
 export interface CreatePartnershipResult {
   record: PartnershipRecord;
   created: boolean;
@@ -1300,10 +1299,9 @@ export interface PartnershipRepository {
   /** 某零售门店已签约的仓库 unit id 集合（业务过滤辅助）。 */
   listWarehouseIds(retailerUnitId: string): Promise<string[]>;
   findById(id: string): Promise<PartnershipRecord | null>;
-  findByPair(warehouseUnitId: string, retailerUnitId: string): Promise<PartnershipRecord | null>;
   /**
    * 幂等创建：已存在时返回现有记录（created=false）。
-   * 必须由单条写语句得出结果，见 sql.ts 中关于 Hyperdrive 查询缓存的注释。
+   * 必须由单条写语句得出结果，见 repos/sql/partnerships.ts 中关于 Hyperdrive 查询缓存的注释。
    */
   create(input: CreatePartnershipInput): Promise<CreatePartnershipResult>;
   /** 删除指定 id 的签约；返回是否实际删除。 */
