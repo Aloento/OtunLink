@@ -88,7 +88,6 @@ export interface UnitRecord {
   type: UnitType;
   address: string | null;
   contact: string | null;
-  baseCurrency: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -118,7 +117,6 @@ export interface CreateUnitInput {
   type: UnitType;
   address?: string | null;
   contact?: string | null;
-  baseCurrency?: string;
   isActive?: boolean;
 }
 
@@ -128,7 +126,6 @@ export interface UpdateUnitInput {
   type?: UnitType;
   address?: string | null;
   contact?: string | null;
-  baseCurrency?: string;
   isActive?: boolean;
 }
 
@@ -968,7 +965,9 @@ export interface SalesOrderItemRecord {
   itemName: string | null;
   spec: string | null;
   qty: string;
+  /** 默认零售价快照（其货币见 listPriceCurrency）；成交价 price 恒为本单货币。 */
   listPrice: string | null;
+  listPriceCurrency: string | null;
   price: string | null;
   lineTotal: string | null;
 }
@@ -1044,6 +1043,7 @@ export interface SalesListResult {
 export interface CreateSalesItemInput {
   itemId: string;
   qty: string;
+  /** 行级改价（本单货币）；为空时沿用默认零售价，货币不一致时必须填写。 */
   unitPriceOverride: string | null;
 }
 
@@ -1057,6 +1057,7 @@ export interface CreateSalesRepoInput {
   trackingNo: string | null;
   freight: string;
   discountPercent: string;
+  /** 本单货币：成交价与整单金额的货币；行级改价不做任何货币换算。 */
   currency: string;
   remark: string | null;
   items: CreateSalesItemInput[];
@@ -1070,6 +1071,7 @@ export interface PatchSalesInput {
   trackingNo?: string | null;
   freight?: string;
   discountPercent?: string;
+  /** 修改本单货币时必须同时提交 items，行价会按新货币重新校验快照。 */
   currency?: string;
   remark?: string | null;
   items?: CreateSalesItemInput[];

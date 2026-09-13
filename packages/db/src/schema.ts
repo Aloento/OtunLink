@@ -61,7 +61,6 @@ export const businessUnits = pgTable('business_units', {
   type: unitTypeEnum('type').notNull(),
   address: text('address'),
   contact: text('contact'),
-  baseCurrency: varchar('base_currency', { length: 3 }).notNull().default('CNY'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -449,6 +448,8 @@ export const salesOrderItems = pgTable(
       .references(() => items.id),
     qty: numeric('qty', { precision: 12, scale: 2 }).notNull(),
     listPrice: money('list_price'),
+    // 零售价快照的货币（取自 retail_prices.currency）；成交价 price 恒为本单货币。
+    listPriceCurrency: varchar('list_price_currency', { length: 3 }),
     price: money('price'),
     lineTotal: money('line_total'),
     createdAt: createdAt(),

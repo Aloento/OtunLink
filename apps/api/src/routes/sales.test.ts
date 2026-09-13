@@ -37,7 +37,6 @@ function unit(partial: Partial<UnitRecord> & { id: string }): UnitRecord {
     type: 'COLLECTOR',
     address: null,
     contact: null,
-    baseCurrency: 'CNY',
     isActive: true,
     createdAt: now,
     updatedAt: now,
@@ -162,11 +161,17 @@ async function seedStock(
 }
 
 /** 仓库设置零售价（PUT /api/v1/retail-prices）。 */
-async function setPrice(app: Awaited<ReturnType<typeof makeApp>>['app'], unitId: string, itemId: string, price: string) {
+async function setPrice(
+  app: Awaited<ReturnType<typeof makeApp>>['app'],
+  unitId: string,
+  itemId: string,
+  price: string,
+  currency = 'CNY',
+) {
   const res = await app.request('/api/v1/retail-prices', {
     method: 'PUT',
     headers: json('wh'),
-    body: JSON.stringify({ unitId, itemId, price, currency: 'CNY' }),
+    body: JSON.stringify({ unitId, itemId, price, currency }),
   });
   expect(res.status).toBe(200);
 }
@@ -204,7 +209,17 @@ async function getOrder(app: Awaited<ReturnType<typeof makeApp>>['app'], id: str
       currency: string;
       carrier: string | null;
       trackingNo: string | null;
-      items: Array<{ id: string; itemId: string; qty: string; listPrice: string; price: string; lineTotal: string }>;
+      items: Array<{
+        id: string;
+        itemId: string;
+        qty: string;
+        listPrice: string;
+        listPriceCurrency: string | null;
+        price: string;
+        priceCurrency: string;
+        priceOverridden: boolean;
+        lineTotal: string;
+      }>;
       allocations: Array<{ id: string; itemId: string; batchId: string; qty: string }>;
       payment: { amount: string; currency: string; methodNote: string | null } | null;
     };
@@ -299,8 +314,116 @@ describe(' 销售单（请货/发货/FEFO 分配）', () => {
     expect(order.status).toBe('DRAFT');
     expect(order.currency).toBe('CNY');
     expect(order.totalAmount).toBe('230.00');
-    expect(order.items[0]).toMatchObject({ itemId: ITEM_A, qty: '2', listPrice: '100', price: '100', lineTotal: '200.00' });
-    expect(order.items[1]).toMatchObject({ itemId: ITEM_B, qty: '1', listPrice: '50', price: '50', lineTotal: '50.00' });
+    expect(order.items[0]).toMatchObject({
+      itemId: ITEM_A, qty: '2', listPrice: '100', listPriceCurrency: 'CNY', price: '100',
+      priceCurrency: 'CNY', priceOverridden: false, lineTotal: '200.00',
+    });
+    expect(order.items[1]).toMatchObject({
+      itemId: ITEM_B, qty: '1', listPrice: null, listPriceCurrency: null, price: '50',
+      priceCurrency: 'CNY', priceOverridden: true, lineTotal: '50.00',
+    });
+  });
+
+  it('本单货币与默认零售价货币不一致且未改价：400 带行级明细（不自动换算）', async () => {
+    const { app } = makeApp();
+    await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100', 'EUR'); // ITEM_B 不设零售价
+
+    const res = await createOrder(app, 'wh', [
+      { itemId: ITEM_A, qty: '1' },
+      { itemId: ITEM_B, qty: '1', unitPriceOverride: '30' },
+    ], { currency: 'CNY' });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+      error: {
+        code: string;
+        details?: { lines: Array<{ index: number; itemId: string; itemName: string; reason: string; message: string }> };
+      };
+    };
+    expect(body.error.code).toBe('SALES_LINE_INVALID');
+    expect(body.error.details?.lines).toHaveLength(1);
+    expect(body.error.details?.lines[0]).toMatchObject({
+      index: 1, itemId: ITEM_A, itemName: '苹果', reason: 'CURRENCY_MISMATCH',
+    });
+    expect(body.error.details?.lines[0].message).toContain('EUR');
+    expect(body.error.details?.lines[0].message).toContain('CNY');
+  });
+
+  it('行级改价后：零售价快照保留原货币，成交价为本单货币', async () => {
+    const { app } = makeApp();
+    await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100', 'EUR');
+
+    const res = await createOrder(app, 'wh', [
+      { itemId: ITEM_A, qty: '2', unitPriceOverride: '120' },
+    ], { currency: 'CNY' });
+    expect(res.status).toBe(201);
+    const { data } = (await res.json()) as { data: { id: string } };
+    const order = await getOrder(app, data.id);
+
+    expect(order.currency).toBe('CNY');
+    expect(order.totalAmount).toBe('240.00');
+    expect(order.items[0]).toMatchObject({
+      listPrice: '100', listPriceCurrency: 'EUR', price: '120', priceCurrency: 'CNY',
+      priceOverridden: true, lineTotal: '240.00',
+    });
+  });
+
+  it('本单货币与零售价货币一致：无需改价 priceOverridden=false', async () => {
+    const { app } = makeApp();
+    await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100', 'EUR');
+
+    const res = await createOrder(app, 'wh', [{ itemId: ITEM_A, qty: '1' }], { currency: 'EUR' });
+    expect(res.status).toBe(201);
+    const { data } = (await res.json()) as { data: { id: string } };
+    const order = await getOrder(app, data.id);
+
+    expect(order.currency).toBe('EUR');
+    expect(order.items[0]).toMatchObject({
+      listPrice: '100', listPriceCurrency: 'EUR', price: '100', priceCurrency: 'EUR', priceOverridden: false,
+    });
+  });
+
+  it('改价金额与零售价相同但货币不同：仍视为行级改价', async () => {
+    const { app } = makeApp();
+    await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100', 'EUR');
+
+    const res = await createOrder(app, 'wh', [
+      { itemId: ITEM_A, qty: '1', unitPriceOverride: '100' },
+    ], { currency: 'CNY' });
+    expect(res.status).toBe(201);
+    const { data } = (await res.json()) as { data: { id: string } };
+    const order = await getOrder(app, data.id);
+
+    expect(order.items[0]).toMatchObject({
+      listPrice: '100', listPriceCurrency: 'EUR', price: '100', priceCurrency: 'CNY', priceOverridden: true,
+    });
+  });
+
+  it('PATCH：改本单货币必须同时提交明细行', async () => {
+    const { app } = makeApp();
+    await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100', 'EUR');
+    const created = await createOrder(app, 'wh', [
+      { itemId: ITEM_A, qty: '1', unitPriceOverride: '100' },
+    ], { currency: 'CNY' });
+    expect(created.status).toBe(201);
+    const { data } = (await created.json()) as { data: { id: string } };
+
+    const bare = await app.request(`/api/v1/sales-orders/${data.id}`, {
+      method: 'PATCH', headers: json('wh'), body: JSON.stringify({ currency: 'EUR' }),
+    });
+    expect(bare.status).toBe(400);
+    expect(await bare.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+
+    const withLines = await app.request(`/api/v1/sales-orders/${data.id}`, {
+      method: 'PATCH',
+      headers: json('wh'),
+      body: JSON.stringify({ currency: 'EUR', lines: [{ itemId: ITEM_A, qty: '2' }] }),
+    });
+    expect(withLines.status).toBe(200);
+    const order = await getOrder(app, data.id);
+    expect(order.currency).toBe('EUR');
+    expect(order.items[0]).toMatchObject({
+      qty: '2', listPriceCurrency: 'EUR', price: '100', priceCurrency: 'EUR', priceOverridden: false,
+    });
   });
 
   it('发送：FEFO 按到期日升序拆批分配（先近效期），库存逐批扣减', async () => {

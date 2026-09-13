@@ -132,7 +132,7 @@ export function salesOrdersRouter(): Hono<AppEnv> {
         trackingNo: input.trackingNo ?? null,
         freight: input.freight,
         discountPercent: input.discountPercent,
-        currency: input.currency ?? seller.baseCurrency ?? 'CNY',
+        currency: input.currency ?? 'CNY',
         remark: input.remark ?? null,
         items: input.lines.map((l) => ({
           itemId: l.itemId,
@@ -183,6 +183,11 @@ export function salesOrdersRouter(): Hono<AppEnv> {
     const parsed = salesOrderPatchSchema.safeParse(body);
     if (!parsed.success) return validationError(c, '参数不合法', parsed.error.flatten());
     const input = parsed.data;
+
+    // 改动本单货币必须同时提交明细：成交价按新货币重新核对，避免出现跨货币行价。
+    if (input.currency && input.currency !== order.currency && !input.lines) {
+      return validationError(c, '修改本单货币时必须同时提交明细行（lines）');
+    }
 
     try {
       const updated = await repos.sales.update(order.id, {
@@ -542,7 +547,7 @@ async function detailOf(repos: Repos, order: SalesOrderRecord) {
   ]);
   return {
     ...salesOrderDto(order, { sellerUnitName: seller?.name ?? null, buyerUnitName: buyer?.name ?? null }),
-    items: items.map(salesOrderItemDto),
+    items: items.map((item) => salesOrderItemDto(item, order.currency)),
     allocations: allocations.map(salesAllocationDto),
     payment: payment ? salesPaymentDto(payment) : null,
   };

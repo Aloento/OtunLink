@@ -202,7 +202,6 @@ function mapUnit(row: Record<string, unknown>): UnitRecord {
     type: row.type as UnitRecord['type'],
     address: row.address ? String(row.address) : null,
     contact: row.contact ? String(row.contact) : null,
-    baseCurrency: String(row.base_currency ?? 'CNY'),
     isActive: row.is_active === true || row.is_active === 'true' || row.is_active === 't',
     createdAt: new Date(String(row.created_at)),
     updatedAt: new Date(String(row.updated_at)),
@@ -635,6 +634,7 @@ function mapSalesItem(row: Record<string, unknown>): SalesOrderItemRecord {
     spec: row.spec ? String(row.spec) : null,
     qty: row.qty != null ? String(row.qty) : '0',
     listPrice: row.list_price != null ? String(row.list_price) : null,
+    listPriceCurrency: row.list_price_currency != null ? String(row.list_price_currency) : null,
     price: row.price != null ? String(row.price) : null,
     lineTotal: row.line_total != null ? String(row.line_total) : null,
   };
@@ -815,10 +815,9 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
     async create(input: CreateUnitInput): Promise<UnitRecord> {
       const { rows } = await exec.query(
-        `INSERT INTO business_units (code, name, type, address, contact, base_currency, is_active)
+        `INSERT INTO business_units (code, name, type, address, contact, is_active)
          VALUES (${quote(input.code)}, ${quote(input.name)}, ${quote(input.type)},
                  ${quote(input.address ?? null)}, ${quote(input.contact ?? null)},
-                 ${quote(input.baseCurrency ?? 'CNY')},
                  ${quote(input.isActive ?? true)})
          RETURNING *`,
       );
@@ -831,7 +830,6 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       if (patch.type !== undefined) sets.push(col('type', patch.type));
       if (patch.address !== undefined) sets.push(col('address', patch.address));
       if (patch.contact !== undefined) sets.push(col('contact', patch.contact));
-      if (patch.baseCurrency !== undefined) sets.push(col('base_currency', patch.baseCurrency));
       if (patch.isActive !== undefined) sets.push(col('is_active', patch.isActive));
       if (sets.length === 0) {
         const existing = await this.findById(id);
@@ -3138,32 +3136,68 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     return rows[0] ? mapSalesOrder(rows[0]) : null;
   }
 
-  /** 按当前零售价/行级改价计算价格快照（行价、行小计、整单合计）。 */
+  /**
+   * 按当前默认零售价（快照，保留它自己的货币）与行级改价计算行价快照。
+   * 成交价恒为本单货币：默认零售价货币与本单货币不一致时必须填写行级改价（不做货币换算）。
+   */
   async function computeSalesLines(
     sellerUnitId: string,
+    orderCurrency: string,
     items: CreateSalesRepoInput['items'],
     qty: (line: CreateSalesRepoInput['items'][number]) => string,
-  ): Promise<{ itemId: string; qty: string; listPrice: string | null; price: string | null; lineTotal: string | null }[]> {
+  ): Promise<{
+    itemId: string;
+    qty: string;
+    listPrice: string | null;
+    listPriceCurrency: string | null;
+    price: string | null;
+    lineTotal: string | null;
+  }[]> {
     const itemIds = [...new Set(items.map((l) => l.itemId))];
-    const prices = new Map<string, string>();
+    const retail = new Map<string, { price: string; currency: string; itemName: string | null }>();
     for (const itemId of itemIds) {
       const { rows } = await exec.query(
-        `SELECT price FROM retail_prices WHERE unit_id = ${quote(sellerUnitId)} AND item_id = ${quote(itemId)} LIMIT 1`,
+        `SELECT rp.price, rp.currency, i.name AS item_name
+         FROM retail_prices rp
+         LEFT JOIN items i ON i.id = rp.item_id
+         WHERE rp.unit_id = ${quote(sellerUnitId)} AND rp.item_id = ${quote(itemId)} LIMIT 1`,
       );
-      prices.set(itemId, rows[0] ? String(rows[0].price) : '');
+      if (rows[0]) {
+        retail.set(itemId, {
+          price: String(rows[0].price),
+          currency: String(rows[0].currency),
+          itemName: rows[0].item_name ? String(rows[0].item_name) : null,
+        });
+      }
     }
-    return items.map((line) => {
+
+    const issues: SalesLineIssue[] = [];
+    const lines = items.map((line, index) => {
       const qtyValue = qty(line);
-      const raw = line.unitPriceOverride ?? prices.get(line.itemId) ?? null;
-      const listPrice = raw === '' ? null : raw;
+      const snapshot = retail.get(line.itemId) ?? null;
+      const override = line.unitPriceOverride ?? null;
+      // 无行级改价时只能沿用默认零售价；货币不一致直接拒绝，避免把数字当成另一种货币使用。
+      if (override === null && snapshot && snapshot.currency !== orderCurrency) {
+        issues.push({
+          index: index + 1,
+          itemId: line.itemId,
+          itemName: snapshot.itemName,
+          reason: 'CURRENCY_MISMATCH',
+          message: `第${index + 1}行（${snapshot.itemName ?? '未知物品'}）：默认零售价货币 ${snapshot.currency} 与本单货币 ${orderCurrency} 不一致，请填写行级改价`,
+        });
+      }
+      const price = override ?? snapshot?.price ?? null;
       return {
         itemId: line.itemId,
         qty: qtyValue,
-        listPrice,
-        price: listPrice,
-        lineTotal: listPrice === null ? null : roundMoney(Number(qtyValue) * Number(listPrice)),
+        listPrice: snapshot?.price ?? null,
+        listPriceCurrency: snapshot?.currency ?? null,
+        price,
+        lineTotal: price === null ? null : roundMoney(Number(qtyValue) * Number(price)),
       };
     });
+    if (issues.length > 0) throw errorWithLineDetails(SALES_LINE_INVALID, issues);
+    return lines;
   }
 
   function calcTotal(lines: { lineTotal: string | null }[], discountPercent: string, freight: string): string {
@@ -3171,7 +3205,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     return roundMoney(subtotal * (1 - Number(discountPercent) / 100) + Number(freight));
   }
 
-  type SalesLineIssueReason = 'NO_LIST_PRICE' | 'NO_BATCH_STOCK' | 'QTY_EXCEEDS_STOCK';
+  type SalesLineIssueReason = 'NO_LIST_PRICE' | 'CURRENCY_MISMATCH' | 'NO_BATCH_STOCK' | 'QTY_EXCEEDS_STOCK';
   interface SalesLineIssue {
     index: number;
     itemId: string;
@@ -3252,7 +3286,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       const salesNo = await nextSalesNo(exec);
       await exec.query('BEGIN');
       try {
-        const lines = await computeSalesLines(input.sellerUnitId, input.items, (l) => l.qty);
+        const lines = await computeSalesLines(input.sellerUnitId, input.currency, input.items, (l) => l.qty);
         const { rows } = await exec.query(
           `INSERT INTO sales_orders
              (sales_no, seller_unit_id, buyer_unit_id, source, delivery_method,
@@ -3271,9 +3305,10 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         for (const line of lines) {
           await exec.query(
             `INSERT INTO sales_order_items
-               (sales_order_id, item_id, qty, list_price, price, line_total)
+               (sales_order_id, item_id, qty, list_price, list_price_currency, price, line_total)
              VALUES (${quote(order.id)}, ${quote(line.itemId)}, ${quote(line.qty)},
-                     ${quote(line.listPrice)}, ${quote(line.price)}, ${quote(line.lineTotal)})`,
+                     ${quote(line.listPrice)}, ${quote(line.listPriceCurrency)},
+                     ${quote(line.price)}, ${quote(line.lineTotal)})`,
           );
         }
         await exec.query('COMMIT');
@@ -3297,16 +3332,22 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
         const order = mapSalesOrder(locked[0]);
 
         if (input.items) {
-          const lines = await computeSalesLines(order.sellerUnitId, input.items, (l) => l.qty);
+          const lines = await computeSalesLines(
+            order.sellerUnitId,
+            input.currency ?? order.currency,
+            input.items,
+            (l) => l.qty,
+          );
           await exec.query(
             `DELETE FROM sales_order_items WHERE sales_order_id = ${quote(id)}`,
           );
           for (const line of lines) {
             await exec.query(
               `INSERT INTO sales_order_items
-                 (sales_order_id, item_id, qty, list_price, price, line_total)
+                 (sales_order_id, item_id, qty, list_price, list_price_currency, price, line_total)
                VALUES (${quote(id)}, ${quote(line.itemId)}, ${quote(line.qty)},
-                       ${quote(line.listPrice)}, ${quote(line.price)}, ${quote(line.lineTotal)})`,
+                       ${quote(line.listPrice)}, ${quote(line.listPriceCurrency)},
+                       ${quote(line.price)}, ${quote(line.lineTotal)})`,
             );
           }
         }

@@ -35,7 +35,6 @@ function unit(partial: Partial<UnitRecord> & { id: string }): UnitRecord {
     type: 'COLLECTOR',
     address: null,
     contact: null,
-    baseCurrency: 'CNY',
     isActive: true,
     createdAt: now,
     updatedAt: now,

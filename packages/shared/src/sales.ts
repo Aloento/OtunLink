@@ -18,8 +18,16 @@ export interface SalesOrderItemDto {
   itemName: string | null;
   spec: string | null;
   qty: string;
+  /** 默认零售价快照（保存时的 retail_prices.price），可能为空。 */
   listPrice: string | null;
+  /** 快照零售价的货币（取自 retail_prices.currency）；无快照为 null。 */
+  listPriceCurrency: string | null;
+  /** 成交价，恒为本单货币。 */
   price: string | null;
+  /** 成交价货币（= 本单货币 order.currency）。 */
+  priceCurrency: string;
+  /** 该行是否填写了行级改价（价格未沿用默认零售价快照）。 */
+  priceOverridden: boolean;
   lineTotal: string | null;
 }
 

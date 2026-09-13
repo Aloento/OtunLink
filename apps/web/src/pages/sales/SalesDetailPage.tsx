@@ -111,8 +111,16 @@ export function SalesDetailPage() {
     },
     { key: 'spec', header: t('inventory.spec'), render: (l) => l.spec ?? '—' },
     { key: 'qty', header: t('sales.qty'), render: (l) => l.qty },
-    { key: 'listPrice', header: t('sales.listPrice'), render: (l) => l.listPrice ?? '—' },
-    { key: 'price', header: t('sales.price'), render: (l) => l.price ?? '—' },
+    {
+      key: 'listPrice',
+      header: t('sales.listPrice'),
+      render: (l) => (l.listPrice === null ? '—' : `${l.listPrice} ${l.listPriceCurrency ?? order.currency}`),
+    },
+    {
+      key: 'price',
+      header: t('sales.price'),
+      render: (l) => (l.price === null ? '—' : `${l.price} ${l.priceCurrency}`),
+    },
     { key: 'lineTotal', header: t('sales.lineTotal'), render: (l) => l.lineTotal ?? '—' },
   ];
 
@@ -224,6 +232,10 @@ export function SalesDetailPage() {
         <div>
           <span className="text-neutral-500">{t('sales.discountPercent')}：</span>
           {order.discountPercent}
+        </div>
+        <div>
+          <span className="text-neutral-500">{t('sales.currency')}：</span>
+          {order.currency}
         </div>
         <div>
           <span className="text-neutral-500">{t('sales.totalAmount')}：</span>

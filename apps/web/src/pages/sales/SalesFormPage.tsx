@@ -14,9 +14,12 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import {
+  CURRENCIES,
   DELIVERY_METHODS,
   SALES_SOURCES,
+  type Currency,
   type DeliveryMethod,
+  type RetailPriceDto,
   type SalesOrderCreateInput,
   type SalesOrderPatchInput,
   type SalesSource,
@@ -25,6 +28,7 @@ import {
 import { errorI18nKey, extractSalesLineErrors, isApiError, type ExtractedSalesLineError } from '../../api/http';
 import { listItems } from '../../api/items';
 import { listPartnerships } from '../../api/partnerships';
+import { listRetailPrices } from '../../api/retail-prices';
 import { createSalesOrder, getSalesOrder, updateSalesOrder } from '../../api/sales';
 import { listStockBatches } from '../../api/stock';
 import { listUnits, type UnitDto } from '../../api/units';
@@ -48,8 +52,8 @@ function emptyLine(): LineState {
   return { key: genKey(), itemId: '', qty: '', unitPriceOverride: '' };
 }
 
-// 销售单新建/编辑：选仓库/门店/物品/数量（行改价可选）/折扣/送货方式。
-// 金额由服务端按零售价快照计算，前端仅展示提示。
+// 销售单新建/编辑：选仓库/门店/物品/数量（行改价可选）/折扣/本单货币/送货方式。
+// 金额由服务端按零售价快照计算（不做货币换算），前端仅展示提示。
 export function SalesFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -67,6 +71,9 @@ export function SalesFormPage() {
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [freight, setFreight] = useState('0');
   const [discountPercent, setDiscountPercent] = useState('0');
+  const [currency, setCurrency] = useState<Currency>('CNY');
+  // 用户手动改过货币后，不再自动跟随明细的默认零售价货币。
+  const [currencyTouched, setCurrencyTouched] = useState(false);
   const [remark, setRemark] = useState('');
   const [carrier, setCarrier] = useState('');
   const [trackingNo, setTrackingNo] = useState('');
@@ -109,6 +116,26 @@ export function SalesFormPage() {
     return map;
   }, [stockBatches]);
 
+  // 卖方仓库的默认零售价：仅用于展示货币与提示行级改价，金额仍由服务端快照。
+  const { data: retailPrices } = useQuery({
+    queryKey: ['retail-prices', 'unit', sellerUnitId],
+    queryFn: () => listRetailPrices({ unitId: sellerUnitId }),
+    enabled: Boolean(sellerUnitId),
+    staleTime: 30_000,
+  });
+
+  const retailPriceByItem = useMemo(() => {
+    const map = new Map<string, RetailPriceDto>();
+    for (const rp of retailPrices?.items ?? []) map.set(rp.itemId, rp);
+    return map;
+  }, [retailPrices]);
+
+  const retailCurrencyOf = (itemId: string): string | undefined =>
+    retailPriceByItem.get(itemId)?.currency;
+
+  const itemNameOf = (itemId: string): string =>
+    (itemPage?.items ?? []).find((candidate) => candidate.id === itemId)?.name ?? '—';
+
   const detailQuery = useQuery({
     queryKey: ['sales-orders', id],
     queryFn: () => getSalesOrder(id!),
@@ -144,6 +171,8 @@ export function SalesFormPage() {
       setDeliveryAddress(order.deliveryAddress ?? '');
       setFreight(order.freight ?? '0');
       setDiscountPercent(order.discountPercent);
+      setCurrency(order.currency as Currency);
+      setCurrencyTouched(true);
       setRemark(order.remark ?? '');
       setCarrier(order.carrier ?? '');
       setTrackingNo(order.trackingNo ?? '');
@@ -153,7 +182,7 @@ export function SalesFormPage() {
             key: genKey(),
             itemId: line.itemId,
             qty: line.qty,
-            unitPriceOverride: line.listPrice !== null && line.listPrice === line.price ? '' : line.price ?? '',
+            unitPriceOverride: line.priceOverridden ? line.price ?? '' : '',
           }))
           : [emptyLine()],
       );
@@ -173,6 +202,15 @@ export function SalesFormPage() {
     }
   }, [isEdit, sellerUnitId, buyerUnitId, me, warehouses, retailers]);
 
+  // 新建时本单货币默认跟随第一条明细的默认零售价货币（未手动改过时）。
+  useEffect(() => {
+    if (isEdit || currencyTouched) return;
+    const first = lines.find((l) => l.itemId && retailPriceByItem.get(l.itemId)?.currency);
+    if (!first) return;
+    const next = retailPriceByItem.get(first.itemId)!.currency as Currency;
+    setCurrency((prev) => (prev === next ? prev : next));
+  }, [isEdit, currencyTouched, lines, retailPriceByItem]);
+
   const setLine = (key: string, field: keyof LineState, value: string) =>
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, [field]: value } : l)));
 
@@ -180,6 +218,22 @@ export function SalesFormPage() {
     if (!sellerUnitId) return t('sales.errors.sellerRequired');
     if (!buyerUnitId) return t('sales.errors.buyerRequired');
     if (lines.some((l) => !l.itemId || !l.qty.trim())) return t('sales.errors.itemRequired');
+    const mismatch = lines.findIndex(
+      (l) =>
+        l.itemId &&
+        !l.unitPriceOverride.trim() &&
+        retailCurrencyOf(l.itemId) !== undefined &&
+        retailCurrencyOf(l.itemId) !== currency,
+    );
+    if (mismatch >= 0) {
+      const line = lines[mismatch];
+      return t('sales.errors.currencyMismatch', {
+        index: mismatch + 1,
+        itemName: itemNameOf(line.itemId),
+        listCurrency: retailCurrencyOf(line.itemId),
+        currency,
+      });
+    }
     return null;
   };
 
@@ -204,6 +258,7 @@ export function SalesFormPage() {
           deliveryAddress: deliveryAddress.trim() || null,
           freight,
           discountPercent,
+          currency,
           remark: remark.trim() || null,
           carrier: carrier.trim() || null,
           trackingNo: trackingNo.trim() || null,
@@ -219,6 +274,7 @@ export function SalesFormPage() {
           deliveryAddress: deliveryAddress.trim() || null,
           freight,
           discountPercent,
+          currency,
           remark: remark.trim() || null,
           carrier: carrier.trim() || null,
           trackingNo: trackingNo.trim() || null,
@@ -352,6 +408,21 @@ export function SalesFormPage() {
             onChange={(_, d) => setDiscountPercent(d.value)}
           />
         </Field>
+        <Field label={t('sales.currency')} hint={t('sales.currencyHint')}>
+          <Select
+            value={currency}
+            onChange={(_, d) => {
+              setCurrencyTouched(true);
+              setCurrency(d.value as Currency);
+            }}
+          >
+            {CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <Field label={t('sales.remark')} className="sm:col-span-2">
           <Textarea value={remark} onChange={(_, d) => setRemark(d.value)} rows={2} />
         </Field>
@@ -416,7 +487,7 @@ export function SalesFormPage() {
                   onChange={(_, d) => setLine(line.key, 'qty', d.value)}
                 />
               </Field>
-              <Field className="min-w-0" label={t('sales.unitPriceOverride')}>
+              <Field className="min-w-0" label={`${t('sales.unitPriceOverride')} (${currency})`}>
                 <Input
                   className="w-full"
                   type="number"
@@ -429,8 +500,22 @@ export function SalesFormPage() {
             {line.itemId && (
               <Text size={200} className="text-neutral-500">
                 {t('sales.availableStock')}: {itemStock.get(line.itemId) ?? '—'}
+                {retailPriceByItem.get(line.itemId)
+                  ? ` · ${t('sales.listPrice')}: ${retailPriceByItem.get(line.itemId)!.price} ${retailPriceByItem.get(line.itemId)!.currency}`
+                  : ''}
               </Text>
             )}
+            {line.itemId &&
+              !line.unitPriceOverride.trim() &&
+              retailCurrencyOf(line.itemId) !== undefined &&
+              retailCurrencyOf(line.itemId) !== currency && (
+                <Text size={200} className="text-red-600">
+                  {t('sales.lineCurrencyMismatch', {
+                    listCurrency: retailCurrencyOf(line.itemId),
+                    currency,
+                  })}
+                </Text>
+              )}
           </div>
         ))}
       </div>

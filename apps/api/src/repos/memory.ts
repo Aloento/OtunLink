@@ -211,7 +211,6 @@ class MemoryUnitRepository implements UnitRepository {
       type: input.type,
       address: input.address ?? null,
       contact: input.contact ?? null,
-      baseCurrency: input.baseCurrency ?? 'CNY',
       isActive: input.isActive ?? true,
       createdAt: now,
       updatedAt: now,
@@ -230,7 +229,6 @@ class MemoryUnitRepository implements UnitRepository {
       ...(patch.type !== undefined ? { type: patch.type } : {}),
       ...(patch.address !== undefined ? { address: patch.address } : {}),
       ...(patch.contact !== undefined ? { contact: patch.contact } : {}),
-      ...(patch.baseCurrency !== undefined ? { baseCurrency: patch.baseCurrency } : {}),
       ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
       updatedAt: new Date(),
     };
@@ -576,7 +574,7 @@ const SALES_STATE_CONFLICT_MESSAGE =
   'SALES_STATE_CONFLICT: sales order is not in the expected state';
 const SALES_LINE_INVALID_MESSAGE = 'SALES_LINE_INVALID: sales order line is invalid';
 
-type SalesLineIssueReason = 'NO_LIST_PRICE' | 'NO_BATCH_STOCK' | 'QTY_EXCEEDS_STOCK';
+type SalesLineIssueReason = 'NO_LIST_PRICE' | 'CURRENCY_MISMATCH' | 'NO_BATCH_STOCK' | 'QTY_EXCEEDS_STOCK';
 interface SalesLineIssue {
   index: number;
   itemId: string;
@@ -2824,28 +2822,55 @@ class MemorySalesRepository implements SalesRepository {
     return `SO-${key}-${String(next).padStart(4, '0')}`;
   }
 
-  /** 价格快照：override ?? 当前零售价；二者皆无则行价/小计置 null（发送时校验）。 */
+  /**
+   * 价格快照：零售价取自定义的默认零售价（保留它自己的货币），成交价恒为本单货币。
+   * 零售价货币与本单货币不一致时必须行级改价（不做货币换算）；两者皆无则置 null（发送时校验）。
+   */
   private async snapshotLines(
     sellerUnitId: string,
+    orderCurrency: string,
     lines: CreateSalesRepoInput['items'],
-  ): Promise<{ itemId: string; qty: string; listPrice: string | null; price: string | null; lineTotal: string | null }[]> {
-    const result: { itemId: string; qty: string; listPrice: string | null; price: string | null; lineTotal: string | null }[] = [];
-    for (const line of lines) {
+  ): Promise<{
+    itemId: string;
+    qty: string;
+    listPrice: string | null;
+    listPriceCurrency: string | null;
+    price: string | null;
+    lineTotal: string | null;
+  }[]> {
+    const issues: SalesLineIssue[] = [];
+    const result: {
+      itemId: string;
+      qty: string;
+      listPrice: string | null;
+      listPriceCurrency: string | null;
+      price: string | null;
+      lineTotal: string | null;
+    }[] = [];
+    for (const [index, line] of lines.entries()) {
+      const snapshot = (await this.retailRepo.list({ unitId: sellerUnitId, itemId: line.itemId }))[0] ?? null;
       const override = line.unitPriceOverride ? String(line.unitPriceOverride) : null;
-      let price = override;
-      if (price === null) {
-        const rows = await this.retailRepo.list({ unitId: sellerUnitId, itemId: line.itemId });
-        price = rows[0]?.price ?? null;
+      if (override === null && snapshot && snapshot.currency !== orderCurrency) {
+        const itemName = snapshot.itemName ?? (await this.itemRepo.findById(line.itemId))?.name ?? null;
+        issues.push({
+          index: index + 1,
+          itemId: line.itemId,
+          itemName,
+          reason: 'CURRENCY_MISMATCH',
+          message: `第${index + 1}行（${itemName ?? '未知物品'}）：默认零售价货币 ${snapshot.currency} 与本单货币 ${orderCurrency} 不一致，请填写行级改价`,
+        });
       }
-      const listPrice = price === '' ? null : price;
+      const price = override ?? snapshot?.price ?? null;
       result.push({
         itemId: line.itemId,
         qty: line.qty,
-        listPrice,
-        price: listPrice,
-        lineTotal: listPrice === null ? null : round2(Number(line.qty) * Number(listPrice)).toFixed(2),
+        listPrice: snapshot?.price ?? null,
+        listPriceCurrency: snapshot?.currency ?? null,
+        price,
+        lineTotal: price === null ? null : round2(Number(line.qty) * Number(price)).toFixed(2),
       });
     }
+    if (issues.length > 0) throw errorWithLineDetails(SALES_LINE_INVALID_MESSAGE, issues);
     return result;
   }
 
@@ -2917,7 +2942,7 @@ class MemorySalesRepository implements SalesRepository {
 
   async create(input: CreateSalesRepoInput): Promise<SalesOrderRecord> {
     const now = new Date();
-    const lines = await this.snapshotLines(input.sellerUnitId, input.items);
+    const lines = await this.snapshotLines(input.sellerUnitId, input.currency, input.items);
     const order: SalesOrderRecord = {
       id: uuid(),
       salesNo: this.nextSalesNo(),
@@ -2952,6 +2977,7 @@ class MemorySalesRepository implements SalesRepository {
         spec: null,
         qty: line.qty,
         listPrice: line.listPrice,
+        listPriceCurrency: line.listPriceCurrency,
         price: line.price,
         lineTotal: line.lineTotal,
       })),
@@ -2965,9 +2991,20 @@ class MemorySalesRepository implements SalesRepository {
     if (existing.status !== 'DRAFT') throw new Error(SALES_STATE_CONFLICT_MESSAGE);
 
     const now = new Date();
-    let lines: { lineTotal: string | null; itemId: string; qty: string; listPrice: string | null; price: string | null }[] | null = null;
+    let lines: {
+      lineTotal: string | null;
+      itemId: string;
+      qty: string;
+      listPrice: string | null;
+      listPriceCurrency: string | null;
+      price: string | null;
+    }[] | null = null;
     if (input.items) {
-      lines = await this.snapshotLines(existing.sellerUnitId, input.items);
+      lines = await this.snapshotLines(
+        existing.sellerUnitId,
+        input.currency ?? existing.currency,
+        input.items,
+      );
       this.items.set(
         id,
         lines.map((line) => ({
@@ -2978,6 +3015,7 @@ class MemorySalesRepository implements SalesRepository {
           spec: null,
           qty: line.qty,
           listPrice: line.listPrice,
+          listPriceCurrency: line.listPriceCurrency,
           price: line.price,
           lineTotal: line.lineTotal,
         })),

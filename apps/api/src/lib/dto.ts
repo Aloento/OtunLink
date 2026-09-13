@@ -68,7 +68,6 @@ export function unitDto(unit: UnitRecord) {
     type: unit.type,
     address: unit.address,
     contact: unit.contact,
-    baseCurrency: unit.baseCurrency,
     isActive: unit.isActive,
     createdAt: unit.createdAt.toISOString(),
     updatedAt: unit.updatedAt.toISOString(),
@@ -451,7 +450,7 @@ export function retailPriceHistoryDto(row: RetailPriceHistoryRecord) {
 
 // ── 销售单 DTO────────────────────────────────────────────────────────
 
-export function salesOrderItemDto(item: SalesOrderItemRecord) {
+export function salesOrderItemDto(item: SalesOrderItemRecord, orderCurrency: string) {
   return {
     id: item.id,
     itemId: item.itemId,
@@ -459,7 +458,15 @@ export function salesOrderItemDto(item: SalesOrderItemRecord) {
     spec: item.spec ?? null,
     qty: item.qty,
     listPrice: item.listPrice,
+    listPriceCurrency: item.listPriceCurrency ?? null,
     price: item.price,
+    priceCurrency: orderCurrency,
+    // 未沿用默认零售价快照即视为行级改价（金额相同但货币不同的改价同样算）。
+    priceOverridden:
+      item.price !== null &&
+      (item.listPrice === null ||
+        item.price !== item.listPrice ||
+        (item.listPriceCurrency ?? orderCurrency) !== orderCurrency),
     lineTotal: item.lineTotal,
   };
 }

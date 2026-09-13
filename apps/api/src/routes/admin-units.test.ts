@@ -28,7 +28,6 @@ function unit(partial: Partial<UnitRecord> & { id: string }): UnitRecord {
     type: 'WAREHOUSE',
     address: null,
     contact: null,
-    baseCurrency: 'CNY',
     isActive: true,
     createdAt: now,
     updatedAt: now,
@@ -116,11 +115,10 @@ describe('admin units 业务单元管理 API', () => {
     });
     expect(res.status).toBe(201);
     const body = (await res.json()) as {
-      data: { code: string; type: string; baseCurrency: string; isActive: boolean };
+      data: { code: string; type: string; isActive: boolean };
     };
     expect(body.data.code).toBe('U-SH');
     expect(body.data.type).toBe('COLLECTOR');
-    expect(body.data.baseCurrency).toBe('CNY');
     expect(body.data.isActive).toBe(true);
   });
 

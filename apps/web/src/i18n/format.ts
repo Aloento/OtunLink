@@ -2,7 +2,7 @@ import type { AppLocale } from '@otunlink/shared';
 
 // 日期/金额/数字格式化。
 // 时间存储为 UTC ISO；全站统一按中欧时间（Europe/Berlin）显示。
-// 金额不做汇率换算，仅按单元本位币（unit.baseCurrency，CNY/EUR/USD）格式化。
+// 金额不做汇率换算，仅按各单据/明细自带的货币（如销售单的 currency）格式化。
 
 const INTL_LOCALE: Record<AppLocale, string> = {
   'zh-CN': 'zh-CN',
