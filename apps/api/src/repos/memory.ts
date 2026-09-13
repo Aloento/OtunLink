@@ -9,6 +9,7 @@ import type {
   CreateItemInput,
   CreateOutboundRepoInput,
   CreatePartnershipInput,
+  CreatePartnershipResult,
   CreateReturnRepoInput,
   CreateReviewInput,
   CreateSalesRepoInput,
@@ -3452,9 +3453,9 @@ class MemoryPartnershipRepository implements PartnershipRepository {
     return row ? this.hydrate(row) : null;
   }
 
-  async create(input: CreatePartnershipInput): Promise<PartnershipRecord> {
+  async create(input: CreatePartnershipInput): Promise<CreatePartnershipResult> {
     const existing = await this.findByPair(input.warehouseUnitId, input.retailerUnitId);
-    if (existing) return existing;
+    if (existing) return { record: existing, created: false };
     const row: PartnershipRecord = {
       id: uuid(),
       warehouseUnitId: input.warehouseUnitId,
@@ -3465,7 +3466,7 @@ class MemoryPartnershipRepository implements PartnershipRepository {
       createdAt: new Date(),
     };
     this.rows.set(row.id, { ...row });
-    return this.hydrate(row);
+    return { record: await this.hydrate(row), created: true };
   }
 
   async delete(id: string): Promise<boolean> {

@@ -1288,6 +1288,12 @@ export interface CreatePartnershipInput {
   createdBy: string;
 }
 
+/** 幂等创建签约的结果：created=false 表示命中已有签约（返回现有记录）。 */
+export interface CreatePartnershipResult {
+  record: PartnershipRecord;
+  created: boolean;
+}
+
 /** 仓库-零售签约仓储：签约只有「存在/不存在」，零售无需同意，无状态字段。 */
 export interface PartnershipRepository {
   list(query?: PartnershipListQuery): Promise<PartnershipRecord[]>;
@@ -1295,8 +1301,11 @@ export interface PartnershipRepository {
   listWarehouseIds(retailerUnitId: string): Promise<string[]>;
   findById(id: string): Promise<PartnershipRecord | null>;
   findByPair(warehouseUnitId: string, retailerUnitId: string): Promise<PartnershipRecord | null>;
-  /** 幂等创建：已存在时返回现有记录。 */
-  create(input: CreatePartnershipInput): Promise<PartnershipRecord>;
+  /**
+   * 幂等创建：已存在时返回现有记录（created=false）。
+   * 必须由单条写语句得出结果，见 sql.ts 中关于 Hyperdrive 查询缓存的注释。
+   */
+  create(input: CreatePartnershipInput): Promise<CreatePartnershipResult>;
   /** 删除指定 id 的签约；返回是否实际删除。 */
   delete(id: string): Promise<boolean>;
 }

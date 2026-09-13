@@ -99,6 +99,8 @@ export function PartnershipsPage() {
   });
 
   const openAdd = () => {
+    // 清掉上一次失败留下的错误，避免重开弹窗时显示过期的报错。
+    addMutation.reset();
     setDraft({ warehouseUnitId: '', retailerUnitId: '' });
   };
 

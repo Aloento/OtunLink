@@ -12,6 +12,7 @@ import type {
   CreateItemInput,
   CreateOutboundRepoInput,
   CreatePartnershipInput,
+  CreatePartnershipResult,
   CreateReturnRepoInput,
   CreateReviewInput,
   CreateSalesRepoInput,
@@ -3832,15 +3833,28 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       );
       return rows[0] ? mapPartnership(rows[0]) : null;
     },
-    async create(input: CreatePartnershipInput): Promise<PartnershipRecord> {
-      await exec.query(
+    async create(input: CreatePartnershipInput): Promise<CreatePartnershipResult> {
+      // 必须由「单条写语句」返回结果：Hyperdrive 会缓存只读查询（写操作不会使其失效），
+      // 若 INSERT 后再 SELECT 同一对 (warehouse, retailer)，极可能命中 INSERT 前的陈旧缓存，
+      // 从而出现「报错但刷新后发现已添加成功」。这里用 ON CONFLICT DO UPDATE 让冲突行也被
+      // RETURNING 返回（xmax = 0 判定本次是插入还是命中已有行），全程不回读。
+      const { rows } = await exec.query(
         `INSERT INTO retail_partnerships (warehouse_unit_id, retailer_unit_id, created_by)
          VALUES (${quote(input.warehouseUnitId)}, ${quote(input.retailerUnitId)}, ${quote(input.createdBy)})
-         ON CONFLICT (warehouse_unit_id, retailer_unit_id) DO NOTHING`,
+         ON CONFLICT (warehouse_unit_id, retailer_unit_id)
+         DO UPDATE SET created_by = retail_partnerships.created_by
+         RETURNING *, (xmax = 0) AS inserted,
+           (SELECT name FROM business_units WHERE id = retail_partnerships.warehouse_unit_id)
+             AS warehouse_unit_name,
+           (SELECT name FROM business_units WHERE id = retail_partnerships.retailer_unit_id)
+             AS retailer_unit_name`,
       );
-      const record = await partnerships.findByPair(input.warehouseUnitId, input.retailerUnitId);
-      if (!record) throw new Error('PARTNERSHIP_CREATE_FAILED: partnership insert produced no row');
-      return record;
+      const row = rows[0];
+      if (!row) throw new Error('PARTNERSHIP_CREATE_FAILED: partnership upsert returned no row');
+      return {
+        record: mapPartnership(row),
+        created: row.inserted === true || row.inserted === 'true' || row.inserted === 't',
+      };
     },
     async delete(id: string): Promise<boolean> {
       const { rows } = await exec.query(

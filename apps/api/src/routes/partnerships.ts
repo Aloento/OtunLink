@@ -81,15 +81,14 @@ export function partnershipsRouter(): Hono<AppEnv> {
       });
     }
 
-    const existing = await repos.partnerships.findByPair(warehouseUnitId, input.retailerUnitId);
-    if (existing) return ok(c, partnershipDto(existing), 200);
-
-    const record = await repos.partnerships.create({
+    // 不做「先查再插」：Hyperdrive 会缓存只读查询（写入不使其失效），
+    // 先查一次会让随后的读回命中陈旧结果，出现「报错但实际已添加」。
+    const { record, created } = await repos.partnerships.create({
       warehouseUnitId,
       retailerUnitId: input.retailerUnitId,
       createdBy: user.id,
     });
-    return ok(c, partnershipDto(record), 201);
+    return ok(c, partnershipDto(record), created ? 201 : 200);
   });
 
   router.delete('/:id', requireRole('WAREHOUSE', 'ADMIN'), async (c) => {
