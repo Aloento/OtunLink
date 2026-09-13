@@ -1,4 +1,4 @@
-import { ErrorCodes, expiryRemainingDays, type UnitType } from '@otunlink/shared';
+import { ErrorCodes, expiryRemainingDays, type MinSaleUnit, type UnitType } from '@otunlink/shared';
 import type { SqlExecutor } from '@otunlink/db';
 
 import type {
@@ -278,6 +278,7 @@ function mapShipmentItem(row: Record<string, unknown>): ShipmentItemRecord {
     itemId: row.item_id ? String(row.item_id) : null,
     name: String(row.name),
     spec: row.spec ? String(row.spec) : null,
+    minSaleUnit: row.min_sale_unit ? (String(row.min_sale_unit) as MinSaleUnit) : null,
     expectedQty: row.expected_qty != null ? String(row.expected_qty) : '0',
     actualQty: row.actual_qty != null ? String(row.actual_qty) : null,
     unitPrice: row.unit_price != null ? String(row.unit_price) : null,
@@ -456,6 +457,7 @@ function mapStockRow(row: Record<string, unknown>): StockRowRecord {
     itemId: String(row.item_id),
     itemName: row.item_name ? String(row.item_name) : null,
     spec: row.spec ? String(row.spec) : null,
+    minSaleUnit: row.min_sale_unit ? (String(row.min_sale_unit) as MinSaleUnit) : null,
     batchId: String(row.batch_id),
     batchNo: row.batch_no ? String(row.batch_no) : null,
     productionDate: toYMD(row.production_date),
@@ -517,6 +519,7 @@ function mapRetailPrice(row: Record<string, unknown>): RetailPriceRecord {
     itemId: String(row.item_id),
     itemName: row.item_name ? String(row.item_name) : null,
     spec: row.spec ? String(row.spec) : null,
+    minSaleUnit: row.min_sale_unit ? (String(row.min_sale_unit) as MinSaleUnit) : null,
     price: row.price != null ? String(row.price) : '0',
     currency: String(row.currency ?? 'CNY'),
     unitCost: row.unit_cost != null ? String(row.unit_cost) : null,
@@ -632,6 +635,7 @@ function mapSalesItem(row: Record<string, unknown>): SalesOrderItemRecord {
     itemId: String(row.item_id),
     itemName: row.item_name ? String(row.item_name) : null,
     spec: row.spec ? String(row.spec) : null,
+    minSaleUnit: row.min_sale_unit ? (String(row.min_sale_unit) as MinSaleUnit) : null,
     qty: row.qty != null ? String(row.qty) : '0',
     listPrice: row.list_price != null ? String(row.list_price) : null,
     listPriceCurrency: row.list_price_currency != null ? String(row.list_price_currency) : null,
@@ -1400,7 +1404,10 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     },
     async listItems(shipmentId: string): Promise<ShipmentItemRecord[]> {
       const { rows } = await exec.query(
-        `SELECT * FROM shipment_items WHERE shipment_id = ${quote(shipmentId)} ORDER BY created_at ASC, id ASC`,
+        `SELECT si.*, i.min_sale_unit AS min_sale_unit
+         FROM shipment_items si
+         LEFT JOIN items i ON i.id = si.item_id
+         WHERE si.shipment_id = ${quote(shipmentId)} ORDER BY si.created_at ASC, si.id ASC`,
       );
       return rows.map(mapShipmentItem);
     },
@@ -2814,6 +2821,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       const { rows } = await exec.query(
         `SELECT s.*, bu.name AS unit_name, i.name AS item_name,
                 CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                i.min_sale_unit AS min_sale_unit,
                 b.batch_no, b.production_date, b.expiry_date
          FROM stock s
          JOIN business_units bu ON bu.id = s.unit_id
@@ -2868,6 +2876,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       const { rows } = await exec.query(
         `SELECT s.*, bu.name AS unit_name, i.name AS item_name,
                 CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                i.min_sale_unit AS min_sale_unit,
                 b.batch_no, b.production_date, b.expiry_date
          FROM stock s
          JOIN business_units bu ON bu.id = s.unit_id
@@ -2892,6 +2901,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       const { rows } = await exec.query(
         `SELECT s.*, bu.name AS unit_name, i.name AS item_name,
                 CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                i.min_sale_unit AS min_sale_unit,
                 b.batch_no, b.production_date, b.expiry_date
          FROM stock s
          JOIN business_units bu ON bu.id = s.unit_id
@@ -2918,6 +2928,7 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
       const { rows } = await exec.query(
         `SELECT rp.*, bu.name AS unit_name, i.name AS item_name,
                 CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                i.min_sale_unit AS min_sale_unit,
                 bu2.name AS updated_by_name,
                 (SELECT CASE WHEN SUM(s.qty) > 0
                         THEN ROUND(SUM(s.qty * s.avg_cost) / SUM(s.qty), 2)
@@ -3256,7 +3267,8 @@ export function createSqlRepos(exec: SqlExecutor): Repos {
     async listItems(salesOrderId: string): Promise<SalesOrderItemRecord[]> {
       const { rows } = await exec.query(
         `SELECT oi.*, i.name AS item_name,
-                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec
+                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                i.min_sale_unit AS min_sale_unit
          FROM sales_order_items oi
          LEFT JOIN items i ON i.id = oi.item_id
          WHERE oi.sales_order_id = ${quote(salesOrderId)}

@@ -35,6 +35,7 @@ import {
   updateItem,
 } from '../../api/items';
 import { ImageUpload } from '../../components/ImageUpload';
+import { FIELD_OVERFLOW_GUARD } from '../../components/lineGrid';
 import { ScannerDialog } from '../../components/ScannerDialog';
 import { isGtin } from '../../lib/gtin';
 
@@ -186,7 +187,7 @@ export function ItemFormPage() {
       {error && <Text className="text-red-600">{error}</Text>}
 
       {/* items-start：Field 根节点是 display:grid，条码校验信息多出一行时会把同行控件挤下去 */}
-      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
+      <div className={`grid grid-cols-1 items-start gap-4 sm:grid-cols-2 ${FIELD_OVERFLOW_GUARD}`}>
         <Field label={t('items.name')} required>
           <Input value={form.name} onChange={(_, d) => set('name', d.value)} />
         </Field>

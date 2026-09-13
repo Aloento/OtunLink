@@ -12,6 +12,7 @@ import { listItems } from '../../api/items';
 import { listUnits } from '../../api/units';
 import { refreshAfterWrite } from '../../api/queryClient';
 import { RefreshButton } from '../../components/RefreshButton';
+import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
 import { useSession } from '../../auth/SessionProvider';
 
 interface ItemLine {
@@ -163,7 +164,7 @@ export function InboundFormPage() {
 
       {error && <Text className="text-red-600">{error}</Text>}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className={`grid grid-cols-1 items-start gap-4 sm:grid-cols-2 ${FIELD_OVERFLOW_GUARD}`}>
         <Field label={t('inbound.warehouse')} required>
           <Select
             value={warehouseUnitId}
@@ -217,7 +218,7 @@ export function InboundFormPage() {
         </div>
         {lines.map((line) => (
           <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className={`${LINE_GRID_CLASS} sm:grid-cols-3`}>
               <Field label={t('inbound.itemName')} required>
                 <Select value={line.itemId} onChange={(_, d) => pickItem(line.key, d.value)}>
                   <option value="">—</option>
@@ -257,7 +258,7 @@ export function InboundFormPage() {
                 />
               </Field>
             </div>
-            <div className={`grid grid-cols-1 gap-2 ${line.isPerishable ? 'sm:grid-cols-4' : 'sm:grid-cols-2'}`}>
+            <div className={`${LINE_GRID_CLASS} ${line.isPerishable ? 'sm:grid-cols-4' : 'sm:grid-cols-2'}`}>
               <Field label={t('inbound.batchNo')}>
                 <Input
                   value={line.batchNo}

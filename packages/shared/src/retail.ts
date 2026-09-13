@@ -2,6 +2,8 @@
 // 铁律：零售价由仓库/管理员随时修改（写 retail_price_history 留痕）；
 // 入库原价 unit_cost 任何接口/页面均不可修改，仅只读展示。
 
+import type { MinSaleUnit } from './items';
+
 /** 零售价行 DTO（retail_prices JOIN units/items + 只读参考 unit_cost）。 */
 export interface RetailPriceDto {
   id: string;
@@ -9,7 +11,10 @@ export interface RetailPriceDto {
   unitName: string | null;
   itemId: string;
   itemName: string | null;
+  /** 最小销售单位的文案键值（分组见 minSaleUnit）。 */
   spec: string | null;
+  /** spec 所属文案分组：INNER → items.innerUnits，SPEC → items.specUnits。 */
+  minSaleUnit: MinSaleUnit | null;
   /** 当前零售价（numeric 转字符串，货币单位见 currency）。 */
   price: string;
   currency: string;

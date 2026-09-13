@@ -602,6 +602,7 @@ class MemoryShipmentRepository implements ShipmentRepository {
   private dailyCounters = new Map<string, number>();
 
   constructor(
+    private readonly itemRepo: MemoryItemRepository,
     seed: {
       shipments?: ShipmentRecord[];
       trackings?: ShipmentTrackingRecord[];
@@ -722,6 +723,7 @@ class MemoryShipmentRepository implements ShipmentRepository {
         itemId: i.itemId,
         name: i.name,
         spec: normalizeEmpty(i.spec),
+        minSaleUnit: null,
         expectedQty: i.expectedQty,
         actualQty: null,
         unitPrice: normalizeEmpty(i.unitPrice),
@@ -780,6 +782,7 @@ class MemoryShipmentRepository implements ShipmentRepository {
           itemId: i.itemId,
           name: i.name,
           spec: normalizeEmpty(i.spec),
+          minSaleUnit: null,
           expectedQty: i.expectedQty,
           actualQty: null,
           unitPrice: normalizeEmpty(i.unitPrice),
@@ -821,7 +824,14 @@ class MemoryShipmentRepository implements ShipmentRepository {
   }
 
   async listItems(shipmentId: string): Promise<ShipmentItemRecord[]> {
-    return (this.items.get(shipmentId) ?? []).map(cloneShipmentItem);
+    const rows = this.items.get(shipmentId) ?? [];
+    const hydrated: ShipmentItemRecord[] = [];
+    for (const row of rows) {
+      const item = row.itemId ? await this.itemRepo.findById(row.itemId) : null;
+      const minSaleUnit = item?.minSaleUnit ?? row.minSaleUnit;
+      hydrated.push(cloneShipmentItem({ ...row, minSaleUnit }));
+    }
+    return hydrated;
   }
 
   async startCounting(id: string): Promise<ShipmentRecord | null> {
@@ -2359,6 +2369,7 @@ class MemoryStockRepository implements StockRepository {
       itemId: row.itemId,
       itemName: item?.name ?? null,
       spec: item ? (item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit) : null,
+      minSaleUnit: item?.minSaleUnit ?? null,
       batchId: row.batchId,
       batchNo: batch?.batchNo ?? null,
       productionDate: batch?.productionDate ?? null,
@@ -2545,6 +2556,7 @@ class MemoryRetailPriceRepository implements RetailPriceRepository {
       itemId: input.itemId,
       itemName: item?.name ?? null,
       spec: item ? (item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit) : null,
+      minSaleUnit: item?.minSaleUnit ?? null,
       price: input.price,
       currency: input.currency,
       unitCost: this.unitCostOf(input.unitId, input.itemId),
@@ -2919,6 +2931,7 @@ class MemorySalesRepository implements SalesRepository {
         ...row,
         itemName: row.itemName ?? item?.name ?? null,
         spec: row.spec ?? (item ? (item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit) : null),
+        minSaleUnit: item?.minSaleUnit ?? null,
       });
     }
     return hydrated;
@@ -2978,6 +2991,7 @@ class MemorySalesRepository implements SalesRepository {
         itemId: line.itemId,
         itemName: null,
         spec: null,
+        minSaleUnit: null,
         qty: line.qty,
         listPrice: line.listPrice,
         listPriceCurrency: line.listPriceCurrency,
@@ -3016,6 +3030,7 @@ class MemorySalesRepository implements SalesRepository {
           itemId: line.itemId,
           itemName: null,
           spec: null,
+          minSaleUnit: null,
           qty: line.qty,
           listPrice: line.listPrice,
           listPriceCurrency: line.listPriceCurrency,
@@ -3498,14 +3513,14 @@ export function createMemoryRepos(seed?: {
   partnerships?: PartnershipRecord[];
 }): Repos {
   const stockLedger = new MemoryStockLedger();
-  const shipmentRepo = new MemoryShipmentRepository({
+  const itemRepo = new MemoryItemRepository(seed?.items);
+  const shipmentRepo = new MemoryShipmentRepository(itemRepo, {
     shipments: seed?.shipments,
     trackings: seed?.shipmentTrackings,
     items: seed?.shipmentItems,
     reviews: seed?.reviews,
   });
   const unitRepo = new MemoryUnitRepository(seed?.units);
-  const itemRepo = new MemoryItemRepository(seed?.items);
   const inboundRepo = new MemoryInboundRepository(
     shipmentRepo,
     itemRepo,

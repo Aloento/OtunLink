@@ -22,7 +22,6 @@ import {
 } from '@otunlink/shared';
 
 import { errorI18nKey, extractSalesLineErrors, isApiError, type ExtractedSalesLineError } from '../../api/http';
-import { listItems } from '../../api/items';
 import { ItemLink } from '../../components/ItemLink';
 import { createSalesReturn, listReturns } from '../../api/returns';
 import { cancelSalesOrder, confirmSaleReceipt, deleteSalesOrder, getSalesOrder, sendSalesOrder, uploadSalePayment } from '../../api/sales';
@@ -34,6 +33,7 @@ import { RefreshButton } from '../../components/RefreshButton';
 import { ImageUpload } from '../../components/ImageUpload';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
+import { unitLabel } from '../../i18n/units';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 
 // 销售单详情（状态机）：草稿可编辑/发送（FEFO 预览可覆盖），
@@ -110,7 +110,11 @@ export function SalesDetailPage() {
       header: t('sales.itemName'),
       render: (l) => <ItemLink itemId={l.itemId} itemName={l.itemName} />,
     },
-    { key: 'spec', header: t('inventory.spec'), render: (l) => l.spec ?? '—' },
+    {
+      key: 'spec',
+      header: t('sales.spec'),
+      render: (l) => unitLabel(t, l.spec, l.minSaleUnit),
+    },
     { key: 'qty', header: t('sales.qty'), render: (l) => l.qty },
     {
       key: 'listPrice',

@@ -19,6 +19,7 @@ export interface OutboundOrderItemDto {
   createdAt: string;
   /** 联表带出（展示用）。 */
   itemName?: string | null;
+  /** 联表带出的最小销售单位键值；本 DTO 未带 minSaleUnit 分组，当前无页面渲染。 */
   spec?: string | null;
   batchNo?: string | null;
 }

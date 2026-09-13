@@ -13,10 +13,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
-import { CURRENCIES, type ItemDto } from '@otunlink/shared';
+import { CURRENCIES, type ItemDto, type MinSaleUnit } from '@otunlink/shared';
 
 import { useSession } from '../../auth/SessionProvider';
 import { RefreshButton } from '../../components/RefreshButton';
+import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
 import { errorI18nKey, isApiError } from '../../api/http';
 import { listItems } from '../../api/items';
 import { createShipment, getShipment, updateShipment, type ShipmentCreateInput } from '../../api/shipments';
@@ -35,6 +36,7 @@ interface ItemLine {
   itemId: string;
   name: string;
   spec: string | null;
+  minSaleUnit: MinSaleUnit | null;
   isPerishable: boolean;
   expectedQty: string;
   unitPrice: string;
@@ -73,12 +75,21 @@ function sanitizeDecimalInput(value: string): string {
   return rest.length ? `${head}.${rest.join('').replace(/\./g, '')}` : head ?? '';
 }
 
+// 最小销售单位：INNER 取内装单位，否则取规格单位（返回文案词条分组与键值）。
+// 与销售清单、以及后端 shipment_items.spec 快照保持同一口径。
+function minSaleUnitOf(item?: ItemDto): { group: 'innerUnits' | 'specUnits'; unit: string | null } {
+  const group = item?.minSaleUnit === 'INNER' ? 'innerUnits' : 'specUnits';
+  const unit = (group === 'innerUnits' ? item?.innerUnit : item?.specUnit) ?? null;
+  return { group, unit };
+}
+
 function emptyItem(item?: ItemDto): ItemLine {
   return {
     key: genKey('i'),
     itemId: item?.id ?? '',
     name: item?.name ?? '',
-    spec: item?.specUnit ?? null,
+    spec: minSaleUnitOf(item).unit,
+    minSaleUnit: item?.minSaleUnit ?? null,
     isPerishable: item?.isPerishable ?? false,
     expectedQty: '',
     unitPrice: '',
@@ -173,6 +184,7 @@ export function ShipmentFormPage() {
         itemId: item.itemId ?? '',
         name: item.name,
         spec: item.spec,
+        minSaleUnit: item.minSaleUnit,
         isPerishable: item.productionDate !== null || item.expiryDate !== null,
         expectedQty: item.expectedQty,
         unitPrice: item.unitPrice ?? '',
@@ -198,15 +210,26 @@ export function ShipmentFormPage() {
       prev.map((l) =>
         l.key === key
           ? {
-              ...l,
-              itemId,
-              name: item?.name ?? l.name,
-              spec: item?.specUnit ?? l.spec,
-              isPerishable: item?.isPerishable ?? l.isPerishable,
-            }
+            ...l,
+            itemId,
+            name: item?.name ?? l.name,
+            spec: minSaleUnitOf(item).unit ?? l.spec,
+            minSaleUnit: item?.minSaleUnit ?? l.minSaleUnit,
+            isPerishable: item?.isPerishable ?? l.isPerishable,
+          }
           : l,
       ),
     );
+  };
+
+  // 「应收数量」后缀单位随物品的「最小销售单位」变化（与销售清单一致）。
+  const quantityUnitSuffix = (line: ItemLine): string => {
+    const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
+    // 物品不在当前候选项（编辑回显的非本页物品）时退回行上快照，分组取详情带出的 minSaleUnit。
+    const { group, unit } = item
+      ? minSaleUnitOf(item)
+      : { group: line.minSaleUnit === 'INNER' ? 'innerUnits' : 'specUnits', unit: line.spec };
+    return unit ? ` (${t(`items.${group}.${unit}`)})` : '';
   };
 
   const buildPayload = (): ShipmentCreateInput | null => {
@@ -293,7 +316,7 @@ export function ShipmentFormPage() {
 
       {error && <Text className="text-red-600">{error}</Text>}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className={`grid grid-cols-1 items-start gap-4 sm:grid-cols-2 ${FIELD_OVERFLOW_GUARD}`}>
         <Field label={t('shipments.shipper')} required>
           <Select
             value={form.shipperUnitId}
@@ -362,7 +385,7 @@ export function ShipmentFormPage() {
           </Button>
         </div>
         {trackings.map((tr) => (
-          <div key={tr.key} className="grid grid-cols-1 gap-2 rounded border border-neutral-200 p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+          <div key={tr.key} className={`${LINE_GRID_CLASS} rounded border border-neutral-200 p-3 sm:grid-cols-[1fr_1fr_1fr_auto]`}>
             <Field label={t('shipments.carrier')} required>
               <Input value={tr.carrier} onChange={(_, d) => setTracking(tr.key, 'carrier', d.value)} />
             </Field>
@@ -418,7 +441,7 @@ export function ShipmentFormPage() {
         </div>
         {lines.map((line) => (
           <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className={`${LINE_GRID_CLASS} sm:grid-cols-3`}>
               <Field label={t('shipments.itemName')} required className="sm:col-span-1">
                 <Select value={line.itemId} onChange={(_, d) => pickItem(line.key, d.value)}>
                   <option value="">{t('shipments.selectItem')}</option>
@@ -430,12 +453,7 @@ export function ShipmentFormPage() {
                   ))}
                 </Select>
               </Field>
-              <Field
-                label={
-                  line.spec ? `${t('shipments.expectedQty')} ${t(`items.specUnits.${line.spec}`)}` : t('shipments.expectedQty')
-                }
-                required
-              >
+              <Field label={`${t('shipments.expectedQty')}${quantityUnitSuffix(line)}`} required>
                 <Input
                   type="number"
                   inputMode="numeric"
@@ -454,7 +472,7 @@ export function ShipmentFormPage() {
               </Field>
             </div>
             {line.isPerishable && (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className={`${LINE_GRID_CLASS} sm:grid-cols-2`}>
                 <Field label={t('shipments.productionDate')} required>
                   <Input
                     type="date"
@@ -471,7 +489,7 @@ export function ShipmentFormPage() {
                 </Field>
               </div>
             )}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+            <div className={`${LINE_GRID_CLASS} sm:grid-cols-[1fr_auto]`}>
               <Field label={t('shipments.lineNote')}>
                 <Input
                   value={line.lineNote}

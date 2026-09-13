@@ -35,6 +35,7 @@ import { listUnits, type UnitDto } from '../../api/units';
 import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { RefreshButton } from '../../components/RefreshButton';
+import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
 
 interface LineState {
   key: string;
@@ -314,7 +315,7 @@ export function SalesFormPage() {
       )}
 
       {/* items-start：Field 根节点是 display:grid，被同行带 hint 的字段撑高时会拉伸行高把控件挤下去 */}
-      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
+      <div className={`grid grid-cols-1 items-start gap-4 sm:grid-cols-2 ${FIELD_OVERFLOW_GUARD}`}>
         <Field label={t('sales.seller')} required>
           <Select
             value={sellerUnitId}
@@ -451,7 +452,7 @@ export function SalesFormPage() {
         </Text>
         {lines.map((line) => (
           <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 *:min-w-0 [&_.fui-Input]:w-full [&_.fui-Input__input]:min-w-0 [&_.fui-Select]:w-full [&_.fui-Select]:min-w-0 [&_.fui-Select__select]:w-full [&_.fui-Select__select]:min-w-0 [&_.fui-Select__select]:h-8 [&_.fui-Input__input]:h-8">
+            <div className={`${LINE_GRID_CLASS} [&_.fui-Select__select]:h-8 [&_.fui-Input__input]:h-8 sm:grid-cols-3`}>
               <Field className="min-w-0" label={t('sales.itemName')} required>
                 <Select className="w-full" value={line.itemId} onChange={(_, d) => setLine(line.key, 'itemId', d.value)}>
                   <option value="">—</option>

@@ -21,6 +21,7 @@ import { listUnits } from '../../api/units';
 import { useSession } from '../../auth/SessionProvider';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
+import { unitLabel } from '../../i18n/units';
 import { ItemLink } from '../../components/ItemLink';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
@@ -137,7 +138,7 @@ export function InventoryPage() {
       header: t('inventory.item'),
       render: (row) => <ItemLink itemId={row.itemId} itemName={row.itemName} />,
     },
-    { key: 'spec', header: t('inventory.spec'), render: (row) => row.spec ?? '—' },
+    { key: 'spec', header: t('inventory.spec'), render: (row) => unitLabel(t, row.spec, row.minSaleUnit) },
     { key: 'batchNo', header: t('inventory.batchNo'), render: (row) => row.batchNo ?? '—' },
     { key: 'expiry', header: t('inventory.expiry'), render: (row) => expiryCell(row.expiryDate) },
     { key: 'qty', header: t('inventory.qty'), render: (row) => row.qty },

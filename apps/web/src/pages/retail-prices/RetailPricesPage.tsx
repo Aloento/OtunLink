@@ -33,6 +33,7 @@ import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { unitLabel } from '../../i18n/units';
 
 const CURRENCIES = ['CNY', 'USD', 'EUR'] as const;
 
@@ -140,7 +141,7 @@ export function RetailPricesPage() {
   const columns: ResponsiveTableColumn<RetailPriceDto>[] = [
     { key: 'unit', header: t('retailPrices.unit'), render: (row) => row.unitName ?? row.unitId },
     { key: 'item', header: t('retailPrices.item'), render: (row) => row.itemName ?? row.itemId },
-    { key: 'spec', header: t('retailPrices.spec'), render: (row) => row.spec ?? '—' },
+    { key: 'spec', header: t('retailPrices.spec'), render: (row) => unitLabel(t, row.spec, row.minSaleUnit) },
     {
       key: 'price',
       header: t('retailPrices.price'),

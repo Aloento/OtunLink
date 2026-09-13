@@ -19,6 +19,7 @@ import { deleteShipment, getShipment, sendShipment, startCounting } from '../../
 import { refreshAfterWrite } from '../../api/queryClient';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
+import { unitLabel } from '../../i18n/units';
 import { ItemLink } from '../../components/ItemLink';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { RefreshButton } from '../../components/RefreshButton';
@@ -140,7 +141,11 @@ export function ShipmentDetailPage() {
       header: t('shipments.itemName'),
       render: (item) => <ItemLink itemId={item.itemId} itemName={item.name} />,
     },
-    { key: 'spec', header: t('shipments.itemSpec'), render: (item) => item.spec ?? '—' },
+    {
+      key: 'spec',
+      header: t('shipments.itemSpec'),
+      render: (item) => unitLabel(t, item.spec, item.minSaleUnit),
+    },
     { key: 'qty', header: t('shipments.expectedQty'), render: (item) => item.expectedQty },
     {
       key: 'actual',

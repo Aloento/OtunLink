@@ -26,6 +26,7 @@ import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { ImageUpload } from '../../components/ImageUpload';
 import { RefreshButton } from '../../components/RefreshButton';
+import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
 
 interface ItemLine {
   key: string;
@@ -289,7 +290,7 @@ export function OutboundFormPage() {
 
       {error && <Text className="text-red-600">{error}</Text>}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className={`grid grid-cols-1 items-start gap-4 sm:grid-cols-2 ${FIELD_OVERFLOW_GUARD}`}>
         <Field label={t('outbound.warehouse')} required>
           <Select
             value={warehouseUnitId}
@@ -373,7 +374,7 @@ export function OutboundFormPage() {
               key={line.key}
               className="flex flex-col gap-2 rounded border border-neutral-200 p-3"
             >
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className={`${LINE_GRID_CLASS} sm:grid-cols-3`}>
                 <Field label={t('outbound.itemName')} required>
                   <Select value={line.itemId} onChange={(_, d) => setLine(line.key, 'itemId', d.value)}>
                     <option value="">—</option>

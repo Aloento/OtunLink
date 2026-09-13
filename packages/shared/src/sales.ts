@@ -1,7 +1,7 @@
 // 销售单：来源、送货方式、状态、DTO。
 // 与 packages/db/src/enums.ts 的 pgEnum 保持一致（数据库层枚举）。
 
-import type { Paged } from './items';
+import type { MinSaleUnit, Paged } from './items';
 
 export const SALES_SOURCES = ['RETAILER_REQUEST', 'WAREHOUSE_INITIATED'] as const;
 export type SalesSource = (typeof SALES_SOURCES)[number];
@@ -16,7 +16,10 @@ export interface SalesOrderItemDto {
   id: string;
   itemId: string;
   itemName: string | null;
+  /** 最小销售单位的文案键值（分组见 minSaleUnit）。 */
   spec: string | null;
+  /** spec 所属文案分组：INNER → items.innerUnits，SPEC → items.specUnits。 */
+  minSaleUnit: MinSaleUnit | null;
   qty: string;
   /** 默认零售价快照（保存时的 retail_prices.price），可能为空。 */
   listPrice: string | null;

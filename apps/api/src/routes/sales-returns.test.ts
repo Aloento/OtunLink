@@ -554,6 +554,7 @@ describe(' 零售售后退货（SALES）闭环', () => {
           itemId: ITEM_A,
           itemName: '苹果',
           spec: 'PIECE',
+          minSaleUnit: 'SPEC',
           qty: '5.00',
           listPrice: '100.00',
           listPriceCurrency: 'CNY',

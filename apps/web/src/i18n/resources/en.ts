@@ -645,6 +645,7 @@ export const en: TranslationSchema = {
     items: 'Items',
     noItems: 'No items',
     itemName: 'Item',
+    spec: 'Spec',
     qty: 'Qty',
     manualQty: 'Manual qty',
     listPrice: 'Retail price',

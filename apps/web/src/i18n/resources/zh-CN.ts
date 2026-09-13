@@ -642,6 +642,7 @@ export const zhCN = {
     items: '销售清单',
     noItems: '暂无清单',
     itemName: '物品',
+    spec: '规格',
     qty: '数量',
     manualQty: '手工数量',
     listPrice: '零售价',

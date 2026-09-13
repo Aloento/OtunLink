@@ -2,6 +2,8 @@
 // 与 packages/db 的 shipment_status 枚举保持语义一致；shared 只放前后端共用的
 // 类型与常量，数据库层枚举在 packages/db/src/enums.ts 独立维护。
 
+import type { MinSaleUnit } from './items';
+
 export const SHIPMENT_STATUSES = [
   'DRAFT',
   'SENT',
@@ -35,8 +37,10 @@ export interface ShipmentItemDto {
   itemId: string | null;
   /** 下单时的物品名称快照。 */
   name: string;
-  /** 下单时的规格快照（spec_unit 文案键值）。 */
+  /** 下单时的规格快照（最小销售单位的文案键值，分组见 minSaleUnit）。 */
   spec: string | null;
+  /** 规格快照所属文案分组：INNER → items.innerUnits，SPEC → items.specUnits。 */
+  minSaleUnit: MinSaleUnit | null;
   expectedQty: string;
   actualQty: string | null;
   unitPrice: string | null;

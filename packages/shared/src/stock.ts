@@ -1,6 +1,8 @@
 // 库存台账相关的类型与常量。
 // 与 packages/db 的 stock_movement_type 枚举保持语义一致。
 
+import type { MinSaleUnit } from './items';
+
 export const STOCK_MOVEMENT_TYPES = [
   'INBOUND_SHIPMENT',
   'INBOUND_MANUAL',
@@ -19,7 +21,10 @@ export interface StockRowDto {
   unitName: string | null;
   itemId: string;
   itemName: string | null;
+  /** 最小销售单位的文案键值（分组见 minSaleUnit）。 */
   spec: string | null;
+  /** spec 所属文案分组：INNER → items.innerUnits，SPEC → items.specUnits。 */
+  minSaleUnit: MinSaleUnit | null;
   batchId: string;
   batchNo: string | null;
   productionDate: string | null;
@@ -63,6 +68,7 @@ export interface StockMovementDto {
   unitName: string | null;
   itemId: string;
   itemName: string | null;
+  /** 最小销售单位键值；本 DTO 未带 minSaleUnit 分组，当前无页面渲染。 */
   spec: string | null;
   batchId: string;
   batchNo: string | null;

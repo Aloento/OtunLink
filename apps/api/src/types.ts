@@ -303,6 +303,7 @@ export interface ShipmentItemRecord {
   itemId: string | null;
   name: string;
   spec: string | null;
+  minSaleUnit: MinSaleUnit | null;
   expectedQty: string;
   actualQty: string | null;
   unitPrice: string | null;
@@ -814,6 +815,8 @@ export interface StockRowRecord {
   itemId: string;
   itemName: string | null;
   spec: string | null;
+  /** spec 所属文案分组（items.min_sale_unit）。 */
+  minSaleUnit: MinSaleUnit | null;
   batchId: string;
   batchNo: string | null;
   productionDate: string | null;
@@ -913,6 +916,8 @@ export interface RetailPriceRecord {
   itemId: string;
   itemName: string | null;
   spec: string | null;
+  /** spec 所属文案分组（items.min_sale_unit）。 */
+  minSaleUnit: MinSaleUnit | null;
   price: string;
   currency: string;
   /** 入库加权平均进价（只读参考；无库存为 null）。 */
@@ -964,6 +969,8 @@ export interface SalesOrderItemRecord {
   itemId: string;
   itemName: string | null;
   spec: string | null;
+  /** spec 所属文案分组（items.min_sale_unit）。 */
+  minSaleUnit: MinSaleUnit | null;
   qty: string;
   /** 默认零售价快照（其货币见 listPriceCurrency）；成交价 price 恒为本单货币。 */
   listPrice: string | null;

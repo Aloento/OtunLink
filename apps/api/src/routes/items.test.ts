@@ -86,6 +86,7 @@ function shipmentItem(
     shipmentId: 's1',
     name: '测试物品',
     spec: null,
+    minSaleUnit: null,
     expectedQty: '10',
     actualQty: null,
     unitPrice: null,
