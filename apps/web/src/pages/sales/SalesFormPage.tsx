@@ -32,6 +32,7 @@ import { listRetailPrices } from '../../api/retail-prices';
 import { createSalesOrder, getSalesOrder, updateSalesOrder } from '../../api/sales';
 import { listStockBatches } from '../../api/stock';
 import { listUnits, type UnitDto } from '../../api/units';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { RefreshButton } from '../../components/RefreshButton';
 
@@ -86,25 +87,21 @@ export function SalesFormPage() {
   const { data: units, isLoading: unitsLoading } = useQuery({
     queryKey: ['units', 'list'],
     queryFn: () => listUnits(),
-    staleTime: 60_000,
   });
   const partnershipsQuery = useQuery({
     queryKey: ['partnerships', 'list'],
     queryFn: () => listPartnerships(),
-    staleTime: 60_000,
   });
 
   const { data: itemPage } = useQuery({
     queryKey: ['items', 'picker', itemSearch],
     queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
-    staleTime: 30_000,
   });
 
   const { data: stockBatches } = useQuery({
     queryKey: ['stock', 'batches', sellerUnitId],
     queryFn: () => listStockBatches({ unitId: sellerUnitId }),
     enabled: Boolean(sellerUnitId),
-    staleTime: 30_000,
   });
 
   // 每个 itemId 在该仓库的可用库存合计（所有批次 qty 之和）。
@@ -121,7 +118,6 @@ export function SalesFormPage() {
     queryKey: ['retail-prices', 'unit', sellerUnitId],
     queryFn: () => listRetailPrices({ unitId: sellerUnitId }),
     enabled: Boolean(sellerUnitId),
-    staleTime: 30_000,
   });
 
   const retailPriceByItem = useMemo(() => {
@@ -281,11 +277,11 @@ export function SalesFormPage() {
           lines: linePayload,
         };
         const created = await createSalesOrder(payload);
-        void queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
+        void refreshAfterWrite(queryClient);
         navigate(`/sales/${created.id}`);
         return;
       }
-      void queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
+      void refreshAfterWrite(queryClient);
       navigate(`/sales/${id}`);
     } catch (cause) {
       const lines = extractSalesLineErrors(cause);

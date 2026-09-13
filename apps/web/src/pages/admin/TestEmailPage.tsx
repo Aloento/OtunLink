@@ -11,6 +11,8 @@ export function TestEmailPage() {
 
   const runMutation = useMutation({
     mutationFn: () => testEmail(),
+    // 只发一封测试邮件、不改动任何业务数据，无需连带刷新全局缓存。
+    meta: { skipRefresh: true },
   });
 
   const result = runMutation.data as EmailTestResult | undefined;

@@ -14,6 +14,7 @@ import { Permissions, hasPermission } from '@otunlink/shared';
 
 import { deleteItem, getItem } from '../../api/items';
 import { isApiError } from '../../api/http';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { ImagePreview } from '../../components/ImagePreview';
 import { RefreshButton } from '../../components/RefreshButton';
@@ -34,7 +35,6 @@ export function ItemDetailPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['items', id],
     queryFn: () => getItem(id),
-    staleTime: 30_000,
   });
 
   const handleDelete = async () => {
@@ -43,7 +43,7 @@ export function ItemDetailPage() {
     setError(null);
     try {
       await deleteItem(id);
-      void queryClient.invalidateQueries({ queryKey: ['items'] });
+      void refreshAfterWrite(queryClient);
       navigate('/items');
     } catch (cause) {
       setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));

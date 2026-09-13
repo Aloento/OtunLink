@@ -29,6 +29,9 @@
 | 用户           | `<DB_USER>`（非超级用户，拥有 otunlink 库）                                                                                                                                      |
 | 连接串（本地） | 见 `apps/api/.dev.vars` 与根 `.dev.vars`（gitignored，含密码）                                                                                                                  |
 | 迁移           | `pnpm --filter @otunlink/db db:migrate`（本地已验证：21 个枚举 / 29 表 / 293 列）                                                                                               |
+| 查询缓存       | **必须把 TTL 压到最小**：`npx wrangler hyperdrive update "<HYPERDRIVE_ID>" --max-age=1 --swr=0`（默认 `max_age=60s` + `stale_while_revalidate=15s` 且写入不会失效，会造成「改了看不到」，详见 `docs/db-setup.md` §6） |
+
+> `wrangler.toml` 的 `[[hyperdrive]]` 绑定只接受 `binding` + `id`；缓存参数属于 Hyperdrive 资源本身，只能用 CLI / 控制台修改。
 
 ## 3. 对象存储（S3 兼容，不使用 R2）
 
@@ -72,14 +75,18 @@ npx wrangler secret put S3_ACCESS_KEY_ID --name otunlink-api
 npx wrangler secret put S3_SECRET_ACCESS_KEY --name otunlink-api
 # 以及 DB 相关（Hyperdrive 连接串在控制台配置，无需 secret）
 
+# Hyperdrive 查询缓存 TTL（关键：默认 60s 缓存且写入不失效，会让「改了看不到」）
+npx wrangler hyperdrive update "<HYPERDRIVE_ID>" --max-age=1 --swr=0
+
 # 部署
 npx wrangler deploy
 ```
 
 ## 7. 仍待用户提供 / 待办
 
-1. **Hyperdrive 确认**：控制台确认 `<HYPERDRIVE_ID>` 指向 `otunlink` 库；
-   并在私有 PG（<DB_HOST>）防火墙放行 CF 出口 IP（Hyperdrive 会给出 IP 范围）
+1. ✅ **Hyperdrive 已确认**（2026-09-13）：实例 `otunlink`（id `d3f06050a92846ca950561f5d37f1232`）指向 `otunlink` 库，
+   `caching` 已设为 `max_age=1` / `stale_while_revalidate=0`（见第 2 节与 `docs/db-setup.md` §6）；
+   仍需在私有 PG（<DB_HOST>）防火墙放行 CF 出口 IP（Hyperdrive 会给出 IP 范围）
 2. **域名**：`otun.musi.land`（Pages 自定义域，已 active，SPA 主站）；`api.otun.musi.land`（API Worker 自定义域，已 active）；
    无需额外 `app.` 子域（SPA 直接跑在 otun.musi.land）
 3. **Entra App Registration**：按 `docs/auth-setup.md` 完成注册并配置 Redirect URI（见第 4 节）

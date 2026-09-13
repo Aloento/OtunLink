@@ -27,6 +27,7 @@ import { ItemLink } from '../../components/ItemLink';
 import { createSalesReturn, listReturns } from '../../api/returns';
 import { cancelSalesOrder, confirmSaleReceipt, deleteSalesOrder, getSalesOrder, sendSalesOrder, uploadSalePayment } from '../../api/sales';
 import { listStockBatches } from '../../api/stock';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
 import { RefreshButton } from '../../components/RefreshButton';
@@ -52,7 +53,7 @@ export function SalesDetailPage() {
   });
 
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ['sales-orders', id] });
+    void refreshAfterWrite(queryClient);
   };
 
   const [actionError, setActionError] = useState<string | null>(null);
@@ -61,7 +62,7 @@ export function SalesDetailPage() {
     mutationFn: () => deleteSalesOrder(id!),
     onSuccess: () => {
       setActionError(null);
-      void queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
+      void refreshAfterWrite(queryClient);
       navigate('/sales');
     },
     onError: (cause) => {
@@ -358,7 +359,6 @@ function AfterSaleSection({ order }: { order: SalesOrderDetailDto }) {
   const { data: returns, isLoading } = useQuery({
     queryKey: ['return-orders', 'list', 'SALES', order.id],
     queryFn: () => listReturns({ sourceType: 'SALES', salesOrderId: order.id, page: 1, size: 20 }),
-    staleTime: 15_000,
   });
 
   const canCreate =
@@ -369,7 +369,7 @@ function AfterSaleSection({ order }: { order: SalesOrderDetailDto }) {
       order.status === 'CONFIRMED');
 
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ['return-orders', 'list', 'SALES', order.id] });
+    void refreshAfterWrite(queryClient);
   };
 
   return (
@@ -519,7 +519,6 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
     queryKey: ['stock', 'batches', order.sellerUnitId],
     queryFn: () => listStockBatches({ unitId: order.sellerUnitId }),
     enabled: Boolean(order.sellerUnitId),
-    staleTime: 30_000,
   });
 
   const suggestions = useMemo(() => {
@@ -577,7 +576,7 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
     setLineErrors(null);
     try {
       await sendSalesOrder(order.id, { allocations });
-      await queryClient.invalidateQueries({ queryKey: ['sales-orders', order.id] });
+      await refreshAfterWrite(queryClient);
       onSent();
     } catch (cause) {
       const lines = extractSalesLineErrors(cause);

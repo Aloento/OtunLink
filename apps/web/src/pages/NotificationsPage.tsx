@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import type { NotificationDto } from '@otunlink/shared';
 
 import { listNotifications, markNotificationsRead } from '../api/notifications';
+import { refreshAfterWrite } from '../api/queryClient';
 import { RefreshButton } from '../components/RefreshButton';
 import { useSession } from '../auth/SessionProvider';
 import { useLocale } from '../i18n/LocaleProvider';
@@ -29,14 +30,12 @@ export function NotificationsPage() {
     queryKey: ['notifications', 'list', unreadOnly, page],
     queryFn: () => listNotifications({ unreadOnly, page, size: PAGE_SIZE }),
     placeholderData: keepPreviousData,
-    staleTime: 15_000,
   });
 
   const markRead = useMutation({
     mutationFn: (ids: string[]) => markNotificationsRead(ids),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      void queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+      void refreshAfterWrite(queryClient);
     },
   });
 

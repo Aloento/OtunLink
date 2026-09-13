@@ -1,6 +1,7 @@
 // PWA Service Worker：预缓存应用外壳，静态资源 stale-while-revalidate，导航 network-first。
 // 跨源请求（API、MSAL 等）不拦截、不缓存，避免将响应混入缓存。
-const CACHE_VERSION = 'otunlink-v1';
+// v2：查询缓存改为「写后即失效」，同步换版清掉旧版预缓存外壳。
+const CACHE_VERSION = 'otunlink-v2';
 
 const PRECACHE = [
   '/',

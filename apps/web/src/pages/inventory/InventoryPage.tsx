@@ -58,12 +58,10 @@ export function InventoryPage() {
   const { data: units } = useQuery({
     queryKey: ['units', 'list'],
     queryFn: () => listUnits(),
-    staleTime: 60_000,
   });
   const { data: itemPage } = useQuery({
     queryKey: ['items', 'picker', ''],
     queryFn: () => listItems({ size: 100 }),
-    staleTime: 30_000,
   });
 
   const warehouses = useMemo(
@@ -76,7 +74,6 @@ export function InventoryPage() {
     queryKey: ['partnerships', 'list'],
     queryFn: () => listPartnerships(),
     enabled: isRetailer,
-    staleTime: 60_000,
   });
   const signedWarehouses = useMemo(
     () =>
@@ -122,7 +119,6 @@ export function InventoryPage() {
     queryKey: ['retail-prices', 'list', unitId || undefined],
     queryFn: () => listRetailPrices({ unitId: unitId || undefined }),
     enabled: isRetailer && view === 'stock',
-    staleTime: 30_000,
   });
   const retailPriceOf = useMemo(() => {
     const map = new Map<string, string>();

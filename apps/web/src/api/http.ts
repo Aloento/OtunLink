@@ -174,7 +174,8 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 
   let res: Response;
   try {
-    res = await fetch(`${apiBaseUrl()}${path}`, { ...init, headers });
+    // no-store：API 响应不进入浏览器 HTTP 缓存，读取新鲜度只由客户端查询缓存策略决定。
+    res = await fetch(`${apiBaseUrl()}${path}`, { cache: 'no-store', ...init, headers });
   } catch {
     throw new ApiError('网络异常', { code: 'NETWORK', status: 0 });
   }

@@ -22,6 +22,7 @@ import { listItems } from '../../api/items';
 import { createOutboundOrder, getOutboundOrder, updateOutboundOrder } from '../../api/outbound';
 import { listStock } from '../../api/stock';
 import { listUnits } from '../../api/units';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { ImageUpload } from '../../components/ImageUpload';
 import { RefreshButton } from '../../components/RefreshButton';
@@ -106,27 +107,23 @@ export function OutboundFormPage() {
   const { data: units, isLoading: unitsLoading } = useQuery({
     queryKey: ['units', 'list'],
     queryFn: () => listUnits(),
-    staleTime: 60_000,
   });
 
   const { data: itemPage } = useQuery({
     queryKey: ['items', 'picker', itemSearch],
     queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
-    staleTime: 30_000,
   });
 
   const { data: stockPage, isLoading: stockLoading } = useQuery({
     queryKey: ['stock', 'batchPicker', warehouseUnitId],
     queryFn: () => listStock({ unitId: warehouseUnitId, size: 100 }),
     enabled: Boolean(warehouseUnitId),
-    staleTime: 30_000,
   });
 
   const { data: detail, isLoading: detailLoading } = useQuery({
     queryKey: ['outbound-orders', params.id],
     queryFn: () => getOutboundOrder(params.id!),
     enabled: isEdit,
-    staleTime: 15_000,
   });
 
   const warehouses = useMemo(
@@ -257,11 +254,11 @@ export function OutboundFormPage() {
       if (isEdit) {
         const id = params.id!;
         await updateOutboundOrder(id, payload);
-        void queryClient.invalidateQueries({ queryKey: ['outbound-orders'] });
+        void refreshAfterWrite(queryClient);
         navigate(`/outbound/${id}`);
       } else {
         const created = await createOutboundOrder(payload);
-        void queryClient.invalidateQueries({ queryKey: ['outbound-orders'] });
+        void refreshAfterWrite(queryClient);
         navigate(`/outbound/${created.id}`);
       }
     } catch (cause) {

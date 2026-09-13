@@ -1,9 +1,11 @@
 import { useIsAuthenticated, useMsal } from '@azure/msal-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { acquireAccessToken, apiBaseUrl, fetchMe, type MeUser } from '../api/client';
 import { setTokenProvider, setUnauthorizedHandler } from '../api/http';
+import { clearQueryCache } from '../api/queryClient';
 import { envAuthConfig } from './msalConfig';
 import { setReturnTo } from './returnTo';
 
@@ -23,6 +25,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const { instance, accounts } = useMsal();
   const authenticated = useIsAuthenticated();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [me, setMe] = useState<MeUser | null>(null);
   // 初始为 true：登录成功回跳 / 后，在 /auth/me 返回前先展示 loading，避免先闪现到 /login。
@@ -30,15 +33,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   // 会话失效：清空 MSAL 缓存使 authenticated 变为 false，从而由 RequireAuth 引导回登录页。
+  // 同时清空查询缓存（内存 + IndexedDB），避免下一个账号读到上一个账号的残留数据。
   const expireSession = useCallback(async () => {
     setMe(null);
     setError('session');
+    await clearQueryCache(queryClient);
     try {
       await instance.clearCache();
     } catch {
       // 清缓存失败仍视为会话失效，由守卫引导回登录。
     }
-  }, [instance]);
+  }, [instance, queryClient]);
 
   const loadMe = useCallback(async () => {
     const config = envAuthConfig();
@@ -119,4 +124,15 @@ export function useSession(): SessionContextValue {
   const ctx = useContext(SessionContext);
   if (!ctx) throw new Error('useSession must be used within SessionProvider');
   return ctx;
+}
+
+/** 登出：先清空查询缓存（内存 + IndexedDB）再交给 MSAL 重定向，避免换账号后读到上一个账号的缓存。 */
+export function useLogout(): () => void {
+  const { instance } = useMsal();
+  const queryClient = useQueryClient();
+  return useCallback(() => {
+    void clearQueryCache(queryClient).finally(() => {
+      void instance.logoutRedirect();
+    });
+  }, [instance, queryClient]);
 }

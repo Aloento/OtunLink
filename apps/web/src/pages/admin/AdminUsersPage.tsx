@@ -31,6 +31,7 @@ import {
   type AdminUserDto,
 } from '../../api/admin';
 import { type UnitDto } from '../../api/units';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { RefreshButton } from '../../components/RefreshButton';
 import { formatDateTime } from '../../i18n/format';
@@ -63,7 +64,7 @@ const emptyDraft = (): Draft => ({
 export function AdminUsersPage() {
   const { t } = useTranslation();
   const { locale } = useLocale();
-  const { me } = useSession();
+  const { me, reload } = useSession();
   const queryClient = useQueryClient();
 
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -113,7 +114,9 @@ export function AdminUsersPage() {
         next[index] = saved;
         return next;
       });
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      await refreshAfterWrite(queryClient);
+      // 改的是自己的账号：/auth/me 的岗位 / 数据范围 / 语言也会变，必须重新拉取会话。
+      if (saved.id === me?.id) await reload();
       setDraft(null);
     },
     onError: (cause) => {
@@ -127,7 +130,7 @@ export function AdminUsersPage() {
       queryClient.setQueryData<AdminUserDto[]>(['admin', 'users'], (prev) =>
         prev?.filter((u) => u.id !== res.id),
       );
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      await refreshAfterWrite(queryClient);
       setSaving(null);
       setDeleting(null);
     },

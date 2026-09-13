@@ -53,6 +53,13 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     }),
   );
 
+  // 所有 API 响应禁用缓存：数据新鲜度由客户端查询失效策略保证，
+  // 任何响应级缓存（浏览器 / 中间层）都会让用户「改了却看不到」。
+  app.use('*', async (c, next) => {
+    await next();
+    c.res.headers.set('Cache-Control', 'no-store');
+  });
+
   app.get('/api/v1/health', (c) => c.json({ ok: true }));
 
   const requireToken = authenticate(deps);

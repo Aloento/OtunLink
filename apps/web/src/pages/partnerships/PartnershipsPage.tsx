@@ -25,6 +25,7 @@ import {
   type PartnershipDto,
 } from '../../api/partnerships';
 import { listUnits } from '../../api/units';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
@@ -84,7 +85,7 @@ export function PartnershipsPage() {
         ...(draft!.warehouseUnitId ? { warehouseUnitId: draft!.warehouseUnitId } : {}),
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['partnerships'] });
+      await refreshAfterWrite(queryClient);
       setDraft(null);
     },
   });
@@ -92,7 +93,7 @@ export function PartnershipsPage() {
   const removeMutation = useMutation({
     mutationFn: () => deletePartnership(removeTarget!.id),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['partnerships'] });
+      await refreshAfterWrite(queryClient);
       setRemoveTarget(null);
     },
   });

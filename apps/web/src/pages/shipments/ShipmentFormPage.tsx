@@ -21,6 +21,7 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import { listItems } from '../../api/items';
 import { createShipment, getShipment, updateShipment, type ShipmentCreateInput } from '../../api/shipments';
 import { listUnits, type UnitDto } from '../../api/units';
+import { refreshAfterWrite } from '../../api/queryClient';
 
 interface TrackingLine {
   key: string;
@@ -113,20 +114,17 @@ export function ShipmentFormPage() {
   const { data: units, isLoading: unitsLoading } = useQuery({
     queryKey: ['units', 'list'],
     queryFn: () => listUnits(),
-    staleTime: 60_000,
   });
 
   const { data: itemPage } = useQuery({
     queryKey: ['items', 'picker', itemSearch],
     queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
-    staleTime: 30_000,
   });
 
   const { data: detail, isLoading: detailLoading } = useQuery({
     queryKey: ['shipments', params.id],
     queryFn: () => getShipment(params.id!),
     enabled: isEdit,
-    staleTime: 15_000,
   });
 
   const shipperUnits = useMemo(
@@ -272,11 +270,11 @@ export function ShipmentFormPage() {
       if (isEdit) {
         const id = params.id!;
         await updateShipment(id, payload);
-        void queryClient.invalidateQueries({ queryKey: ['shipments'] });
+        void refreshAfterWrite(queryClient);
         navigate(`/shipments/${id}`);
       } else {
         const created = await createShipment(payload);
-        void queryClient.invalidateQueries({ queryKey: ['shipments'] });
+        void refreshAfterWrite(queryClient);
         navigate(`/shipments/${created.id}`);
       }
     } catch (cause) {

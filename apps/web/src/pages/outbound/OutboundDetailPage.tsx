@@ -8,6 +8,7 @@ import { Permissions, hasPermission, type OutboundOrderItemDto } from '@otunlink
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { deleteOutboundOrder, getOutboundOrder, postOutboundOrder } from '../../api/outbound';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { FileImage } from '../../components/FileImage';
 import { ItemLink } from '../../components/ItemLink';
@@ -33,7 +34,6 @@ export function OutboundDetailPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['outbound-orders', id],
     queryFn: () => getOutboundOrder(id),
-    staleTime: 15_000,
   });
 
   const canPost = hasPermission(me?.role, Permissions.STOCK_WRITE);
@@ -43,7 +43,7 @@ export function OutboundDetailPage() {
     setError(null);
     try {
       await postOutboundOrder(id);
-      await queryClient.invalidateQueries({ queryKey: ['outbound-orders', id] });
+      await refreshAfterWrite(queryClient);
     } catch (cause) {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
     } finally {
@@ -57,7 +57,7 @@ export function OutboundDetailPage() {
     setError(null);
     try {
       await deleteOutboundOrder(id);
-      await queryClient.invalidateQueries({ queryKey: ['outbound-orders'] });
+      await refreshAfterWrite(queryClient);
       navigate('/outbound');
     } catch (cause) {
       setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));

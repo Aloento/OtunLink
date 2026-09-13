@@ -2570,9 +2570,12 @@ class MemoryRetailPriceRepository implements RetailPriceRepository {
 
   async listHistory(unitId: string, itemId: string): Promise<RetailPriceHistoryRecord[]> {
     return this.history
-      .filter((row) => row.unitId === unitId && row.itemId === itemId)
-      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-      .map((row) => ({ ...row }));
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.unitId === unitId && row.itemId === itemId)
+      // 内存时间戳只有毫秒精度，同毫秒内的多次改价按写入先后兜底排序，
+      // 保证列表顺序确定（生产用 now() 微秒精度，不会出现并列）。
+      .sort((a, b) => b.row.updatedAt.getTime() - a.row.updatedAt.getTime() || b.index - a.index)
+      .map(({ row }) => ({ ...row }));
   }
 
   referencesItem(itemId: string): boolean {

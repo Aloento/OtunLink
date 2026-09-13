@@ -10,6 +10,7 @@ import { errorI18nKey, isApiError } from '../../api/http';
 import { createManualInbound, postInbound } from '../../api/inbound';
 import { listItems } from '../../api/items';
 import { listUnits } from '../../api/units';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { RefreshButton } from '../../components/RefreshButton';
 import { useSession } from '../../auth/SessionProvider';
 
@@ -63,13 +64,11 @@ export function InboundFormPage() {
   const { data: units, isLoading: unitsLoading } = useQuery({
     queryKey: ['units', 'list'],
     queryFn: () => listUnits(),
-    staleTime: 60_000,
   });
 
   const { data: itemPage } = useQuery({
     queryKey: ['items', 'picker', itemSearch],
     queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
-    staleTime: 30_000,
   });
 
   const warehouses = useMemo(
@@ -148,7 +147,7 @@ export function InboundFormPage() {
       const created = await createManualInbound(payload);
       // 创建即过账：建档批次 + 写库存（也可在详情页手动过账）。
       await postInbound(created.id);
-      void queryClient.invalidateQueries({ queryKey: ['inbound-orders'] });
+      void refreshAfterWrite(queryClient);
       navigate(`/inbound/${created.id}`);
     } catch (cause) {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));

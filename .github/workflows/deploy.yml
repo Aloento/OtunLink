@@ -105,6 +105,20 @@ jobs:
           HYPERDRIVE_ID: ${{ secrets.HYPERDRIVE_ID }}
           KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
 
+      # Hyperdrive 查询缓存默认 max_age=60s + stale_while_revalidate=15s，且**写入不会使其失效**，
+      # 会让所有用户「改了却看不到」最长约 75 秒（刷新也没用）。这里在每次部署时把 TTL 压到最小。
+      # 需要 API Token 具备 Hyperdrive 编辑权限；失败时仅告警（不阻断部署），按 docs/db-setup.md 手动确认。
+      - name: Enforce Hyperdrive query cache TTL
+        continue-on-error: true
+        run: |
+          npx wrangler hyperdrive update "$HYPERDRIVE_ID" --max-age=1 --swr=0 \
+            || echo "::warning::Hyperdrive 缓存 TTL 设置失败（API Token 可能缺少 Hyperdrive 编辑权限）；请按 docs/db-setup.md 手动确认 max_age=1 / stale_while_revalidate=0"
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HYPERDRIVE_ID: ${{ secrets.HYPERDRIVE_ID }}
+
       - name: Deploy Worker
         run: |
           test -n "$MAIL_FROM" || { echo "::error::Missing MAIL_FROM value (set GitHub Actions secret SMTP_USER)"; exit 1; }

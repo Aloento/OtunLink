@@ -22,6 +22,7 @@ import { Permissions, hasPermission } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { getItemByBarcode, listItemCategories, listItems, mergeItem } from '../../api/items';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
@@ -61,7 +62,6 @@ export function ItemsPage() {
   const { data: categories = [] } = useQuery({
     queryKey: ['items', 'categories'],
     queryFn: listItemCategories,
-    staleTime: 60_000,
   });
 
   const { data, isLoading, isError } = useQuery({
@@ -83,7 +83,7 @@ export function ItemsPage() {
     setMergeError(null);
     try {
       await mergeItem(mergeTargetId, mergeSourceId);
-      await queryClient.invalidateQueries({ queryKey: ['items'] });
+      await refreshAfterWrite(queryClient);
       setMergeOpen(false);
       setMergeTargetId('');
       setMergeSourceId('');

@@ -29,6 +29,7 @@ import {
   updateAdminUnit,
 } from '../../api/admin';
 import { type UnitDto } from '../../api/units';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { RefreshButton } from '../../components/RefreshButton';
 
@@ -107,7 +108,7 @@ export function AdminUnitsPage() {
         next[index] = saved;
         return next;
       });
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'units'] });
+      await refreshAfterWrite(queryClient);
       setDraft(null);
     },
     onError: (cause) => {
@@ -140,7 +141,7 @@ export function AdminUnitsPage() {
       queryClient.setQueryData<UnitDto[]>(['admin', 'units'], (prev) =>
         prev?.filter((u) => u.id !== res.id),
       );
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'units'] });
+      await refreshAfterWrite(queryClient);
       setDeleteError(null);
       setDeleting(null);
     },

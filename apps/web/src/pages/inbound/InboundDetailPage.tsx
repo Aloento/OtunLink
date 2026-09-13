@@ -8,6 +8,7 @@ import { Permissions, hasPermission, type InboundOrderItemDto } from '@otunlink/
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { deleteInbound, getInbound, postInbound } from '../../api/inbound';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
@@ -32,7 +33,6 @@ export function InboundDetailPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['inbound-orders', id],
     queryFn: () => getInbound(id),
-    staleTime: 15_000,
   });
 
   const canPost = hasPermission(me?.role, Permissions.INBOUND_CONFIRM);
@@ -42,7 +42,7 @@ export function InboundDetailPage() {
     setError(null);
     try {
       await postInbound(id);
-      await queryClient.invalidateQueries({ queryKey: ['inbound-orders', id] });
+      await refreshAfterWrite(queryClient);
     } catch (cause) {
       setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('errors.UNKNOWN'));
     } finally {
@@ -56,7 +56,7 @@ export function InboundDetailPage() {
     setError(null);
     try {
       await deleteInbound(id);
-      await queryClient.invalidateQueries({ queryKey: ['inbound-orders'] });
+      await refreshAfterWrite(queryClient);
       navigate('/inbound');
     } catch (cause) {
       setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));

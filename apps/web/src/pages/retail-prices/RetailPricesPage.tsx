@@ -29,6 +29,7 @@ import { listItems } from '../../api/items';
 import { listPartnerships } from '../../api/partnerships';
 import { listRetailPriceHistory, listRetailPrices, putRetailPrice } from '../../api/retail-prices';
 import { listUnits } from '../../api/units';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
@@ -58,17 +59,14 @@ export function RetailPricesPage() {
   const { data: units } = useQuery({
     queryKey: ['units', 'list'],
     queryFn: () => listUnits(),
-    staleTime: 60_000,
   });
   const partnershipsQuery = useQuery({
     queryKey: ['partnerships', 'list'],
     queryFn: () => listPartnerships(),
-    staleTime: 60_000,
   });
   const { data: itemPage } = useQuery({
     queryKey: ['items', 'picker', ''],
     queryFn: () => listItems({ size: 100 }),
-    staleTime: 30_000,
   });
 
   const isRetailer = me?.role === 'RETAILER';
@@ -102,7 +100,7 @@ export function RetailPricesPage() {
         currency: currencyInput,
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['retail-prices'] });
+      await refreshAfterWrite(queryClient);
       setDraft(null);
     },
   });

@@ -7,6 +7,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Permissions, hasPermission, type ReturnOrderItemDto } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
+import { refreshAfterWrite } from '../../api/queryClient';
 import {
   acceptReturn,
   approveSalesReturn,
@@ -42,7 +43,6 @@ export function ReturnDetailPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['return-orders', id],
     queryFn: () => getReturn(id),
-    staleTime: 15_000,
   });
 
   const isSales = data?.sourceType === 'SALES';
@@ -66,7 +66,7 @@ export function ReturnDetailPage() {
       isSales &&
       hasPermission(me?.role, Permissions.AFTER_SALE_CREATE));
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['return-orders', id] });
+  const refresh = () => refreshAfterWrite(queryClient);
 
   const handleAccept = async () => {
     setBusy(true);
@@ -138,7 +138,7 @@ export function ReturnDetailPage() {
     setError(null);
     try {
       await deleteReturn(id);
-      await queryClient.invalidateQueries({ queryKey: ['return-orders'] });
+      await refreshAfterWrite(queryClient);
       navigate('/returns');
     } catch (cause) {
       setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));

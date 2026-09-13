@@ -1,15 +1,13 @@
-import { useMsal } from '@azure/msal-react';
 import { Body1, Button, Title1 } from '@fluentui/react-components';
 import { useTranslation } from 'react-i18next';
 
 import type { MeUser } from '../api/client';
+import { useLogout } from '../auth/SessionProvider';
 
 // PENDING / DISABLED 引导页：等待管理员分配岗位或联系管理员。
 export function PendingPage({ me, onRefresh }: { me: MeUser; onRefresh: () => void }) {
-  const { instance } = useMsal();
   const { t } = useTranslation();
-
-  const logout = () => instance.logoutRedirect();
+  const logout = useLogout();
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4">

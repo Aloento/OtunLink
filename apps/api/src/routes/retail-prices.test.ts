@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../index';
 import { createMemoryRepos } from '../repos/memory';
@@ -199,6 +199,33 @@ describe(' 零售价', () => {
     // 仓储层：历史上不会出现 unitCost 字段（不可变）。
     const raw = await repos.retailPrices.listHistory(WAREHOUSE_UNIT, ITEM_A);
     expect('unitCost' in raw[0]).toBe(false);
+  });
+
+  it('同一毫秒内连续改价：历史顺序仍确定（按写入先后倒序）', async () => {
+    const { app } = makeApp({ users: [warehouse], units, items });
+
+    // 内存仓储的时间戳只有毫秒精度：把时钟钉死在同一毫秒，复现「并列时间戳」这一顺序不稳定条件。
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2025-06-01T00:00:00.000Z'));
+    try {
+      for (const price of ['10.00', '12.50', '15.00']) {
+        const res = await app.request('/api/v1/retail-prices', {
+          method: 'PUT',
+          headers: json('warehouse'),
+          body: JSON.stringify({ unitId: WAREHOUSE_UNIT, itemId: ITEM_A, price }),
+        });
+        expect(res.status).toBe(200);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const history = await app.request(`/api/v1/retail-prices/${WAREHOUSE_UNIT}/${ITEM_A}/history`, {
+      headers: auth('warehouse'),
+    });
+    expect(history.status).toBe(200);
+    const payload = (await history.json()) as { data: { items: Array<{ price: string }> } };
+    expect(payload.data.items.map((row) => row.price)).toEqual(['15.00', '12.50', '10.00']);
   });
 
   it('校验与权限：非仓库单元 400；物品不存在 404；RETAILER 写 403、读 200；scope 越界 403', async () => {

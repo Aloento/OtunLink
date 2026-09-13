@@ -1,11 +1,10 @@
-import { useMsal } from '@azure/msal-react';
 import { Badge, Button } from '@fluentui/react-components';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet } from 'react-router-dom';
 
 import { getUnreadCount } from '../api/notifications';
-import { useSession } from '../auth/SessionProvider';
+import { useLogout, useSession } from '../auth/SessionProvider';
 import { Copyright } from '../components/Copyright';
 import { LanguageSwitch } from '../components/LanguageSwitch';
 import { canAccessPermissions } from '../routes/access';
@@ -54,7 +53,7 @@ function NavItems({ keys, vertical }: { keys: RouteKey[]; vertical?: boolean }) 
 export function AppLayout() {
   const { t } = useTranslation();
   const { me } = useSession();
-  const { instance } = useMsal();
+  const logout = useLogout();
 
   const isDesktop = useMediaQuery('(min-width: 1025px)');
   const isMobile = useMediaQuery('(max-width: 767px)');
@@ -62,13 +61,11 @@ export function AppLayout() {
 
   const navKeys = permittedRoutes(me?.role ?? null);
   const roleLabel = me?.role ? t(`roles.${me.role}`) : t('common.notAssigned');
-  const logout = () => instance.logoutRedirect();
 
   const unread = useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: getUnreadCount,
     refetchInterval: 30_000,
-    staleTime: 15_000,
   });
 
   return (

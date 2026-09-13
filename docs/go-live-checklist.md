@@ -15,6 +15,7 @@
 - [ ] Pages 项目 + 自定义域 CNAME（`otun.musi.land` → `*.pages.dev`）
 - [ ] Workers 项目 + 自定义域（`api.otun.musi.land`）
 - [ ] Hyperdrive 实例指向生产 PG（连接池参数见 deploy.md §2）
+- [x] Hyperdrive 查询缓存 TTL 已压到最小（2026-09-13 已核实生产实例 `d3f06050a92846ca950561f5d37f1232`：`max_age=1` / `stale_while_revalidate=0`；默认 60s 缓存且写入不失效会造成「改了看不到」，见 db-setup.md §6）
 - [ ] OBS bucket 与 KV 创建，绑定到 Worker（s3-compatible API）
 - [ ] `.dev.vars` 与生产 secrets 分离，生产不提交任何密钥
 

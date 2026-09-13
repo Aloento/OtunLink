@@ -16,6 +16,7 @@ import { Permissions, hasPermission, type ShipmentItemDto } from '@otunlink/shar
 import { useSession } from '../../auth/SessionProvider';
 import { errorI18nKey, isApiError } from '../../api/http';
 import { deleteShipment, getShipment, sendShipment, startCounting } from '../../api/shipments';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
 import { ItemLink } from '../../components/ItemLink';
@@ -45,7 +46,6 @@ export function ShipmentDetailPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['shipments', id],
     queryFn: () => getShipment(id),
-    staleTime: 15_000,
   });
 
   const canEdit = hasPermission(me?.role, Permissions.SHIPMENTS_CREATE);
@@ -66,7 +66,7 @@ export function ShipmentDetailPage() {
     hasPermission(me?.role, Permissions.SHIPMENT_RETURNS_CREATE) &&
     (!me?.scopeUnitId || me.scopeUnitId === data?.receiverUnitId);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['shipments', id] });
+  const refresh = () => refreshAfterWrite(queryClient);
 
   const handleSend = async () => {
     setSending(true);
@@ -100,7 +100,7 @@ export function ShipmentDetailPage() {
     setError(null);
     try {
       await deleteShipment(id);
-      await queryClient.invalidateQueries({ queryKey: ['shipments'] });
+      await refreshAfterWrite(queryClient);
       navigate('/shipments');
     } catch (cause) {
       setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));

@@ -18,12 +18,10 @@ export function DashboardPage() {
   const todosQuery = useQuery({
     queryKey: ['dashboard', 'todos'],
     queryFn: getDashboardTodos,
-    staleTime: 30_000,
   });
   const recentNotificationsQuery = useQuery({
     queryKey: ['notifications', 'dashboard'],
     queryFn: () => listNotifications({ page: 1, size: 5 }),
-    staleTime: 30_000,
   });
 
   const items = todosQuery.data?.items ?? [];

@@ -28,6 +28,9 @@ Worker (apps/api) ── 降级直连 ──► DATABASE_URL
 - **本地开发**：`wrangler dev` 支持 `.dev.vars` 中写 `DATABASE_URL`（不入库），或在 `wrangler.toml` 配置 hyperdrive 绑定。
 - **CLI / 脚本**：`packages/db` 的 `migrate` / `seed` / `ping` 命令读取 `DATABASE_URL`（可选 `DB_SSL=true`）。
 
+> ⚠️ Hyperdrive 默认开启**查询缓存**（且写入不会使其失效），会造成「用户改了看不到、刷新也没用」。
+> 必须把 TTL 压到最小，见下文 §6。
+
 ## 3. 待用户提供后执行的验证步骤
 
 ### 3.1 防火墙 / 白名单
@@ -116,3 +119,59 @@ curl -X POST http://localhost:8787/api/v1/admin/migrate \
 | ST-YY | YY超市   | RETAILER  |
 
 设置 `SEED_ADMIN=1` 可额外插入占位管理员用户（需先手动重置为可用凭证）。
+
+## 6. Hyperdrive 查询缓存与写后读一致性（重要）
+
+### 症状
+
+用户新增 / 编辑 / 过账后，界面上看不到变化：**F5 刷新、清空浏览器缓存、换设备都没用**，等大约 1 分钟后才出现。这是服务端 Hyperdrive 查询缓存导致的，客户端怎么刷都刷不掉。
+
+### 根因
+
+Cloudflare Hyperdrive 自 2024 年起**默认开启查询缓存**（`caching.enabled = true`）：
+
+- 只缓存**只读查询**（SELECT），缓存键 = SQL 文本 + 参数；
+- **写入 / 事务不会使其失效**（官方明确：Hyperdrive 不做自动失效，也不感知逻辑依赖）；
+- 默认 `max_age = 60s` + `stale_while_revalidate = 15s` → 写入后最长约 75 秒内，**所有用户**（包括写入者自己）读到的都还是旧数据。
+
+注意：`apps/api/wrangler.toml` 的 `[[hyperdrive]]` 绑定只接受 `binding` 与 `id` 两个键，
+缓存参数属于 Hyperdrive **资源本身**，改 toml 无效，必须用 CLI 或控制台修改。
+
+### 处理（一次即可，但每次新环境都要做）
+
+```bash
+# TTL 压到最小：保留连接池，仅去掉「陈旧窗口」
+npx wrangler hyperdrive update "<HYPERDRIVE_ID>" --max-age=1 --swr=0
+# --swr=0 等价于 stale_while_revalidate 关闭（wrangler 输出 "disabled"）
+
+# 校验
+npx wrangler hyperdrive get "<HYPERDRIVE_ID>"
+#   caching: { disabled: false, max_age: 1, stale_while_revalidate: 0 }
+```
+
+`wrangler hyperdrive update` 是 PATCH 语义：只改显式传入的字段，不会重置 origin / 连接参数。
+
+**生产实例已应用**（2026-09-13 验证）：id `d3f06050a92846ca950561f5d37f1232`，`wrangler hyperdrive get` 返回
+`"caching": { "disabled": false, "max_age": 1, "stale_while_revalidate": 0 }`（origin / 连接池参数未变动）。
+
+极端情况下也可整体关闭缓存：`npx wrangler hyperdrive update "<HYPERDRIVE_ID>" --caching-disabled`。
+本项目的选择是**保留缓存、把 TTL 降到 1 秒**（`swr=0`），兼顾连接池收益与写后读一致性。
+
+### CI 与权限
+
+`.github/workflows/deploy.yml` 已内置步骤 **Enforce Hyperdrive query cache TTL**（每次部署执行一次）。
+它需要 `CLOUDFLARE_API_TOKEN` 具备 **Hyperdrive: Edit** 权限；该步骤是 `continue-on-error: true`，
+权限不足时只打印 warning，不会阻断部署 —— 此时请按上面的命令手动执行一次并确认。
+
+### 客户端配合（避免同类问题复发）
+
+- API 全部响应带 `Cache-Control: no-store`（见 `apps/api/src/index.ts` 的全局中间件），前端请求另显式使用 `cache: 'no-store'`；
+- 前端 TanStack Query 全局 `staleTime: 0`，挂载 / 窗口聚焦 / 网络重连均重新取数；任何写操作成功后统一失效查询缓存（`refreshAfterWrite`），仅签名图片 URL（带时效）保留缓存；
+- Service Worker 仅缓存同源静态资源并已升版本号，不参与 API 缓存。
+
+### 排查清单（再次出现「改了看不到」时）
+
+1. `curl -i https://api.otun.musi.land/api/v1/health` —— 若响应头**没有** `cache-control: no-store`，说明 Worker 未更新（重新部署）。
+2. `npx wrangler hyperdrive get "<HYPERDRIVE_ID>"` —— 确认 `caching.max_age=1`、`stale_while_revalidate=0`。
+3. 绕开 Worker 直连数据库读一次（`pnpm --filter @otunlink/db db:ping` 或 issue 一条 SELECT）—— 若数据已是新的，问题一定在缓存层，而不是业务逻辑。
+4. 浏览器 DevTools → Network：请求若来自 `(ServiceWorker)` 或显示 `from disk cache`，检查 `apps/web/public/sw.js` 的 `CACHE_VERSION` 是否已递增。

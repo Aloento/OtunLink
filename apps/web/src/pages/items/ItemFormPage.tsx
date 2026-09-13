@@ -26,6 +26,7 @@ import {
 } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
+import { refreshAfterWrite } from '../../api/queryClient';
 import {
   createItem,
   getItem,
@@ -84,13 +85,11 @@ export function ItemFormPage() {
     queryKey: ['items', params.id],
     queryFn: () => getItem(params.id!),
     enabled: isEdit,
-    staleTime: 30_000,
   });
 
   const { data: categories = [] } = useQuery({
     queryKey: ['items', 'categories'],
     queryFn: listItemCategories,
-    staleTime: 60_000,
   });
 
   useEffect(() => {
@@ -144,7 +143,7 @@ export function ItemFormPage() {
           status: form.status,
         });
         await replaceItemImages(id, files.map((file) => file.id));
-        void queryClient.invalidateQueries({ queryKey: ['items'] });
+        void refreshAfterWrite(queryClient);
         navigate(`/items/${id}`);
       } else {
         const detail = await createItem({
@@ -161,7 +160,7 @@ export function ItemFormPage() {
           status: form.status,
           fileIds: files.map((file) => file.id),
         });
-        void queryClient.invalidateQueries({ queryKey: ['items'] });
+        void refreshAfterWrite(queryClient);
         navigate(`/items/${detail.id}`);
       }
     } catch (cause) {
