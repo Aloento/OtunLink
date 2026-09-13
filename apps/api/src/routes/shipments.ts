@@ -50,8 +50,8 @@ import type {
 } from '../types';
 
 // 发货单。
-// - 创建：绑定集货方(COLLECTOR) → 收货方(WAREHOUSE)；多物流单号；清单复用物品并
-//   写入名称/规格快照；is_perishable 物品逐行必填生产日期+到期日（多批拆行）。
+// - 创建：绑定集货方(COLLECTOR) → 收货方(WAREHOUSE)；多物流单号；清单仅存物品引用，
+//   名称/规格读取时联表 items；is_perishable 物品逐行必填生产日期+到期日（多批拆行）。
 // - 转交：DRAFT → SENT（转交后行/价格锁定，后续点货处理）。
 // - 权限：读 = SHIPMENTS_READ；写 = SHIPMENTS_CREATE；转交 = SHIPMENTS_TRANSFER；
 //   scope_unit_id 非空时数据范围收敛到本单元（发货方或收货方命中即放行读）。
@@ -578,7 +578,8 @@ type LinesResult =
   | { ok: true; items: CreateShipmentItemInput[] }
   | { ok: false; message: string };
 
-// 清单行：复用物品目录 → 快照名称/规格；is_perishable 必填生产日期+到期日。
+// 清单行：只存 item_id 与数量；名称/规格读取时联表 items 派生（物品被单据引用即不可删除）。
+// is_perishable 必填生产日期+到期日。
 async function buildLines(repos: Repos, lines: ShipmentItemCreateInput[]): Promise<LinesResult> {
   const items: CreateShipmentItemInput[] = [];
   for (const line of lines) {
@@ -591,8 +592,6 @@ async function buildLines(repos: Repos, lines: ShipmentItemCreateInput[]): Promi
     }
     items.push({
       itemId: item.id,
-      name: item.name,
-      spec: item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit,
       expectedQty: line.expectedQty,
       unitPrice: line.unitPrice ?? null,
       productionDate,

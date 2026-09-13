@@ -1,5 +1,6 @@
 // 零售价内存仓库（retail_prices + history）。
 import type { RetailPriceHistoryRecord, RetailPriceListQuery, RetailPriceRecord, RetailPriceRepository } from '../../types';
+import { resolveSpec } from '../item-spec';
 import { round2, uuid } from './helpers';
 import type { MemoryItemRepository } from './items';
 import type { MemoryStockLedger } from './ledger';
@@ -71,7 +72,7 @@ export class MemoryRetailPriceRepository implements RetailPriceRepository {
       unitName: unit?.name ?? null,
       itemId: input.itemId,
       itemName: item?.name ?? null,
-      spec: item ? (item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit) : null,
+      spec: resolveSpec(item),
       minSaleUnit: item?.minSaleUnit ?? null,
       price: input.price,
       currency: input.currency,

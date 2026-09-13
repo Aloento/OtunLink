@@ -1,6 +1,7 @@
 // 出库单仓库（outbound_orders + outbound_order_items）。
 import type { SqlExecutor } from '@otunlink/db';
 import type { CreateOutboundRepoInput, OutboundListQuery, OutboundListResult, OutboundOrderItemRecord, OutboundOrderRecord, OutboundRepository, UpdateOutboundRepoInput } from '../../types';
+import { ITEM_SPEC_SQL } from '../item-spec';
 import { INSUFFICIENT_STOCK, OUTBOUND_STATE_CONFLICT, STOCK_BATCH_NOT_FOUND } from './errors';
 import { nn, photoArray, quote } from './helpers';
 import { mapOutbound, mapOutboundItem } from './mappers';
@@ -43,7 +44,7 @@ export function createOutboundsRepo(exec: SqlExecutor): OutboundRepository {
     async listItems(outboundOrderId: string): Promise<OutboundOrderItemRecord[]> {
       const { rows } = await exec.query(
         `SELECT ooi.*, i.name AS item_name,
-                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec, b.batch_no
+                ${ITEM_SPEC_SQL} AS spec, b.batch_no
          FROM outbound_order_items ooi
          LEFT JOIN items i ON i.id = ooi.item_id
          LEFT JOIN batches b ON b.id = ooi.batch_id
@@ -143,7 +144,7 @@ export function createOutboundsRepo(exec: SqlExecutor): OutboundRepository {
 
         const { rows: itemRows } = await exec.query(
           `SELECT ooi.*,
-                  CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec
+                  ${ITEM_SPEC_SQL} AS spec
             FROM outbound_order_items ooi
            LEFT JOIN items i ON i.id = ooi.item_id
            WHERE ooi.outbound_order_id = ${quote(id)}

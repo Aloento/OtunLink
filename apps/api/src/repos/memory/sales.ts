@@ -1,5 +1,6 @@
 // 销售单内存仓库（sales_orders + items + allocations + payments）。
 import type { CreateSalesRepoInput, PatchSalesInput, PaymentRecord, SalesAllocationInput, SalesBatchAllocationRecord, SalesListQuery, SalesListResult, SalesOrderItemRecord, SalesOrderRecord, SalesRepository } from '../../types';
+import { resolveSpec } from '../item-spec';
 import { INSUFFICIENT_STOCK_MESSAGE, SALES_STATE_CONFLICT_MESSAGE, STOCK_BATCH_NOT_FOUND_MESSAGE, normalizeEmpty, round2, uuid, type SalesLineIssueReason } from './helpers';
 import type { MemoryItemRepository } from './items';
 import type { MemoryStockLedger } from './ledger';
@@ -177,7 +178,7 @@ export class MemorySalesRepository implements SalesRepository {
       hydrated.push({
         ...row,
         itemName: row.itemName ?? item?.name ?? null,
-        spec: row.spec ?? (item ? (item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit) : null),
+        spec: row.spec ?? resolveSpec(item),
         minSaleUnit: item?.minSaleUnit ?? null,
       });
     }

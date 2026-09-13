@@ -203,7 +203,8 @@ export const shipmentTrackings = pgTable(
   ],
 );
 
-// ── 发货单明细 shipment_items（含效期上报、快照列）────────────────────────────
+// ── 发货单明细 shipment_items（含效期上报）────────────────────────────────────
+// 物品名称/规格不落列：items 被任何单据引用时禁止删除，item_id 恒有效，读取时联表派生。
 
 export const shipmentItems = pgTable(
   'shipment_items',
@@ -213,8 +214,6 @@ export const shipmentItems = pgTable(
       .notNull()
       .references(() => shipments.id, { onDelete: 'cascade' }),
     itemId: uuid('item_id').references(() => items.id, { onDelete: 'set null' }),
-    name: varchar('name', { length: 256 }).notNull(),
-    spec: varchar('spec', { length: 64 }),
     expectedQty: numeric('expected_qty', { precision: 12, scale: 2 }).notNull(),
     actualQty: numeric('actual_qty', { precision: 12, scale: 2 }),
     unitPrice: numeric('unit_price', { precision: 12, scale: 2 }),

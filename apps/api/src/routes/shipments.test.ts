@@ -143,7 +143,7 @@ describe('shipments 发货单 API', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
   });
 
-  it('创建发货单：多物流单号、快照与编号', async () => {
+  it('创建发货单：多物流单号、名称规格取自物品目录与编号', async () => {
     const { app } = makeApp({ users: [collector], units, items });
     const res = await app.request('/api/v1/shipments', {
       method: 'POST',
@@ -170,7 +170,7 @@ describe('shipments 发货单 API', () => {
     expect(payload.data.trackings).toHaveLength(2);
     expect(payload.data.trackings.map((t) => t.carrier)).toContain('SF');
     expect(payload.data.trackings.map((t) => t.carrier)).toContain('DHL');
-    // 快照：名称/规格在创建时复制自物品目录。
+    // 名称/规格不落库：读取时联表物品目录带出。
     expect(payload.data.items[0]).toMatchObject({
       itemId: ITEM_A,
       name: '苹果',
@@ -312,7 +312,7 @@ describe('shipments 发货单 API', () => {
     expect(await patchSent.json()).toMatchObject({ error: { code: 'SHIPMENT_STATE_CONFLICT' } });
   });
 
-  it('列表与详情：状态过滤、物流单号卡片、清单快照', async () => {
+  it('列表与详情：状态过滤、物流单号卡片、清单名称规格联表带出', async () => {
     const { app } = makeApp({ users: [collector], units, items });
     await app.request('/api/v1/shipments', {
       method: 'POST',
@@ -343,6 +343,28 @@ describe('shipments 发货单 API', () => {
     });
     const filteredBody = (await filtered.json()) as { data: { total: number } };
     expect(filteredBody.data.total).toBe(0);
+  });
+
+  it('物品改名/改规格后发货单清单即时反映（不存冗余快照）', async () => {
+    const { app, repos } = makeApp({ users: [collector], units, items });
+    const created = await app.request('/api/v1/shipments', {
+      method: 'POST',
+      headers: json('collector'),
+      body: JSON.stringify(body()),
+    });
+    const id = ((await created.json()) as { data: { id: string } }).data.id;
+
+    await repos.items.update(ITEM_A, { name: '苹果（改名后）', specUnit: 'BOX' });
+
+    const detail = await app.request(`/api/v1/shipments/${id}`, { headers: auth('collector') });
+    const detailBody = (await detail.json()) as {
+      data: { items: Array<{ itemId: string; name: string; spec: string }> };
+    };
+    expect(detailBody.data.items[0]).toMatchObject({
+      itemId: ITEM_A,
+      name: '苹果（改名后）',
+      spec: 'BOX',
+    });
   });
 
   it('删除 DRAFT 发货单成功，随后 GET 404', async () => {

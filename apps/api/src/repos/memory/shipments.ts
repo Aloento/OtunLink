@@ -1,7 +1,11 @@
 // 发货单内存仓库（shipments + trackings + items + reviews）。
 import type { CreateReviewInput, CreateShipmentInput, DiscrepancyReviewItemRecord, DiscrepancyReviewRecord, SaveCountResult, ShipmentCountRepoInput, ShipmentItemRecord, ShipmentListQuery, ShipmentListResult, ShipmentRecord, ShipmentRepository, ShipmentTrackingRecord, UpdateShipmentInput } from '../../types';
+import { resolveSpec } from '../item-spec';
 import { normalizeEmpty, uuid } from './helpers';
 import type { MemoryItemRepository } from './items';
+
+// 存储行不含 name/spec/minSaleUnit：与 SQL 实现一致，展示字段读取时联表派生。
+type ShipmentItemRow = Omit<ShipmentItemRecord, 'name' | 'spec' | 'minSaleUnit'>;
 
 // 物流单号 / 状态冲突信号：内存实现用消息前缀标记，路由层据此映射 409。
 const TRACKING_CONFLICT_MESSAGE = 'TRACKING_CONFLICT: carrier+tracking_no already exists';
@@ -27,7 +31,7 @@ function shipmentNoDate(now: Date): string {
 export class MemoryShipmentRepository implements ShipmentRepository {
   private rows = new Map<string, ShipmentRecord>();
   private trackings = new Map<string, ShipmentTrackingRecord[]>();
-  private items = new Map<string, ShipmentItemRecord[]>();
+  private items = new Map<string, ShipmentItemRow[]>();
   private reviews = new Map<string, DiscrepancyReviewRecord>();
   private reviewItems = new Map<string, DiscrepancyReviewItemRecord[]>();
   private dailyCounters = new Map<string, number>();
@@ -49,7 +53,7 @@ export class MemoryShipmentRepository implements ShipmentRepository {
     }
     for (const row of seed.items ?? []) {
       const list = this.items.get(row.shipmentId) ?? [];
-      list.push(cloneShipmentItem(row));
+      list.push(toItemRow(row));
       this.items.set(row.shipmentId, list);
     }
     for (const row of seed.reviews ?? []) {
@@ -145,9 +149,6 @@ export class MemoryShipmentRepository implements ShipmentRepository {
         id: uuid(),
         shipmentId: row.id,
         itemId: i.itemId,
-        name: i.name,
-        spec: normalizeEmpty(i.spec),
-        minSaleUnit: null,
         expectedQty: i.expectedQty,
         actualQty: null,
         unitPrice: normalizeEmpty(i.unitPrice),
@@ -204,9 +205,6 @@ export class MemoryShipmentRepository implements ShipmentRepository {
           id: uuid(),
           shipmentId: id,
           itemId: i.itemId,
-          name: i.name,
-          spec: normalizeEmpty(i.spec),
-          minSaleUnit: null,
           expectedQty: i.expectedQty,
           actualQty: null,
           unitPrice: normalizeEmpty(i.unitPrice),
@@ -252,8 +250,14 @@ export class MemoryShipmentRepository implements ShipmentRepository {
     const hydrated: ShipmentItemRecord[] = [];
     for (const row of rows) {
       const item = row.itemId ? await this.itemRepo.findById(row.itemId) : null;
-      const minSaleUnit = item?.minSaleUnit ?? row.minSaleUnit;
-      hydrated.push(cloneShipmentItem({ ...row, minSaleUnit }));
+      hydrated.push(
+        cloneShipmentItem({
+          ...row,
+          name: item?.name ?? '',
+          spec: resolveSpec(item),
+          minSaleUnit: item?.minSaleUnit ?? null,
+        }),
+      );
     }
     return hydrated;
   }
@@ -506,6 +510,23 @@ function cloneShipmentTracking(row: ShipmentTrackingRecord): ShipmentTrackingRec
 function cloneShipmentItem(row: ShipmentItemRecord): ShipmentItemRecord {
   return {
     ...row,
+    createdAt: new Date(row.createdAt),
+    updatedAt: new Date(row.updatedAt),
+  };
+}
+
+/** 种子/入参 → 存储行：剔除联表派生的展示字段。 */
+function toItemRow(row: ShipmentItemRecord): ShipmentItemRow {
+  return {
+    id: row.id,
+    shipmentId: row.shipmentId,
+    itemId: row.itemId,
+    expectedQty: row.expectedQty,
+    actualQty: row.actualQty,
+    unitPrice: row.unitPrice,
+    productionDate: row.productionDate,
+    expiryDate: row.expiryDate,
+    lineNote: row.lineNote,
     createdAt: new Date(row.createdAt),
     updatedAt: new Date(row.updatedAt),
   };

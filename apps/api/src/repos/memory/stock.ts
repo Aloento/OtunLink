@@ -1,5 +1,6 @@
 // 库存内存仓库（stock + stock_movements）。
 import { expiryRemainingDays } from '@otunlink/shared';
+import { resolveSpec } from '../item-spec';
 import type { StockBatchListQuery, StockBatchRecord, StockListQuery, StockListResult, StockMovementListQuery, StockMovementListResult, StockMovementRecord, StockRepository, StockRowRecord } from '../../types';
 import type { MemoryItemRepository } from './items';
 import type { MemoryStockLedger, MemoryStockRecord } from './ledger';
@@ -23,7 +24,7 @@ export class MemoryStockRepository implements StockRepository {
       unitName: unit?.name ?? null,
       itemId: row.itemId,
       itemName: item?.name ?? null,
-      spec: item ? (item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit) : null,
+      spec: resolveSpec(item),
       minSaleUnit: item?.minSaleUnit ?? null,
       batchId: row.batchId,
       batchNo: batch?.batchNo ?? null,
@@ -123,7 +124,7 @@ export class MemoryStockRepository implements StockRepository {
         unitName: unit?.name ?? null,
         itemId: row.itemId,
         itemName: item?.name ?? null,
-        spec: item ? (item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit) : null,
+        spec: resolveSpec(item),
         batchId: row.batchId,
         batchNo: batch?.batchNo ?? null,
         type: row.type as StockMovementRecord['type'],

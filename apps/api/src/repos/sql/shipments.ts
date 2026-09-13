@@ -1,6 +1,7 @@
 // 发货单仓库（shipments + trackings + items + discrepancy reviews）。
 import type { SqlExecutor } from '@otunlink/db';
 import type { CreateReviewInput, CreateShipmentInput, DiscrepancyReviewRecord, SaveCountResult, ShipmentCountRepoInput, ShipmentItemRecord, ShipmentListQuery, ShipmentListResult, ShipmentRecord, ShipmentRepository, ShipmentTrackingRecord, UpdateShipmentInput } from '../../types';
+import { ITEM_SPEC_SQL } from '../item-spec';
 import { COUNTING_STATE_CONFLICT, COUNT_LINE_INVALID, REVIEW_ALREADY_PROCESSED, REVIEW_NO_DIFFERENCE, SHIPMENT_STATE_CONFLICT, SHIPMENT_TRACKING_CONFLICT } from './errors';
 import { col, nn, photoArray, quote } from './helpers';
 import { mapDiscrepancyReview, mapDiscrepancyReviewItem, mapShipment, mapShipmentItem, mapShipmentTracking } from './mappers';
@@ -81,12 +82,11 @@ export function createShipmentsRepo(exec: SqlExecutor): ShipmentRepository {
         for (const i of input.items) {
           await exec.query(
             `INSERT INTO shipment_items
-               (shipment_id, item_id, name, spec, expected_qty, unit_price,
+               (shipment_id, item_id, expected_qty, unit_price,
                 production_date, expiry_date, line_note)
-             VALUES (${quote(shipment.id)}, ${quote(i.itemId)}, ${quote(i.name)},
-                     ${quote(nn(i.spec))}, ${quote(i.expectedQty)}, ${quote(nn(i.unitPrice))},
-                     ${quote(nn(i.productionDate))}, ${quote(nn(i.expiryDate))},
-                     ${quote(nn(i.lineNote))})`,
+             VALUES (${quote(shipment.id)}, ${quote(i.itemId)}, ${quote(i.expectedQty)},
+                     ${quote(nn(i.unitPrice))}, ${quote(nn(i.productionDate))},
+                     ${quote(nn(i.expiryDate))}, ${quote(nn(i.lineNote))})`,
           );
         }
         await exec.query('COMMIT');
@@ -134,12 +134,11 @@ export function createShipmentsRepo(exec: SqlExecutor): ShipmentRepository {
           for (const i of patch.items) {
             await exec.query(
               `INSERT INTO shipment_items
-                 (shipment_id, item_id, name, spec, expected_qty, unit_price,
+                 (shipment_id, item_id, expected_qty, unit_price,
                   production_date, expiry_date, line_note)
-               VALUES (${quote(id)}, ${quote(i.itemId)}, ${quote(i.name)},
-                       ${quote(nn(i.spec))}, ${quote(i.expectedQty)}, ${quote(nn(i.unitPrice))},
-                       ${quote(nn(i.productionDate))}, ${quote(nn(i.expiryDate))},
-                       ${quote(nn(i.lineNote))})`,
+               VALUES (${quote(id)}, ${quote(i.itemId)}, ${quote(i.expectedQty)},
+                       ${quote(nn(i.unitPrice))}, ${quote(nn(i.productionDate))},
+                       ${quote(nn(i.expiryDate))}, ${quote(nn(i.lineNote))})`,
             );
           }
         }
@@ -191,7 +190,8 @@ export function createShipmentsRepo(exec: SqlExecutor): ShipmentRepository {
     },
     async listItems(shipmentId: string): Promise<ShipmentItemRecord[]> {
       const { rows } = await exec.query(
-        `SELECT si.*, i.min_sale_unit AS min_sale_unit
+        `SELECT si.*, i.min_sale_unit AS min_sale_unit, i.name AS item_name,
+                ${ITEM_SPEC_SQL} AS spec
          FROM shipment_items si
          LEFT JOIN items i ON i.id = si.item_id
          WHERE si.shipment_id = ${quote(shipmentId)} ORDER BY si.created_at ASC, si.id ASC`,

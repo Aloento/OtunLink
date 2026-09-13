@@ -301,7 +301,9 @@ export interface ShipmentItemRecord {
   id: string;
   shipmentId: string;
   itemId: string | null;
+  /** 物品名称（联表带出 items.name，不落库）。 */
   name: string;
+  /** 规格（由 items.min_sale_unit + inner_unit/spec_unit 派生，不落库）。 */
   spec: string | null;
   minSaleUnit: MinSaleUnit | null;
   expectedQty: string;
@@ -322,9 +324,6 @@ export interface CreateShipmentTrackingInput {
 
 export interface CreateShipmentItemInput {
   itemId: string;
-  /** 下单时快照（由路由层从物品目录读出）。 */
-  name: string;
-  spec: string | null;
   expectedQty: string;
   unitPrice: string | null;
   productionDate: string | null;

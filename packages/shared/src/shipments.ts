@@ -31,15 +31,15 @@ export interface ShipmentTrackingDto {
   createdAt: string;
 }
 
-/** 发货单明细 DTO（shipment_items，含效期上报与快照列）。 */
+/** 发货单明细 DTO（shipment_items，含效期上报）。 */
 export interface ShipmentItemDto {
   id: string;
   itemId: string | null;
-  /** 下单时的物品名称快照。 */
+  /** 物品名称（联表带出 items.name 的当前值，改目录名即时生效）。 */
   name: string;
-  /** 下单时的规格快照（最小销售单位的文案键值，分组见 minSaleUnit）。 */
+  /** 规格（由 items 的 min_sale_unit + inner_unit/spec_unit 派生，分组见 minSaleUnit）。 */
   spec: string | null;
-  /** 规格快照所属文案分组：INNER → items.innerUnits，SPEC → items.specUnits。 */
+  /** 规格所属文案分组：INNER → items.innerUnits，SPEC → items.specUnits。 */
   minSaleUnit: MinSaleUnit | null;
   expectedQty: string;
   actualQty: string | null;

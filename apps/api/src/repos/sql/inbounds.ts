@@ -2,6 +2,7 @@
 import type { SqlExecutor } from '@otunlink/db';
 import type { ConfirmReceiptRepoInput, CreateInboundManualRepoInput, InboundListQuery, InboundListResult, InboundOrderItemRecord, InboundOrderRecord, InboundRepository, ShipmentRepository } from '../../types';
 import { mergeInboundLines, qtyEqual } from '../inbound-lines';
+import { ITEM_SPEC_SQL } from '../item-spec';
 import { INBOUND_STATE_CONFLICT, SHIPMENT_NOT_READY } from './errors';
 import { nn, photoArray, quote } from './helpers';
 import { insertDraftInbound, perishableDates, postInboundLine } from './inbound-posting';
@@ -47,7 +48,7 @@ export function createInboundsRepo(
     async listItems(inboundOrderId: string): Promise<InboundOrderItemRecord[]> {
       const { rows } = await exec.query(
         `SELECT ioi.*, i.name AS item_name,
-                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec
+                ${ITEM_SPEC_SQL} AS spec
          FROM inbound_order_items ioi
          LEFT JOIN items i ON i.id = ioi.item_id
          WHERE ioi.inbound_order_id = ${quote(inboundOrderId)}

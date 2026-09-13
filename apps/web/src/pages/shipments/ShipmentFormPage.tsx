@@ -23,6 +23,7 @@ import { listItems } from '../../api/items';
 import { createShipment, getShipment, updateShipment, type ShipmentCreateInput } from '../../api/shipments';
 import { listUnits, type UnitDto } from '../../api/units';
 import { refreshAfterWrite } from '../../api/queryClient';
+import { specUnitOf, unitLabel } from '../../i18n/units';
 
 interface TrackingLine {
   key: string;
@@ -75,20 +76,13 @@ function sanitizeDecimalInput(value: string): string {
   return rest.length ? `${head}.${rest.join('').replace(/\./g, '')}` : head ?? '';
 }
 
-// 最小销售单位：INNER 取内装单位，否则取规格单位（返回文案词条分组与键值）。
-// 与销售清单、以及后端 shipment_items.spec 快照保持同一口径。
-function minSaleUnitOf(item?: ItemDto): { group: 'innerUnits' | 'specUnits'; unit: string | null } {
-  const group = item?.minSaleUnit === 'INNER' ? 'innerUnits' : 'specUnits';
-  const unit = (group === 'innerUnits' ? item?.innerUnit : item?.specUnit) ?? null;
-  return { group, unit };
-}
-
+// 最小销售单位：INNER 取内装单位，否则取规格单位（键值；文案分组按 minSaleUnit）。
 function emptyItem(item?: ItemDto): ItemLine {
   return {
     key: genKey('i'),
     itemId: item?.id ?? '',
     name: item?.name ?? '',
-    spec: minSaleUnitOf(item).unit,
+    spec: specUnitOf(item),
     minSaleUnit: item?.minSaleUnit ?? null,
     isPerishable: item?.isPerishable ?? false,
     expectedQty: '',
@@ -213,7 +207,7 @@ export function ShipmentFormPage() {
             ...l,
             itemId,
             name: item?.name ?? l.name,
-            spec: minSaleUnitOf(item).unit ?? l.spec,
+            spec: specUnitOf(item) ?? l.spec,
             minSaleUnit: item?.minSaleUnit ?? l.minSaleUnit,
             isPerishable: item?.isPerishable ?? l.isPerishable,
           }
@@ -225,11 +219,10 @@ export function ShipmentFormPage() {
   // 「应收数量」后缀单位随物品的「最小销售单位」变化（与销售清单一致）。
   const quantityUnitSuffix = (line: ItemLine): string => {
     const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
-    // 物品不在当前候选项（编辑回显的非本页物品）时退回行上快照，分组取详情带出的 minSaleUnit。
-    const { group, unit } = item
-      ? minSaleUnitOf(item)
-      : { group: line.minSaleUnit === 'INNER' ? 'innerUnits' : 'specUnits', unit: line.spec };
-    return unit ? ` (${t(`items.${group}.${unit}`)})` : '';
+    // 物品不在当前候选项（编辑回显的非本页物品）时退回详情带回的规格与 minSaleUnit。
+    const unit = item ? specUnitOf(item) : line.spec;
+    const minSaleUnit = item?.minSaleUnit ?? line.minSaleUnit;
+    return unit ? ` (${unitLabel(t, unit, minSaleUnit)})` : '';
   };
 
   const buildPayload = (): ShipmentCreateInput | null => {

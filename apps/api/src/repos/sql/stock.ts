@@ -1,6 +1,7 @@
 // 库存仓库（stock + stock_movements）。
 import type { SqlExecutor } from '@otunlink/db';
 import type { StockBatchListQuery, StockBatchRecord, StockListQuery, StockListResult, StockMovementListQuery, StockMovementListResult, StockRepository } from '../../types';
+import { ITEM_SPEC_SQL } from '../item-spec';
 import { inClause, quote } from './helpers';
 import { attachExpiry, mapStockMovement, mapStockRow } from './mappers';
 
@@ -24,7 +25,7 @@ export function createStockRepo(exec: SqlExecutor): StockRepository {
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(
         `SELECT s.*, bu.name AS unit_name, i.name AS item_name,
-                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                ${ITEM_SPEC_SQL} AS spec,
                 i.min_sale_unit AS min_sale_unit,
                 b.batch_no, b.production_date, b.expiry_date
          FROM stock s
@@ -57,7 +58,7 @@ export function createStockRepo(exec: SqlExecutor): StockRepository {
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(
         `SELECT m.*, bu.name AS unit_name, i.name AS item_name,
-                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                ${ITEM_SPEC_SQL} AS spec,
                 b.batch_no
          FROM stock_movements m
          LEFT JOIN business_units bu ON bu.id = m.unit_id
@@ -79,7 +80,7 @@ export function createStockRepo(exec: SqlExecutor): StockRepository {
       };
       const { rows } = await exec.query(
         `SELECT s.*, bu.name AS unit_name, i.name AS item_name,
-                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                ${ITEM_SPEC_SQL} AS spec,
                 i.min_sale_unit AS min_sale_unit,
                 b.batch_no, b.production_date, b.expiry_date
          FROM stock s
@@ -104,7 +105,7 @@ export function createStockRepo(exec: SqlExecutor): StockRepository {
       };
       const { rows } = await exec.query(
         `SELECT s.*, bu.name AS unit_name, i.name AS item_name,
-                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                ${ITEM_SPEC_SQL} AS spec,
                 i.min_sale_unit AS min_sale_unit,
                 b.batch_no, b.production_date, b.expiry_date
          FROM stock s

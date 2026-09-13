@@ -100,7 +100,7 @@ export function mapShipmentItem(row: Record<string, unknown>): ShipmentItemRecor
     id: String(row.id),
     shipmentId: String(row.shipment_id),
     itemId: row.item_id ? String(row.item_id) : null,
-    name: String(row.name),
+    name: row.item_name != null ? String(row.item_name) : '',
     spec: row.spec ? String(row.spec) : null,
     minSaleUnit: row.min_sale_unit ? (String(row.min_sale_unit) as MinSaleUnit) : null,
     expectedQty: row.expected_qty != null ? String(row.expected_qty) : '0',

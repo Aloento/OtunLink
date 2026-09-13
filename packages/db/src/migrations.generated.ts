@@ -10,5 +10,9 @@ export const migrations: Migration[] = [
   {
     "name": "0001_uneven_nico_minoru",
     "sql": "ALTER TABLE \"sales_order_items\" ADD COLUMN \"list_price_currency\" varchar(3);--> statement-breakpoint\nUPDATE \"sales_order_items\"\nSET \"list_price_currency\" = \"sales_orders\".\"currency\"\nFROM \"sales_orders\"\nWHERE \"sales_orders\".\"id\" = \"sales_order_items\".\"sales_order_id\"\n  AND \"sales_order_items\".\"list_price\" IS NOT NULL;--> statement-breakpoint\nALTER TABLE \"business_units\" DROP COLUMN \"base_currency\";"
+  },
+  {
+    "name": "0002_daffy_wild_child",
+    "sql": "ALTER TABLE \"shipment_items\" DROP COLUMN \"name\";--> statement-breakpoint\nALTER TABLE \"shipment_items\" DROP COLUMN \"spec\";"
   }
 ];

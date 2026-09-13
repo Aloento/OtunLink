@@ -14,6 +14,7 @@ import { refreshAfterWrite } from '../../api/queryClient';
 import { RefreshButton } from '../../components/RefreshButton';
 import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
 import { useSession } from '../../auth/SessionProvider';
+import { specUnitOf, unitLabel } from '../../i18n/units';
 
 interface ItemLine {
   key: string;
@@ -234,9 +235,8 @@ export function InboundFormPage() {
                 label={`${t('inbound.qty')}${
                   (() => {
                     const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
-                    if (!item) return '';
-                    const unit = item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit;
-                    return unit ? ` (${t(`items.${item.minSaleUnit === 'INNER' ? 'innerUnits' : 'specUnits'}.${unit}`)})` : '';
+                    const unit = specUnitOf(item);
+                    return unit ? ` (${unitLabel(t, unit, item?.minSaleUnit)})` : '';
                   })()
                 }`}
                 required

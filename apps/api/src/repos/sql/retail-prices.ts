@@ -1,6 +1,7 @@
 // 零售价仓库（retail_prices + retail_price_history）。
 import type { SqlExecutor } from '@otunlink/db';
 import type { RetailPriceHistoryRecord, RetailPriceListQuery, RetailPriceRecord, RetailPriceRepository } from '../../types';
+import { ITEM_SPEC_SQL } from '../item-spec';
 import { inClause, quote } from './helpers';
 import { mapRetailPrice, mapRetailPriceHistory } from './mappers';
 
@@ -16,7 +17,7 @@ export function createRetailPricesRepo(exec: SqlExecutor): RetailPriceRepository
       };
       const { rows } = await exec.query(
         `SELECT rp.*, bu.name AS unit_name, i.name AS item_name,
-                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                ${ITEM_SPEC_SQL} AS spec,
                 i.min_sale_unit AS min_sale_unit,
                 bu2.name AS updated_by_name,
                 (SELECT CASE WHEN SUM(s.qty) > 0
@@ -61,7 +62,7 @@ export function createRetailPricesRepo(exec: SqlExecutor): RetailPriceRepository
     async listHistory(unitId: string, itemId: string): Promise<RetailPriceHistoryRecord[]> {
       const { rows } = await exec.query(
         `SELECT h.*, bu.name AS unit_name, i.name AS item_name,
-                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                ${ITEM_SPEC_SQL} AS spec,
                 u.name AS updated_by_name
          FROM retail_price_history h
          JOIN business_units bu ON bu.id = h.unit_id

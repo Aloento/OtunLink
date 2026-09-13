@@ -34,6 +34,7 @@ import { listStockBatches } from '../../api/stock';
 import { listUnits, type UnitDto } from '../../api/units';
 import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
+import { specUnitOf, unitLabel } from '../../i18n/units';
 import { RefreshButton } from '../../components/RefreshButton';
 import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
 
@@ -468,11 +469,8 @@ export function SalesFormPage() {
                 className="min-w-0"
                 label={`${t('sales.qty')}${(() => {
                     const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
-                    if (!item) return '';
-                    const unit = item.minSaleUnit === 'INNER' ? item.innerUnit : item.specUnit;
-                    return unit
-                      ? ` (${t(`items.${item.minSaleUnit === 'INNER' ? 'innerUnits' : 'specUnits'}.${unit}`)})`
-                      : '';
+                    const unit = specUnitOf(item);
+                    return unit ? ` (${unitLabel(t, unit, item?.minSaleUnit)})` : '';
                   })()
                   }`}
                 required

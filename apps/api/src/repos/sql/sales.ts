@@ -1,6 +1,7 @@
 // 销售单仓库（sales_orders + 明细 + 批次分配 + 支付）。
 import type { SqlExecutor } from '@otunlink/db';
 import type { CreateSalesRepoInput, PatchSalesInput, PaymentRecord, SalesAllocationInput, SalesBatchAllocationRecord, SalesListQuery, SalesListResult, SalesOrderItemRecord, SalesOrderRecord, SalesRepository } from '../../types';
+import { ITEM_SPEC_SQL } from '../item-spec';
 import { INSUFFICIENT_STOCK, SALES_LINE_INVALID, SALES_STATE_CONFLICT, STOCK_BATCH_NOT_FOUND } from './errors';
 import { inClause, nn, quote, round2num } from './helpers';
 import { mapPayment, mapSalesAllocation, mapSalesItem, mapSalesOrder } from './mappers';
@@ -55,7 +56,7 @@ export function createSalesRepo(exec: SqlExecutor): SalesRepository {
     async listItems(salesOrderId: string): Promise<SalesOrderItemRecord[]> {
       const { rows } = await exec.query(
         `SELECT oi.*, i.name AS item_name,
-                CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+                ${ITEM_SPEC_SQL} AS spec,
                 i.min_sale_unit AS min_sale_unit
          FROM sales_order_items oi
          LEFT JOIN items i ON i.id = oi.item_id
