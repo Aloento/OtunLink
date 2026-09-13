@@ -313,7 +313,8 @@ export function SalesFormPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {/* items-start：Field 根节点是 display:grid，被同行带 hint 的字段撑高时会拉伸行高把控件挤下去 */}
+      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
         <Field label={t('sales.seller')} required>
           <Select
             value={sellerUnitId}
