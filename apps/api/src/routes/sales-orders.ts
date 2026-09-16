@@ -191,6 +191,7 @@ export function salesOrdersRouter(): Hono<AppEnv> {
 
     try {
       const updated = await repos.sales.update(order.id, {
+        source: input.source,
         deliveryMethod: input.deliveryMethod,
         deliveryAddress: input.deliveryAddress,
         carrier: input.carrier,

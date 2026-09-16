@@ -409,8 +409,9 @@ export const salesOrderCreateSchema = z.object({
   lines: z.array(salesOrderLineSchema).min(1).max(500),
 });
 
-/** 更新销售单（PATCH /sales-orders/:id）：仅 DRAFT；行整体替换，价格快照重算。 */
+/** 更新销售单（PATCH /sales-orders/:id）：仅 DRAFT；行整体替换，价格快照重算；来源可改正。 */
 export const salesOrderPatchSchema = z.object({
+  source: z.enum(SALES_SOURCES).optional(),
   deliveryMethod: z.enum(DELIVERY_METHODS).optional(),
   deliveryAddress: z.string().trim().max(1024).optional().nullable(),
   carrier: z.string().trim().max(200).optional().nullable(),

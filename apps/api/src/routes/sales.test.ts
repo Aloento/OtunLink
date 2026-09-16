@@ -204,6 +204,7 @@ async function getOrder(app: Awaited<ReturnType<typeof makeApp>>['app'], id: str
     data: {
       id: string;
       salesNo: string;
+      source: string;
       status: string;
       totalAmount: string | null;
       currency: string;
@@ -424,6 +425,35 @@ describe(' 销售单（请货/发货/FEFO 分配）', () => {
     expect(order.items[0]).toMatchObject({
       qty: '2', listPriceCurrency: 'EUR', price: '100', priceCurrency: 'EUR', priceOverridden: false,
     });
+  });
+
+  it('PATCH：来源可在草稿阶段改正；未提交 source 时保持原值；非法值 400', async () => {
+    const { app } = makeApp();
+    await setPrice(app, WAREHOUSE_UNIT, ITEM_A, '100');
+    const created = await createOrder(app, 'wh', [{ itemId: ITEM_A, qty: '1' }], {
+      source: 'WAREHOUSE_INITIATED',
+    });
+    expect(created.status).toBe(201);
+    const { data } = (await created.json()) as { data: { id: string } };
+    expect((await getOrder(app, data.id)).source).toBe('WAREHOUSE_INITIATED');
+
+    const patched = await app.request(`/api/v1/sales-orders/${data.id}`, {
+      method: 'PATCH', headers: json('wh'), body: JSON.stringify({ source: 'RETAILER_REQUEST' }),
+    });
+    expect(patched.status).toBe(200);
+    expect((await getOrder(app, data.id)).source).toBe('RETAILER_REQUEST');
+
+    const kept = await app.request(`/api/v1/sales-orders/${data.id}`, {
+      method: 'PATCH', headers: json('wh'), body: JSON.stringify({ remark: '备注' }),
+    });
+    expect(kept.status).toBe(200);
+    expect((await getOrder(app, data.id)).source).toBe('RETAILER_REQUEST');
+
+    const invalid = await app.request(`/api/v1/sales-orders/${data.id}`, {
+      method: 'PATCH', headers: json('wh'), body: JSON.stringify({ source: 'UNKNOWN' }),
+    });
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
   });
 
   it('发送：FEFO 按到期日升序拆批分配（先近效期），库存逐批扣减', async () => {

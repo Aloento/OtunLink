@@ -165,6 +165,7 @@ export function createSalesRepo(exec: SqlExecutor): SalesRepository {
         );
         const { rows } = await exec.query(
           `UPDATE sales_orders SET
+             source = COALESCE(${quote(input.source ?? null)}, source),
              delivery_method = COALESCE(${quote(input.deliveryMethod ?? null)}, delivery_method),
              delivery_address = COALESCE(${quote(input.deliveryAddress ?? null)}, delivery_address),
              carrier = COALESCE(${quote(nn(input.carrier))}, carrier),

@@ -1070,6 +1070,8 @@ export interface CreateSalesRepoInput {
 }
 
 export interface PatchSalesInput {
+  /** 来源：门店请货 / 仓库主动送货，仅 DRAFT 可改正。 */
+  source?: SalesSource;
   deliveryMethod?: DeliveryMethod;
   deliveryAddress?: string | null;
   carrier?: string | null;

@@ -294,6 +294,7 @@ export class MemorySalesRepository implements SalesRepository {
     const discountPercent = input.discountPercent ?? existing.discountPercent;
     const next: SalesOrderRecord = {
       ...existing,
+      source: input.source ?? existing.source,
       deliveryMethod: input.deliveryMethod ?? existing.deliveryMethod,
       deliveryAddress:
         input.deliveryAddress !== undefined ? normalizeEmpty(input.deliveryAddress) : existing.deliveryAddress,

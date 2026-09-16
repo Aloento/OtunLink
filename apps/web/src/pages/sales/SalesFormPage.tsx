@@ -252,6 +252,7 @@ export function SalesFormPage() {
     try {
       if (isEdit) {
         const payload: SalesOrderPatchInput = {
+          source,
           deliveryMethod,
           deliveryAddress: deliveryAddress.trim() || null,
           freight,
@@ -345,17 +346,15 @@ export function SalesFormPage() {
             ))}
           </Select>
         </Field>
-        {!isEdit && (
-          <Field label={t('sales.source')} hint={t('sales.sourceHint')}>
-            <Select value={source} onChange={(_, d) => setSource(d.value as SalesSource)}>
-              {SALES_SOURCES.map((s) => (
-                <option key={s} value={s}>
-                  {t(`sales.sources.${s}`)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
+        <Field label={t('sales.source')} hint={t('sales.sourceHint')}>
+          <Select value={source} onChange={(_, d) => setSource(d.value as SalesSource)}>
+            {SALES_SOURCES.map((s) => (
+              <option key={s} value={s}>
+                {t(`sales.sources.${s}`)}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <Field label={t('sales.deliveryMethod')} hint={t(`sales.deliveryMethodHints.${deliveryMethod}`)}>
           <Select
             value={deliveryMethod}
