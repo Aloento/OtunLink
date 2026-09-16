@@ -212,6 +212,13 @@ export function SalesFormPage() {
   const setLine = (key: string, field: keyof LineState, value: string) =>
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, [field]: value } : l)));
 
+  // 移除明细行：单据至少保留一行（服务端 lines.min(1) 约束）。行号会整体前移，同时清掉按行号返回的服务端错误。
+  const removeLine = (key: string) => {
+    if (lines.length <= 1) return;
+    setLines((prev) => prev.filter((l) => l.key !== key));
+    setLineErrors(null);
+  };
+
   const validate = (): string | null => {
     if (!sellerUnitId) return t('sales.errors.sellerRequired');
     if (!buyerUnitId) return t('sales.errors.buyerRequired');
@@ -452,7 +459,9 @@ export function SalesFormPage() {
         </Text>
         {lines.map((line) => (
           <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-            <div className={`${LINE_GRID_CLASS} [&_.fui-Select__select]:h-8 [&_.fui-Input__input]:h-8 sm:grid-cols-3`}>
+            <div
+              className={`${LINE_GRID_CLASS} [&_.fui-Select__select]:h-8 [&_.fui-Input__input]:h-8 sm:grid-cols-[1fr_1fr_1fr_auto]`}
+            >
               <Field className="min-w-0" label={t('sales.itemName')} required>
                 <Select className="w-full" value={line.itemId} onChange={(_, d) => setLine(line.key, 'itemId', d.value)}>
                   <option value="">—</option>
@@ -491,6 +500,16 @@ export function SalesFormPage() {
                   onChange={(_, d) => setLine(line.key, 'unitPriceOverride', d.value)}
                 />
               </Field>
+              <div className="flex items-end">
+                <Button
+                  size="small"
+                  appearance="subtle"
+                  disabled={lines.length <= 1}
+                  onClick={() => removeLine(line.key)}
+                >
+                  {t('sales.removeLine')}
+                </Button>
+              </div>
             </div>
             {line.itemId && (
               <Text size={200} className="text-neutral-500">

@@ -662,6 +662,7 @@ export const en: TranslationSchema = {
     saveDraftHint: 'Save as draft; you can send it from the detail page.',
     cancel: 'Cancel',
     addLine: 'Add line',
+    removeLine: 'Remove line',
     send: 'Send',
     sendConfirm: 'Sending allocates stock by FEFO (or the batches you specify) and writes movements; this cannot be undone.',
     cancelOrder: 'Cancel sales order',

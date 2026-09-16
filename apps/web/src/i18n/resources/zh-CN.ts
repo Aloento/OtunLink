@@ -659,6 +659,7 @@ export const zhCN = {
     saveDraftHint: '保存后为草稿，可在详情页发送。',
     cancel: '取消',
     addLine: '添加销售行',
+    removeLine: '移除该行',
     send: '发送',
     sendConfirm: '发送后将按 FEFO（或您指定的批次）扣减库存并写入台账，不可撤销。',
     cancelOrder: '取消销售单',
