@@ -27,6 +27,7 @@ import { useSession } from '../../auth/SessionProvider';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { ScannerDialog } from '../../components/ScannerDialog';
+import { specUnitOf, unitLabel } from '../../i18n/units';
 
 const PAGE_SIZE = 20;
 
@@ -115,6 +116,15 @@ export function ItemsPage() {
     [navigate, t],
   );
 
+  // 内装单位单元格：单位文案 + 内装数量（innerCount 形如 "24.00"，去掉多余的小数零）。
+  const innerUnitText = (item: ItemDto): string => {
+    if (!item.innerUnit) return '—';
+    const label = t(`items.innerUnits.${item.innerUnit}`);
+    const raw = item.innerCount?.trim();
+    const count = raw ? Number(raw) : Number.NaN;
+    return Number.isFinite(count) ? `${label} / ${String(count)}` : label;
+  };
+
   const columns: ResponsiveTableColumn<ItemDto>[] = [
     {
       key: 'name',
@@ -132,6 +142,18 @@ export function ItemsPage() {
       key: 'specUnit',
       header: t('items.specUnit'),
       render: (item) => t(`items.specUnits.${item.specUnit}`),
+    },
+    {
+      key: 'innerUnit',
+      header: t('items.innerUnit'),
+      render: (item) => innerUnitText(item),
+    },
+    {
+      key: 'minSaleUnit',
+      header: t('items.minSaleUnit'),
+      // 分组文案 + 实际生效的单位文案（SPEC → 规格单位文案，INNER → 内装单位文案）。
+      render: (item) =>
+        `${t(`items.minSaleUnits.${item.minSaleUnit}`)} · ${unitLabel(t, specUnitOf(item), item.minSaleUnit)}`,
     },
     {
       key: 'status',

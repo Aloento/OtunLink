@@ -30,4 +30,9 @@ describe('buildMsalConfig', () => {
     const { msal } = buildMsalConfig(input);
     expect(msal.system?.loggerOptions?.piiLoggingEnabled).toBe(false);
   });
+
+  it('令牌缓存放在 localStorage（跨标签页/重启保留登录态）', () => {
+    const { msal } = buildMsalConfig(input);
+    expect(msal.cache?.cacheLocation).toBe('localStorage');
+  });
 });

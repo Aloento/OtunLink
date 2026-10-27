@@ -30,7 +30,9 @@ export function buildMsalConfig(input: WebAuthConfigInput): BuiltAuthConfig {
       postLogoutRedirectUri: input.postLogoutRedirectUri,
     },
     cache: {
-      cacheLocation: 'sessionStorage',
+      // 令牌存 localStorage：跨标签页/浏览器重启保留登录态，避免每次新开标签都要重新登录；
+      // 代价是刷新页面或新标签页无需（也不会）重新认证，共享同一浏览器会话即共享登录态。
+      cacheLocation: 'localStorage',
     },
     system: {
       // 注意：@azure/msal-browser v5 起，navigateToLoginRequestUrl 已不再支持放在 system 配置里，
