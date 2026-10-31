@@ -1,8 +1,8 @@
 import { useIsAuthenticated } from '@azure/msal-react';
-import { Body1, Button, Title3 } from '@fluentui/react-components';
+import { Body1, Button, Caption1, Title3 } from '@fluentui/react-components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 
 import type { Permission } from '@otunlink/shared';
 
@@ -33,31 +33,65 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function SessionErrorPage({ onRetry }: { onRetry: () => void }) {
+interface SessionErrorProps {
+  title: string;
+  body: string;
+  detail: string | null;
+  actionLabel: string;
+  onAction: () => void;
+}
+
+function SessionErrorPage({ title, body, detail, actionLabel, onAction }: SessionErrorProps) {
   const { t } = useTranslation();
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <Title3>{t('session.errorTitle')}</Title3>
-      <Body1>{t('session.errorBody')}</Body1>
-      <Button appearance="primary" onClick={onRetry}>
-        {t('session.retry')}
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6">
+      <Title3>{title}</Title3>
+      <Body1 className="text-center">{body}</Body1>
+      {/* 诊断信息：以前两种完全不同的故障共用一句「服务器或网络异常」，导致无法区分
+          「授权过期」与「接口 5xx」。这里把错误码/HTTP 状态直接摊开，便于自助排查。 */}
+      {detail ? (
+        <div className="flex max-w-xl flex-col items-center gap-1 text-center">
+          <Caption1>{t('session.detailLabel')}</Caption1>
+          <code className="break-all rounded bg-neutral-100 px-2 py-1 text-xs">{detail}</code>
+        </div>
+      ) : null}
+      <Button appearance="primary" onClick={onAction}>
+        {actionLabel}
       </Button>
     </div>
   );
 }
 
 export function RequireActive({ children }: { children: ReactNode }) {
-  const { me, loading, error, reload } = useSession();
-  const navigate = useNavigate();
+  const { me, loading, error, errorDetail, reload, signInAgain } = useSession();
+  const { t } = useTranslation();
 
   if (loading) return <FullPageSpinner />;
   if (!me) {
     // 服务器/网络异常：允许重试，避免把可恢复的错误误判为会话失效。
-    if (error === 'server') return <SessionErrorPage onRetry={() => void reload()} />;
-    // 资源 scope / consent 问题会让 acquireTokenSilent 失败；保留 MSAL account，
-    // 引导用户重新走登录流程而不是直接清缓存并循环回到 /login。
-    if (error === 'token') {
-      return <SessionErrorPage onRetry={() => navigate(LOGIN_PATH, { replace: true })} />;
+    if (error === 'server') {
+      return (
+        <SessionErrorPage
+          title={t('session.serverErrorTitle')}
+          body={t('session.serverErrorBody')}
+          detail={errorDetail}
+          actionLabel={t('session.retry')}
+          onAction={() => void reload()}
+        />
+      );
+    }
+    // 授权类失败（令牌刷新被拒、需要重新同意、账号被撤销）：重试静默刷新没有意义，
+    // 直接引导重新登录；旧实现的按钮只是跳转 /login，点了也不会恢复。
+    if (error === 'auth') {
+      return (
+        <SessionErrorPage
+          title={t('session.authErrorTitle')}
+          body={t('session.authErrorBody')}
+          detail={errorDetail}
+          actionLabel={t('session.signInAgain')}
+          onAction={signInAgain}
+        />
+      );
     }
     // 已登录但 /auth/me 返回空（如令牌失效被清缓存）：记录原目标路径，登录后回跳原页。
     // 与 RequireAuth 相同，避免 `<Navigate replace>` 重渲染后把深链覆盖成 /login。

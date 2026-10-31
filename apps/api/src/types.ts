@@ -39,6 +39,8 @@ export interface Env extends Record<string, unknown> {
   DATABASE_URL?: string;
   ADMIN_SECRET?: string;
   PERMANENT_ADMIN_EMAIL?: string;
+  /** 追加的跨域来源白名单（逗号分隔），默认已含 localhost:5173 与 https://otun.musi.land。 */
+  CORS_ORIGINS?: string;
   // 邮件：MAIL_PROVIDER=smtp（默认）经 Cloudflare connect()（TCP socket）直连外部 SMTP；
   // SMTP_SECURE=true 走 465 隐式 TLS（secureTransport=on）；否则 SMTP_STARTTLS=true 走 587 STARTTLS。
   MAIL_PROVIDER?: string;

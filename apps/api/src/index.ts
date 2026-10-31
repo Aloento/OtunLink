@@ -34,6 +34,21 @@ import type { AppEnv } from './types';
 
 export interface AppDeps extends AuthDeps {}
 
+// 允许跨域的前端来源：本机开发 + 生产站点，可用 CORS_ORIGINS（逗号分隔）追加，
+// 例如 Pages 预览域 https://<branch>.otunlink.pages.dev —— 预览域不在白名单时，
+// 浏览器会在 fetch 阶段直接失败（status 0），前端只能显示「服务器或网络异常」。
+const DEFAULT_CORS_ORIGINS = ['http://localhost:5173', 'https://otun.musi.land'];
+
+function resolveCorsOrigins(env: AppEnv['Bindings'] | undefined): string[] {
+  const extra =
+    typeof env?.CORS_ORIGINS === 'string'
+      ? env.CORS_ORIGINS.split(',')
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0)
+      : [];
+  return [...new Set([...DEFAULT_CORS_ORIGINS, ...extra])];
+}
+
 /**
  * 组装应用（依赖注入便于测试：verifyToken / getRepos 可替换为替身）。
  * - /auth/me、/users/me、/units、/admin/users、/admin/units 走 JWT 鉴权；
@@ -43,10 +58,12 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
   // CORS：SPA 与 API 分离部署（CF Pages + CF Workers），仅放行自有前端域名。
+  // origin 用函数形式：白名单需按请求读取 env（CORS_ORIGINS 可在部署时追加），
+  // 未命中时返回 null → 不下发 Access-Control-Allow-Origin，由浏览器拦截。
   app.use(
     '*',
     cors({
-      origin: ['http://localhost:5173', 'https://otun.musi.land'],
+      origin: (origin, c) => (resolveCorsOrigins(c.env).includes(origin) ? origin : null),
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization', 'X-Admin-Secret'],
       maxAge: 86400,
@@ -152,6 +169,24 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
       getExecutor: createExecutor,
     }),
   );
+
+  // 统一异常出口：任何未捕获异常（SQL 驱动错误、jose 校验异常、SMTP/存储异常…）
+  // 都转成 JSON 信封。Hono 默认返回纯文本 500，前端解析不出 error.code，只能
+  // 归类为「服务器异常」且看不到状态码——这正是「登录后只看到暂时无法连接」的成因之一。
+  app.onError((err, c) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[api] 未捕获异常:', err);
+    c.header('Cache-Control', 'no-store');
+    return c.json(
+      {
+        error: {
+          code: ErrorCodes.INTERNAL_ERROR,
+          message: message.slice(0, 300) || 'Internal error',
+        },
+      },
+      500,
+    );
+  });
 
   app.notFound((c) =>
     c.json({ error: { code: ErrorCodes.NOT_FOUND, message: 'Not found' } }, 404),

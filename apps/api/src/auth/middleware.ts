@@ -2,7 +2,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import { ErrorCodes, hasPermission, type Permission, type UserRole } from '@otunlink/shared';
 
 import type { AppEnv, AuthState, Repos, TokenClaims } from '../types';
-import { dbUnavailable, forbidden } from '../lib/http';
+import { dbQueryFailed, dbUnavailable, forbidden } from '../lib/http';
 
 type Ctx = Context<AppEnv>;
 
@@ -58,10 +58,18 @@ export function authenticate(deps: AuthDeps): MiddlewareHandler<AppEnv> {
 
     let user = null;
     if (repos) {
-      // 优先用稳定的 oid（与管理员在「新增用户」填写的 objectId 一致）关联，
-      // 找不到再回退 sub，兼容历史按 sub 开户的记录（含现有管理员）。
-      if (claims.oid) user = await repos.users.findByEntraSub(claims.oid);
-      if (!user) user = await repos.users.findByEntraSub(claims.sub);
+      try {
+        // 优先用稳定的 oid（与管理员在「新增用户」填写的 objectId 一致）关联，
+        // 找不到再回退 sub，兼容历史按 sub 开户的记录（含现有管理员）。
+        if (claims.oid) user = await repos.users.findByEntraSub(claims.oid);
+        if (!user) user = await repos.users.findByEntraSub(claims.sub);
+      } catch (error) {
+        // 数据库查询失败（Hyperdrive 连不上 origin、连接被拒、SQL 异常…）。
+        // 旧实现让异常冒到 Hono 默认处理器：返回纯文本 500，前端拿不到状态码与错误码，
+        // 只能归入「服务器或网络异常」。这里给出带 code 的 503 与清洗后的原因。
+        console.error('[auth] 用户查询失败:', error);
+        return dbQueryFailed(c, error, '数据库查询失败');
+      }
     }
 
     c.set('auth', { claims, user });

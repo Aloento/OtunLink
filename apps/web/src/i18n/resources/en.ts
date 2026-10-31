@@ -26,11 +26,17 @@ export const en: TranslationSchema = {
     button: 'Sign in',
     unconfigured:
       'Entra ID environment variables are not configured (VITE_ENTRA_TENANT_ID / VITE_ENTRA_CLIENT_ID). See docs/auth-setup.md.',
+    redirectError: 'Sign-in did not complete: {{detail}}',
   },
   session: {
-    errorTitle: 'Unable to connect right now',
-    errorBody: 'Failed to load your account (server or network error). Please try again.',
+    serverErrorTitle: 'Unable to connect right now',
+    serverErrorBody: 'Failed to load your account (server or network error). Please try again.',
+    authErrorTitle: 'Your sign-in has expired',
+    authErrorBody:
+      'The access token could not be refreshed (expired grant, changed permissions, or revoked session). Please sign in again.',
+    detailLabel: 'Diagnostics (copy this to your administrator)',
     retry: 'Retry',
+    signInAgain: 'Sign in again',
   },
   pending: {
     title: 'Awaiting role assignment',

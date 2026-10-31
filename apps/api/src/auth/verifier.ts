@@ -80,12 +80,19 @@ export async function getJwks(env: Env, tenantId: string): Promise<{ keys: JWK[]
   return fresh;
 }
 
-function resolveAudience(env: Env): string[] {
+export function resolveAudience(env: Env): string[] {
   const audience = env.ENTRA_AUDIENCE;
   const clientId = env.ENTRA_CLIENT_ID;
   const result: string[] = [];
   // 配置的 audience（发布者域形式，如 https://tenant.onmicrosoft.com/OtunLink/API）。
-  if (typeof audience === 'string' && audience.length > 0) result.push(audience);
+  if (typeof audience === 'string' && audience.length > 0) {
+    result.push(audience);
+    // v2 访问令牌的 aud 是「App ID URI」，不含 scope 段；而 ENTRA_AUDIENCE 常被写成
+    // 完整 scope（…/OtunLink/API）。此时 aud（…/OtunLink）与配置值不相等，若不放行
+    // 父级 URI，每个请求都会 401，前端表现为「登录后又回到登录页」的循环。
+    const parent = audience.replace(/\/[^/]+$/, '');
+    if (parent.length > 0 && parent !== audience && !result.includes(parent)) result.push(parent);
+  }
   if (typeof clientId === 'string' && clientId.length > 0) {
     // 裸 client id（guid）、默认 App ID URI 形式 api://<client-id>，以及前端 MSAL
     // 默认申请 scope 对应的 api://<client-id>/OtunLink.API 一并接受，

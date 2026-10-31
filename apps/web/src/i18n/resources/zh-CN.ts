@@ -24,11 +24,16 @@ export const zhCN = {
     button: '登录',
     unconfigured:
       '未配置 Entra ID 环境变量（VITE_ENTRA_TENANT_ID / VITE_ENTRA_CLIENT_ID），请参考 docs/auth-setup.md。',
+    redirectError: '登录未完成：{{detail}}',
   },
   session: {
-    errorTitle: '暂时无法连接',
-    errorBody: '获取账号信息失败（服务器或网络异常），请稍后重试。',
+    serverErrorTitle: '暂时无法连接',
+    serverErrorBody: '获取账号信息失败（服务器或网络异常），请稍后重试。',
+    authErrorTitle: '登录状态已失效',
+    authErrorBody: '访问令牌无法刷新（授权过期、权限变更或会话被撤销），需要重新登录。',
+    detailLabel: '诊断信息（可复制给管理员）',
     retry: '重试',
+    signInAgain: '重新登录',
   },
   pending: {
     title: '等待管理员分配岗位',

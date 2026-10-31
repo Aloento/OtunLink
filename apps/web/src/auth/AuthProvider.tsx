@@ -3,6 +3,7 @@ import { MsalProvider } from '@azure/msal-react';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { FullPageSpinner } from '../components/FullPageSpinner';
+import { clearAuthRedirectError, setAuthRedirectError } from './redirectError';
 
 // 登录初始化：
 // 之前直接渲染 MsalProvider，由其内部执行 initialize() + handleRedirectPromise()。但默认
@@ -31,8 +32,15 @@ export function AuthProvider({
       await instance.initialize();
       try {
         await instance.handleRedirectPromise({ navigateToLoginRequestUrl: false });
-      } catch {
-        // 兑换失败：由登录流程处理；此处仅保证交互状态被清理，不阻断启动。
+        clearAuthRedirectError();
+      } catch (cause) {
+        // 兑换失败：不再静默吞掉——把 AAD 的 error/error_description 留下来由登录页展示，
+        // 否则「点登录 → 回跳 → 什么都没发生」无法定位（租户策略/同意缺失都长这样）。
+        const err = cause as { errorCode?: string; errorMessage?: string; message?: string };
+        setAuthRedirectError({
+          code: err?.errorCode,
+          message: err?.errorMessage ?? err?.message,
+        });
       }
       if (!cancelled) setReady(true);
     }
