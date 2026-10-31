@@ -650,6 +650,11 @@ export const en: TranslationSchema = {
     total: '{{total}} orders',
     items: 'Items',
     noItems: 'No items',
+    picked: 'Picked',
+    pickedCount: 'Picked {{done}}/{{total}}',
+    clearPicked: 'Clear picked',
+    pickedHint:
+      'Ticks are for warehouse picking only; they stay in this browser and never touch the order or stock.',
     itemName: 'Item',
     spec: 'Spec',
     qty: 'Qty',

@@ -1,5 +1,7 @@
 import {
   Button,
+  Caption1,
+  Checkbox,
   Field,
   Input,
   Spinner,
@@ -35,6 +37,7 @@ import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
 import { unitLabel } from '../../i18n/units';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { usePickedLines } from './pickingState';
 
 // 销售单详情（状态机）：草稿可编辑/发送（FEFO 预览可覆盖），
 // 已发送后可取消（回补）、零售方上传支付并确认收货。
@@ -91,6 +94,9 @@ export function SalesDetailPage() {
     },
   });
 
+  // 拣货勾选：仓库取货现场用，存在本机浏览器（见 pickingState.ts），不参与单据状态机。
+  const picking = usePickedLines(id);
+
   if (isLoading) return <Spinner label={t('common.loading')} />;
   if (isError || !order) return <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>;
 
@@ -103,6 +109,9 @@ export function SalesDetailPage() {
     (order.status === 'SENT' || order.status === 'PAYMENT_UPLOADED');
   const canConfirm =
     hasPermission(me?.role, Permissions.SALES_CONFIRM_RECEIPT) && order.status === 'PAYMENT_UPLOADED';
+
+  // 只统计本单现存的行：清单改过之后，旧勾选不会虚增计数。
+  const pickedCount = order.items.filter((l) => picking.picked.has(l.id)).length;
 
   const itemColumns: ResponsiveTableColumn<SalesOrderItemDto>[] = [
     {
@@ -127,6 +136,19 @@ export function SalesDetailPage() {
       render: (l) => (l.price === null ? '—' : `${l.price} ${l.priceCurrency}`),
     },
     { key: 'lineTotal', header: t('sales.lineTotal'), render: (l) => l.lineTotal ?? '—' },
+    // 末列：拣货勾选。逐行勾掉已取到的货，买到哪件一眼可见。
+    {
+      key: 'picked',
+      header: t('sales.picked'),
+      render: (l) => (
+        <Checkbox
+          size="large"
+          checked={picking.picked.has(l.id)}
+          onChange={() => picking.toggle(l.id)}
+          aria-label={t('sales.picked')}
+        />
+      ),
+    },
   ];
 
   const allocColumns: ResponsiveTableColumn<SalesBatchAllocationDto>[] = [
@@ -271,15 +293,33 @@ export function SalesDetailPage() {
       </div>
 
       <div>
-        <Text as="h2" weight="semibold" size={400}>
-          {t('sales.items')}
-        </Text>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <Text as="h2" weight="semibold" size={400}>
+              {t('sales.items')}
+            </Text>
+            {order.items.length > 0 && (
+              <Caption1 className="text-neutral-500">
+                {t('sales.pickedCount', { done: pickedCount, total: order.items.length })}
+              </Caption1>
+            )}
+          </div>
+          {/* 勾选是本地状态，明确给一个清空入口：重打一份清单或换一单取货时不必逐行点掉。 */}
+          {pickedCount > 0 && (
+            <Button size="small" appearance="subtle" onClick={picking.clear}>
+              {t('sales.clearPicked')}
+            </Button>
+          )}
+        </div>
         <ResponsiveTable
           columns={itemColumns}
           items={order.items}
           rowKey={(l) => l.id}
           emptyText={t('sales.noItems')}
         />
+        {order.items.length > 0 && (
+          <Caption1 className="text-neutral-500">{t('sales.pickedHint')}</Caption1>
+        )}
       </div>
 
       {order.allocations.length > 0 && (
