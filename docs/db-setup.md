@@ -5,17 +5,20 @@
 ## 1. 当前验证结论（✅ 已连通 · 2026-11-05 迁移后）
 
 - **2026-11-05 迁移**：`164.30.21.203:9500`（PG 17.11）→ **`sc.aloen.to:6432`（PG 18.6）**；库名与账号不变（`otunlink` / `root`）。
-- 服务端**强制 TLS**：明文连接直接报 `08P01 SSL required`，连接串**必须**带 `?sslmode=require`。
-  证书为 Let's Encrypt `CN=sc.aloen.to`（有效期到 2027-02-03）。
-- 6432 是前置代理（PG 本体 `listen_addresses=localhost`、`port=5432`）：实测同一会话内 `pg_backend_pid()` 不变化、
-  `prepare` 可用 → 不是事务级池；`db.ts` 仍保留 `prepare: false`（Hyperdrive 兼容，别改）。
+- 服务端**强制 TLS**：明文连接直接报 `08P01 SSL required`。连接串统一用 **`?sslmode=verify-full`**
+  （校验 LE 证书链 + 主机名，与生产 Hyperdrive 同口径）。证书 Let's Encrypt `CN=sc.aloen.to`，到 2027-02-03。
+- 6432 是 **PgBouncer**（`pool_mode = transaction`，客户端 TLS，PG 本体只听 `127.0.0.1:5432`）。
+  事务级池意味着**不能用**：advisory lock、`LISTEN/NOTIFY`、`SET LOCAL/SESSION` 会话态、临时表、跨语句游标；
+  prepared statement 在 PgBouncer 1.26 下能建但**不要依赖** —— `db.ts` 的 `prepare: false` 必须保留。
+  2026-11-05 复查过代码：这些构造一个都没用到（`notifications` 只是业务表名），所以现在安全。
 - 连接串两处都要改（均 gitignored，含密码，勿提交）：`apps/api/.dev.vars`（wrangler dev 读）与
   根 `.dev.vars`（`packages/db` 的 CLI 只读仓库根这两个文件：`.env` / `.dev.vars`）。
 - 2026-11-05 实测：`db:ping` → `SELECT 1 = 1`；`db:migrate` → `applied 0 / skipped 3`（幂等，schema 已一致）。
 - 迁移完整性核对：30 张表**逐表行数 + 最大时间戳新旧完全一致**，最后一条业务写入 `2026-11-03T18:36:08Z`
   （`sales_orders` / `notifications`）→ 迁移后旧库无新增写入，可安全切换。
 - 生产链路（Worker → Hyperdrive → 新库）实测：`wrangler dev --remote` 绑生产 Hyperdrive 读 `server_version`
-  = **18.6**（切换前的同一测试 harness 读到 17.11）。
+  = **18.6**（切换前的同一测试 harness 读到 17.11）。2026-11-05 晚 Hyperdrive 升到 `verify-full` 后同一 harness
+  复测仍 18.6；本地 workerd（postgres.js + `cloudflare:sockets`）跑 `verify-full` 同样 200。
 
 ## 2. 架构与连接方式
 
@@ -44,14 +47,15 @@ Worker (apps/api) ── 降级直连 ──► DATABASE_URL
 
 1. `sc.aloen.to` 侧需放行：开发机出口 IP（当前经 WARP，出口 `104.28.193.95`，会变）与 Cloudflare 出口 IP 段
    （`https://www.cloudflare.com/ips/`）。2026-11-05 切换生产 Hyperdrive 后远端实测连通，说明 Cloudflare 侧已放行。
-2. 服务端只接受 TLS（`08P01 SSL required`）。本机直连用 `sslmode=require` 即可；
-   注意 pg v8 把 `require` 当作 `verify-full` 处理（pg v9 起改为 libpq 语义），postgres.js 的 `require` 只加密不校验证书。
+2. 服务端只接受 TLS（`08P01 SSL required`）。统一 `sslmode=verify-full`：pg v8 显式支持且不告警；
+   postgres.js 里 `require/allow/prefer` 会**关掉证书校验**（`rejectUnauthorized=false`），只有 `verify-full`
+   才真正校验链与主机名 —— 这也是我们全线用 `verify-full` 的原因。
 
 ### 3.2 连接串样例
 
 ```env
-# 直连（本地 / 降级）— 必须带 sslmode=require，否则服务端拒绝
-DATABASE_URL=postgresql://<user>:<password>@sc.aloen.to:6432/otunlink?sslmode=require
+# 直连（本地 / 降级）— 必须带 sslmode=verify-full，否则服务端拒绝或不校验证书
+DATABASE_URL=postgresql://<user>:<password>@sc.aloen.to:6432/otunlink?sslmode=verify-full
 
 # Hyperdrive（在 Cloudflare 控制台创建绑定后自动获得）
 # wrangler.toml:
@@ -191,17 +195,35 @@ npx wrangler hyperdrive get "<HYPERDRIVE_ID>"
 
 ## 7. 2026-11-05 迁移（sc.aloen.to）与回滚口径
 
-| 项               | 旧（已停用）                                        | 新（当前）                                                        |
-| ---------------- | --------------------------------------------------- | ----------------------------------------------------------------- |
-| 直连串           | `postgres://root:***@164.30.21.203:9500/otunlink`（明文） | `postgres://root:***@sc.aloen.to:6432/otunlink?sslmode=require` |
-| PG 版本          | 17.11                                               | 18.6（Ubuntu pgdg24.04）                                          |
-| Hyperdrive origin | `164.30.21.203:9500`                               | `sc.aloen.to:6432`，`sslmode=require`，缓存仍 `max_age=1 / swr=0` |
+| 项                | 旧（已停用）                                          | 新（当前）                                                                        |
+| ----------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 直连串            | `postgres://root:***@164.30.21.203:9500/otunlink`（明文） | `postgres://root:***@sc.aloen.to:6432/otunlink?sslmode=verify-full`           |
+| PG 版本           | 17.11                                                 | 18.6（Ubuntu pgdg24.04）+ PgBouncer 1.26（`pool_mode=transaction`）                |
+| Hyperdrive origin | `164.30.21.203:9500`                                 | `sc.aloen.to:6432`，`sslmode=verify-full`，缓存仍 `max_age=1 / swr=0`             |
+| Hyperdrive CA     | 无                                                    | `ca_certificate_id = f591f184-92b9-4846-8cd3-4dffe85f121f`（`letsencrypt-isrg-root-x1`） |
 
 改动落点：`apps/api/.dev.vars`、根 `.dev.vars`（gitignored，含密码）、`.dev.vars.example`、
 `.env.example`、`packages/db/drizzle.config.ts` 默认值、`apps/api/src/auth/middleware.test.ts` 的报错样本。
 `wrangler.toml` **不需要改**（Hyperdrive 只按 binding id 引用资源，id 未变，Worker 无需重新部署）。
 
-**回滚（一条命令，binding id 不变）**：
+### 7.1 verify-full 是怎么装的（下次换证书/换机照抄）
+
+`verify-ca` / `verify-full` 必须给 Hyperdrive 一个 CA 证书 id，而 CA 只能这样上传（`wrangler >= 4.9`，
+一次账号级上传，可被多个 Hyperdrive 配置复用；**只能放单个 CA，不能塞多证书 bundle**）：
+
+```powershell
+# 1) 取 LE 根证书（单证书）
+curl.exe -o isrg-root-x1.pem https://letsencrypt.org/certs/isrgrootx1.pem
+# 2) 上传 → 记下返回的 ID
+npx wrangler cert upload certificate-authority --ca-cert isrg-root-x1.pem --name letsencrypt-isrg-root-x1
+# 3) 绑定到本项目的 Hyperdrive
+npx wrangler hyperdrive update d3f06050a92846ca950561f5d37f1232 --sslmode verify-full --ca-certificate-id f591f184-92b9-4846-8cd3-4dffe85f121f
+```
+
+服务端必须把中间证书一起发出来（PgBouncer 用 `fullchain.pem`，已满足），否则 `verify-full` 建链失败。
+注意：仓库里的 `.cf/api-token.txt` 对 CA 相关端点没有权限（`10001`），用 `wrangler cert` 走已登录的 wrangler 即可。
+
+### 7.2 回滚（一条命令，binding id 不变）
 
 ```powershell
 npx wrangler hyperdrive update d3f06050a92846ca950561f5d37f1232 `
@@ -209,8 +231,8 @@ npx wrangler hyperdrive update d3f06050a92846ca950561f5d37f1232 `
 npx wrangler hyperdrive get d3f06050a92846ca950561f5d37f1232   # 确认 origin 与 caching
 ```
 
-旧库是明文连接：回滚后用 `wrangler hyperdrive get` 确认没有残留 `sslmode`
-（CLI 无法把 sslmode 设回“关闭”，若仍有 `sslmode: require` 就在 CF 控制台把 TLS 关掉）。
+旧库是明文连接：回滚后 `wrangler hyperdrive get` 里若仍残留 `mtls.sslmode` / `ca_certificate_id`
+（CLI 没有把 sslmode 设回“关闭”的取值），就在 CF 控制台把该项清掉。
 
 回滚只在旧库仍可写时有意义：**切换后写进新库的数据不会回流旧库**。
 切换前已核对 30 张表行数与最大时间戳完全一致（见 §1），因此切换点无数据差。

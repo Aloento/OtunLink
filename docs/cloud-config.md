@@ -24,12 +24,12 @@
 
 | 项目           | 值                                                                                                                                                                              |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 主机 / 端口    | **`sc.aloen.to:6432`**（2026-11-05 起；旧地址 `164.30.21.203:9500` 已停用。6432 为前置代理，PG 本体只听 `localhost:5432`）；**强制 TLS** → 连接串必须带 `?sslmode=require`（证书 LE `CN=sc.aloen.to`） |
+| 主机 / 端口    | **`sc.aloen.to:6432`**（2026-11-05 起；旧地址 `164.30.21.203:9500` 已停用。6432 = PgBouncer 1.26 事务级池，PG 本体只听 `127.0.0.1:5432`）；**强制 TLS** → 连接串用 `?sslmode=verify-full`（证书 LE `CN=sc.aloen.to`） |
 | 数据库         | `otunlink`（**专用库**；同机另有 `musiland` / `fusionfx` / `status_dashboard` 等其它项目的库，别混用。历史原因：账号对 `postgres` 默认库无 public 建表权限，PG15+ public schema 归 `pg_database_owner`，故单独建库并 `OWNER` 给业务账号） |
 | 用户           | `root`（非超级用户，拥有 otunlink 库）                                                                                                                                      |
 | 连接串（本地） | 见 `apps/api/.dev.vars` 与根 `.dev.vars`（gitignored，含密码）                                                                                                                  |
 | 迁移           | `pnpm --filter @otunlink/db db:migrate`（本地已验证：21 个枚举 / 29 表 / 293 列；2026-11-05 在新库重跑 → applied 0 / skipped 3，schema 一致） |
-| Hyperdrive     | 名称 **`otunlink`**，id `d3f06050a92846ca950561f5d37f1232`；**2026-11-05 origin 已改指 `sc.aloen.to:6432`（`sslmode=require`）**，远端实测 Worker 读到 PG 18.6；旧 origin 见 `docs/db-setup.md` §7 回滚 |
+| Hyperdrive     | 名称 **`otunlink`**，id `d3f06050a92846ca950561f5d37f1232`；**2026-11-05 origin 改指 `sc.aloen.to:6432` 并升到 `sslmode=verify-full`**（CA `letsencrypt-isrg-root-x1` = `f591f184-92b9-4846-8cd3-4dffe85f121f`），远端实测 Worker 读到 PG 18.6；口径见 `docs/db-setup.md` §7 |
 | 查询缓存       | **必须把 TTL 压到最小**：`npx wrangler hyperdrive update "<HYPERDRIVE_ID>" --max-age=1 --swr=0`（默认 `max_age=60s` + `stale_while_revalidate=15s` 且写入不会失效，会造成「改了看不到」，详见 `docs/db-setup.md` §6） |
 
 > `wrangler.toml` 的 `[[hyperdrive]]` 绑定只接受 `binding` + `id`；缓存参数属于 Hyperdrive 资源本身，只能用 CLI / 控制台修改。

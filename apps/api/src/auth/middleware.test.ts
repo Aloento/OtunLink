@@ -39,7 +39,7 @@ describe('authenticate：DB 查询异常', () => {
 
   it('外发消息里抹掉连接串口令', async () => {
     const app = appWith(
-      reposThatThrow('failed: postgres://root:%23123Aloento@sc.aloen.to:6432/otunlink?sslmode=require'),
+      reposThatThrow('failed: postgres://root:%23123Aloento@sc.aloen.to:6432/otunlink?sslmode=verify-full'),
     );
 
     const res = await app.request('/api/v1/auth/me', {

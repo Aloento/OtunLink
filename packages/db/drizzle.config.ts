@@ -7,6 +7,6 @@ export default defineConfig({
   schema: './src/index.ts',
   out: './migrations',
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? 'postgresql://<user>:<password>@sc.aloen.to:6432/otunlink?sslmode=require',
+    url: process.env.DATABASE_URL ?? 'postgresql://<user>:<password>@sc.aloen.to:6432/otunlink?sslmode=verify-full',
   },
 });
