@@ -19,6 +19,11 @@
 - 生产链路（Worker → Hyperdrive → 新库）实测：`wrangler dev --remote` 绑生产 Hyperdrive 读 `server_version`
   = **18.6**（切换前的同一测试 harness 读到 17.11）。2026-11-05 晚 Hyperdrive 升到 `verify-full` 后同一 harness
   复测仍 18.6；本地 workerd（postgres.js + `cloudflare:sockets`）跑 `verify-full` 同样 200。
+- 2026-11-05 全量升级依赖（`pnpm -r update --latest`，含跨版本：postgres 3.4.9→**4.0.0**、vitest 4→**5.1.0**、
+  nodemailer 9→**10.3.1**）后复验：typecheck / 358 个单测 / 两端 build 全绿，且用真实 `createSqlRepos` 层
+  对新库只读冒烟 200（units 5 / notifications 93 / auditLogs 20，日期序列化正常）。
+  postgres v4 的破坏性变更对本项目无影响：我们只走 `sql.unsafe(纯文本 SQL)`，不用 `sql.array()`、不用绑定参数，
+  所以「参数不再带类型推断」这条碰不到；`prepare: false` 仍然有效且必须保留。
 
 ## 2. 架构与连接方式
 
@@ -47,9 +52,11 @@ Worker (apps/api) ── 降级直连 ──► DATABASE_URL
 
 1. `sc.aloen.to` 侧需放行：开发机出口 IP（当前经 WARP，出口 `104.28.193.95`，会变）与 Cloudflare 出口 IP 段
    （`https://www.cloudflare.com/ips/`）。2026-11-05 切换生产 Hyperdrive 后远端实测连通，说明 Cloudflare 侧已放行。
-2. 服务端只接受 TLS（`08P01 SSL required`）。统一 `sslmode=verify-full`：pg v8 显式支持且不告警；
-   postgres.js 里 `require/allow/prefer` 会**关掉证书校验**（`rejectUnauthorized=false`），只有 `verify-full`
-   才真正校验链与主机名 —— 这也是我们全线用 `verify-full` 的原因。
+2. 服务端只接受 TLS（`08P01 SSL required`）。统一 `sslmode=verify-full`，别依赖驱动默认：
+   - pg（CLI）：v8 把 `require` 当 `verify-full` 用，但会打弃用警告；pg v9 起改成 libpq 语义 → 显式写 `verify-full`。
+   - postgres.js：3.x 对 `require/allow/prefer` 一律 `rejectUnauthorized=false`（只加密不校验）；
+     **4.0 起**（`src/socket.js`）在 Workers/workerd 下 `require` 不再关校验、走运行时默认，但 Node 侧仍然关闭。
+     结论不变：写 `verify-full` 才是两边一致的语义。
 
 ### 3.2 连接串样例
 
