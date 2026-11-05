@@ -49,9 +49,11 @@ API 通过 Cloudflare Workers 出站 TCP 直连外部 SMTP（仅 465 隐式 TLS 
 ## 2. Hyperdrive
 
 1. 在 Cloudflare 创建 Hyperdrive 实例，指向私有 PostgreSQL（连接串 / 隧道）。
+   现网实例：名称 `otunlink`、id `d3f06050a92846ca950561f5d37f1232`，2026-11-05 起 origin 为
+   `sc.aloen.to:6432`（`sslmode=require`）；改 origin 用 `wrangler hyperdrive update`，见 `docs/db-setup.md` §7。
 2. API `wrangler.toml` 中把 hyperdrive binding 命名为 `HYPERDRIVE`（已配置，见 `docs/cloud-config.md`）。
 3. 生产建议：连接池 `maxConnections` ≤ 10、`minConnections` ≥ 1，
-   `idleTimeout` 30s，开启 TLS。
+   `idleTimeout` 30s；**TLS 必开**（新库服务端拒绝明文连接，`08P01 SSL required`）。
 4. 本地开发无 Hyperdrive 时用 `DATABASE_URL` 直连（`apps/api/.dev.vars`）。
 
 ## 3. 域名与 CNAME
@@ -92,7 +94,7 @@ curl -X POST https://api.otun.musi.land/api/v1/admin/migrate -H "X-Admin-Secret:
 
 | 变量 | 说明 | 示例 |
 | ---- | ---- | ---- |
-| `DATABASE_URL` | 本地直连 PG（生产走 Hyperdrive binding，无需此项） | `postgres://...` |
+| `DATABASE_URL` | 本地直连 PG（生产走 Hyperdrive binding，无需此项）；新库强制 TLS，必须带 `?sslmode=require` | `postgres://<user>:<password>@sc.aloen.to:6432/otunlink?sslmode=require` |
 | `ADMIN_SECRET` | `/api/v1/admin/migrate` 的 bootstrap 密钥（X-Admin-Secret） | — |
 | `ENTRA_TENANT_ID` | Entra 租户（目录）ID | `<TENANT_ID>` |
 | `ENTRA_CLIENT_ID` | Entra 应用（客户端）ID | `<CLIENT_ID>` |

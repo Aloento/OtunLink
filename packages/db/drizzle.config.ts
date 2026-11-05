@@ -1,4 +1,4 @@
-﻿import { defineConfig } from 'drizzle-kit';
+import { defineConfig } from 'drizzle-kit';
 
 // generate 为离线操作，dbCredentials.url 仅用于 push/migrate 等需要连库的命令。
 export default defineConfig({
@@ -7,6 +7,6 @@ export default defineConfig({
   schema: './src/index.ts',
   out: './migrations',
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? 'postgresql://<user>:<password>@localhost:5432/otunlink',
+    url: process.env.DATABASE_URL ?? 'postgresql://<user>:<password>@sc.aloen.to:6432/otunlink?sslmode=require',
   },
 });

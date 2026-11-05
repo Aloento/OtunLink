@@ -2,13 +2,20 @@
 
 > 记录私有 PostgreSQL 的连通方式、迁移执行方式与验证结论。
 
-## 1. 当前验证结论（✅ 已连通）
+## 1. 当前验证结论（✅ 已连通 · 2026-11-05 迁移后）
 
-- 连接串已配置在 `apps/api/.dev.vars`（gitignored）：`postgresql://<user>:<password>@<DB_HOST>:5432/otunlink`
-- `pnpm --filter @otunlink/db db:migrate` 已应用（`schema_migrations` 有记录、业务表存在）
-- `pnpm --filter @otunlink/db db:ping` 直连与经 relay 均 OK
-- Worker 内 `/api/v1/auth/me` 经 postgres.js（`cloudflare:sockets`）直连返回 **200 OK**（登录闭环实测，见 3.3b）
-- 本地直连未启用 SSL；生产 Hyperdrive 连接由 Cloudflare 隧道 + Hyperdrive 数据库配置（建议 SSL）承担
+- **2026-11-05 迁移**：`164.30.21.203:9500`（PG 17.11）→ **`sc.aloen.to:6432`（PG 18.6）**；库名与账号不变（`otunlink` / `root`）。
+- 服务端**强制 TLS**：明文连接直接报 `08P01 SSL required`，连接串**必须**带 `?sslmode=require`。
+  证书为 Let's Encrypt `CN=sc.aloen.to`（有效期到 2027-02-03）。
+- 6432 是前置代理（PG 本体 `listen_addresses=localhost`、`port=5432`）：实测同一会话内 `pg_backend_pid()` 不变化、
+  `prepare` 可用 → 不是事务级池；`db.ts` 仍保留 `prepare: false`（Hyperdrive 兼容，别改）。
+- 连接串两处都要改（均 gitignored，含密码，勿提交）：`apps/api/.dev.vars`（wrangler dev 读）与
+  根 `.dev.vars`（`packages/db` 的 CLI 只读仓库根这两个文件：`.env` / `.dev.vars`）。
+- 2026-11-05 实测：`db:ping` → `SELECT 1 = 1`；`db:migrate` → `applied 0 / skipped 3`（幂等，schema 已一致）。
+- 迁移完整性核对：30 张表**逐表行数 + 最大时间戳新旧完全一致**，最后一条业务写入 `2026-11-03T18:36:08Z`
+  （`sales_orders` / `notifications`）→ 迁移后旧库无新增写入，可安全切换。
+- 生产链路（Worker → Hyperdrive → 新库）实测：`wrangler dev --remote` 绑生产 Hyperdrive 读 `server_version`
+  = **18.6**（切换前的同一测试 harness 读到 17.11）。
 
 ## 2. 架构与连接方式
 
@@ -35,14 +42,16 @@ Worker (apps/api) ── 降级直连 ──► DATABASE_URL
 
 ### 3.1 防火墙 / 白名单
 
-1. 在私有 PG 的安全组 / 防火墙放行 Cloudflare 出口 IP 段（见 Cloudflare 文档 `https://www.cloudflare.com/ips/`），或对测试库临时放行开发机出口 IP。
-2. PG 必须允许外部 SSL 连接（`pg_hba.conf` 使用 `hostssl`），建议 `sslmode=require` 起步，生产建议 `verify-full` 并提供 CA 证书。
+1. `sc.aloen.to` 侧需放行：开发机出口 IP（当前经 WARP，出口 `104.28.193.95`，会变）与 Cloudflare 出口 IP 段
+   （`https://www.cloudflare.com/ips/`）。2026-11-05 切换生产 Hyperdrive 后远端实测连通，说明 Cloudflare 侧已放行。
+2. 服务端只接受 TLS（`08P01 SSL required`）。本机直连用 `sslmode=require` 即可；
+   注意 pg v8 把 `require` 当作 `verify-full` 处理（pg v9 起改为 libpq 语义），postgres.js 的 `require` 只加密不校验证书。
 
 ### 3.2 连接串样例
 
 ```env
-# 直连（本地 / 降级）
-DATABASE_URL=postgresql://<user>:<password>@<DB_HOST>:5432/otunlink?sslmode=require
+# 直连（本地 / 降级）— 必须带 sslmode=require，否则服务端拒绝
+DATABASE_URL=postgresql://<user>:<password>@sc.aloen.to:6432/otunlink?sslmode=require
 
 # Hyperdrive（在 Cloudflare 控制台创建绑定后自动获得）
 # wrangler.toml:
@@ -175,3 +184,33 @@ npx wrangler hyperdrive get "<HYPERDRIVE_ID>"
 2. `npx wrangler hyperdrive get "<HYPERDRIVE_ID>"` —— 确认 `caching.max_age=1`、`stale_while_revalidate=0`。
 3. 绕开 Worker 直连数据库读一次（`pnpm --filter @otunlink/db db:ping` 或 issue 一条 SELECT）—— 若数据已是新的，问题一定在缓存层，而不是业务逻辑。
 4. 浏览器 DevTools → Network：请求若来自 `(ServiceWorker)` 或显示 `from disk cache`，检查 `apps/web/public/sw.js` 的 `CACHE_VERSION` 是否已递增。
+
+> 本机提示：Windows 自带的 `curl.exe`（schannel）经 WARP 出口对 `api.otun.musi.land` 会报
+> `SEC_E_ILLEGAL_MESSAGE`，不是站点故障；用 `node -e "fetch('https://api.otun.musi.land/api/v1/health').then(r=>r.text()).then(console.log)"`
+> 或浏览器验证。
+
+## 7. 2026-11-05 迁移（sc.aloen.to）与回滚口径
+
+| 项               | 旧（已停用）                                        | 新（当前）                                                        |
+| ---------------- | --------------------------------------------------- | ----------------------------------------------------------------- |
+| 直连串           | `postgres://root:***@164.30.21.203:9500/otunlink`（明文） | `postgres://root:***@sc.aloen.to:6432/otunlink?sslmode=require` |
+| PG 版本          | 17.11                                               | 18.6（Ubuntu pgdg24.04）                                          |
+| Hyperdrive origin | `164.30.21.203:9500`                               | `sc.aloen.to:6432`，`sslmode=require`，缓存仍 `max_age=1 / swr=0` |
+
+改动落点：`apps/api/.dev.vars`、根 `.dev.vars`（gitignored，含密码）、`.dev.vars.example`、
+`.env.example`、`packages/db/drizzle.config.ts` 默认值、`apps/api/src/auth/middleware.test.ts` 的报错样本。
+`wrangler.toml` **不需要改**（Hyperdrive 只按 binding id 引用资源，id 未变，Worker 无需重新部署）。
+
+**回滚（一条命令，binding id 不变）**：
+
+```powershell
+npx wrangler hyperdrive update d3f06050a92846ca950561f5d37f1232 `
+  --connection-string "postgres://root:<密码>@164.30.21.203:9500/otunlink"
+npx wrangler hyperdrive get d3f06050a92846ca950561f5d37f1232   # 确认 origin 与 caching
+```
+
+旧库是明文连接：回滚后用 `wrangler hyperdrive get` 确认没有残留 `sslmode`
+（CLI 无法把 sslmode 设回“关闭”，若仍有 `sslmode: require` 就在 CF 控制台把 TLS 关掉）。
+
+回滚只在旧库仍可写时有意义：**切换后写进新库的数据不会回流旧库**。
+切换前已核对 30 张表行数与最大时间戳完全一致（见 §1），因此切换点无数据差。

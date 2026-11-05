@@ -24,7 +24,7 @@ function appWith(repos: Repos | null) {
 
 describe('authenticate：DB 查询异常', () => {
   it('返回 503 + DATABASE_UNAVAILABLE JSON，而不是纯文本 500', async () => {
-    const app = appWith(reposThatThrow('connect ECONNREFUSED 164.30.21.203:9500', 'ECONNREFUSED'));
+    const app = appWith(reposThatThrow('connect ECONNREFUSED sc.aloen.to:6432', 'ECONNREFUSED'));
 
     const res = await app.request('/api/v1/auth/me', {
       headers: { Authorization: 'Bearer sub-1' },
@@ -39,7 +39,7 @@ describe('authenticate：DB 查询异常', () => {
 
   it('外发消息里抹掉连接串口令', async () => {
     const app = appWith(
-      reposThatThrow('failed: postgres://root:%23123Aloento@164.30.21.203:9500/otunlink'),
+      reposThatThrow('failed: postgres://root:%23123Aloento@sc.aloen.to:6432/otunlink?sslmode=require'),
     );
 
     const res = await app.request('/api/v1/auth/me', {

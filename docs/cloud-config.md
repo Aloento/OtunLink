@@ -24,11 +24,12 @@
 
 | 项目           | 值                                                                                                                                                                              |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 主机 / 端口    | `<DB_HOST>:5432`（公司私有，需 Hyperdrive 隧道）                                                                                                                                  |
-| 数据库         | `otunlink`（**专用库**；原因：账号 `<DB_USER>` 对 `postgres` 默认库无 public 建表权限，PG15+ public schema 归 `pg_database_owner`，故以 `CREATE DATABASE otunlink OWNER <DB_USER>` 解决） |
-| 用户           | `<DB_USER>`（非超级用户，拥有 otunlink 库）                                                                                                                                      |
+| 主机 / 端口    | **`sc.aloen.to:6432`**（2026-11-05 起；旧地址 `164.30.21.203:9500` 已停用。6432 为前置代理，PG 本体只听 `localhost:5432`）；**强制 TLS** → 连接串必须带 `?sslmode=require`（证书 LE `CN=sc.aloen.to`） |
+| 数据库         | `otunlink`（**专用库**；同机另有 `musiland` / `fusionfx` / `status_dashboard` 等其它项目的库，别混用。历史原因：账号对 `postgres` 默认库无 public 建表权限，PG15+ public schema 归 `pg_database_owner`，故单独建库并 `OWNER` 给业务账号） |
+| 用户           | `root`（非超级用户，拥有 otunlink 库）                                                                                                                                      |
 | 连接串（本地） | 见 `apps/api/.dev.vars` 与根 `.dev.vars`（gitignored，含密码）                                                                                                                  |
-| 迁移           | `pnpm --filter @otunlink/db db:migrate`（本地已验证：21 个枚举 / 29 表 / 293 列）                                                                                               |
+| 迁移           | `pnpm --filter @otunlink/db db:migrate`（本地已验证：21 个枚举 / 29 表 / 293 列；2026-11-05 在新库重跑 → applied 0 / skipped 3，schema 一致） |
+| Hyperdrive     | 名称 **`otunlink`**，id `d3f06050a92846ca950561f5d37f1232`；**2026-11-05 origin 已改指 `sc.aloen.to:6432`（`sslmode=require`）**，远端实测 Worker 读到 PG 18.6；旧 origin 见 `docs/db-setup.md` §7 回滚 |
 | 查询缓存       | **必须把 TTL 压到最小**：`npx wrangler hyperdrive update "<HYPERDRIVE_ID>" --max-age=1 --swr=0`（默认 `max_age=60s` + `stale_while_revalidate=15s` 且写入不会失效，会造成「改了看不到」，详见 `docs/db-setup.md` §6） |
 
 > `wrangler.toml` 的 `[[hyperdrive]]` 绑定只接受 `binding` + `id`；缓存参数属于 Hyperdrive 资源本身，只能用 CLI / 控制台修改。
@@ -84,9 +85,9 @@ npx wrangler deploy
 
 ## 7. 仍待用户提供 / 待办
 
-1. ✅ **Hyperdrive 已确认**（2026-09-13）：实例 `otunlink`（id `d3f06050a92846ca950561f5d37f1232`）指向 `otunlink` 库，
+1. ✅ **Hyperdrive 已确认**（2026-09-13；2026-11-05 origin 迁到 `sc.aloen.to:6432`）：实例 `otunlink`（id `d3f06050a92846ca950561f5d37f1232`）指向 `otunlink` 库，
    `caching` 已设为 `max_age=1` / `stale_while_revalidate=0`（见第 2 节与 `docs/db-setup.md` §6）；
-   仍需在私有 PG（<DB_HOST>）防火墙放行 CF 出口 IP（Hyperdrive 会给出 IP 范围）
+   ✅ 新库（`sc.aloen.to`）防火墙已放行 CF 出口 —— 2026-11-05 远端 Worker 实测读到 PG 18.6
 2. **域名**：`otun.musi.land`（Pages 自定义域，已 active，SPA 主站）；`api.otun.musi.land`（API Worker 自定义域，已 active）；
    无需额外 `app.` 子域（SPA 直接跑在 otun.musi.land）
 3. **Entra App Registration**：按 `docs/auth-setup.md` 完成注册并配置 Redirect URI（见第 4 节）
