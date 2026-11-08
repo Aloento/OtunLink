@@ -1,0 +1,4 @@
+# 生成中间物
+__pycache__/
+_html/
+_imgtest/
