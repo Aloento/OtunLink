@@ -245,6 +245,8 @@ export class MemorySalesRepository implements SalesRepository {
         listPriceCurrency: line.listPriceCurrency,
         price: line.price,
         lineTotal: line.lineTotal,
+        bundleItemId: null,
+        bundleItemName: null,
       })),
     );
     return this.withPayment(order);
@@ -284,6 +286,8 @@ export class MemorySalesRepository implements SalesRepository {
           listPriceCurrency: line.listPriceCurrency,
           price: line.price,
           lineTotal: line.lineTotal,
+          bundleItemId: null,
+          bundleItemName: null,
         })),
       );
     }

@@ -132,6 +132,31 @@ export const items = pgTable(
   ],
 );
 
+// ── 组合商品 bundle_components ───────────────────────────────────────────────
+// 组合商品本身是 items 里的一条（bundle 标记由组件行存在与否派生）：
+// 销售单里它的行会被展开成组件行（带 bundle_item_id 归组），
+// 期末台账、批次分配、拣货都走真实组件，界面上按组合商品折叠显示。
+
+export const bundleComponents = pgTable(
+  'bundle_components',
+  {
+    id: pk(),
+    bundleItemId: uuid('bundle_item_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'cascade' }),
+    componentItemId: uuid('component_item_id')
+      .notNull()
+      .references(() => items.id),
+    qty: numeric('qty', { precision: 12, scale: 2 }).notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('bundle_components_unique').on(table.bundleItemId, table.componentItemId),
+    index('bundle_components_bundle_idx').on(table.bundleItemId),
+  ],
+);
+
 // ── 物品图片 item_images ──────────────────────────────────────────────────────
 
 export const itemImages = pgTable(
@@ -451,9 +476,14 @@ export const salesOrderItems = pgTable(
     listPriceCurrency: varchar('list_price_currency', { length: 3 }),
     price: money('price'),
     lineTotal: money('line_total'),
+    // 组合商品归组：该行由哪个组合商品展开而来（普通行为 null）。
+    bundleItemId: uuid('bundle_item_id').references(() => items.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
   },
-  (table) => [index('sales_order_items_order_idx').on(table.salesOrderId)],
+  (table) => [
+    index('sales_order_items_order_idx').on(table.salesOrderId),
+    index('sales_order_items_bundle_idx').on(table.bundleItemId),
+  ],
 );
 
 export const salesBatchAllocations = pgTable(

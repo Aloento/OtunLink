@@ -246,8 +246,25 @@ export interface UnitRepository {
   delete(id: string): Promise<boolean>;
 }
 
+export interface BundleComponentRecord {
+  id: string;
+  bundleItemId: string;
+  componentItemId: string;
+  componentName: string | null;
+  componentMinSaleUnit: MinSaleUnit | null;
+  qty: string;
+  sortOrder: number;
+}
+
 export interface ItemRepository {
   findById(id: string): Promise<ItemRecord | null>;
+  /** 组合商品的组件清单（按 sort_order 升序）；非组合商品返回空数组。 */
+  listBundleComponents(itemId: string): Promise<BundleComponentRecord[]>;
+  /** 整表替换组合商品组件；传空数组即取消组合商品身份。 */
+  setBundleComponents(
+    itemId: string,
+    components: { componentItemId: string; qty: string }[],
+  ): Promise<BundleComponentRecord[]>;
   findByBarcode(code: string): Promise<ItemRecord | null>;
   list(query: ItemListQuery): Promise<ItemListResult>;
   listCategories(): Promise<string[]>;
@@ -977,6 +994,9 @@ export interface SalesOrderItemRecord {
   listPriceCurrency: string | null;
   price: string | null;
   lineTotal: string | null;
+  /** 该行由哪个组合商品展开而来（普通行 null）。 */
+  bundleItemId: string | null;
+  bundleItemName: string | null;
 }
 
 /** 销售批次分配行（sales_batch_allocations JOIN batches/items）。 */

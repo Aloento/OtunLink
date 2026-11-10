@@ -560,6 +560,8 @@ describe(' 零售售后退货（SALES）闭环', () => {
           listPriceCurrency: 'CNY',
           price: '100.00',
           lineTotal: '500.00',
+          bundleItemId: null,
+          bundleItemName: null,
         },
       ],
     });

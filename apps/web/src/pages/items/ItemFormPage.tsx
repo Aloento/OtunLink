@@ -37,6 +37,7 @@ import {
 import { ImageUpload } from '../../components/ImageUpload';
 import { FIELD_OVERFLOW_GUARD } from '../../components/lineGrid';
 import { ScannerDialog } from '../../components/ScannerDialog';
+import { BundleEditor } from './BundleEditor';
 import { isGtin } from '../../lib/gtin';
 
 interface FormState {
@@ -289,6 +290,8 @@ export function ItemFormPage() {
       <Field label={t('items.images')}>
         <ImageUpload value={files} onChange={setFiles} />
       </Field>
+
+      {isEdit && detail && <BundleEditor itemId={detail.id} initial={detail.bundleComponents} />}
 
       <div className="flex items-center gap-3">
         <Button appearance="primary" disabled={saving || !form.name.trim()} onClick={() => void submit()}>

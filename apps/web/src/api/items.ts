@@ -4,8 +4,20 @@ import { apiDelete, apiGet, apiPatch, apiPost, apiRequest } from './http';
 
 // 物品目录 API 客户端：/items 与 /files。
 
+export interface BundleComponentDto {
+  id: string;
+  bundleItemId: string;
+  componentItemId: string;
+  componentName: string | null;
+  componentMinSaleUnit: MinSaleUnit | null;
+  qty: string;
+  sortOrder: number;
+}
+
 export interface ItemDetail extends ItemDto {
   images: ItemImageDto[];
+  bundleComponents: BundleComponentDto[];
+  isBundle: boolean;
 }
 
 export interface ItemListQuery {
@@ -83,6 +95,17 @@ export function createItem(input: CreateItemInput): Promise<ItemDetail> {
 
 export function updateItem(id: string, input: UpdateItemInput): Promise<ItemDto> {
   return apiPatch<ItemDto>(`/api/v1/items/${id}`, input);
+}
+
+/** 组合商品定义：整表替换组件清单（空数组即取消组合商品身份）。 */
+export function setItemBundle(
+  id: string,
+  components: { itemId: string; qty: string }[],
+): Promise<{ bundleComponents: BundleComponentDto[]; isBundle: boolean }> {
+  return apiRequest<{ bundleComponents: BundleComponentDto[]; isBundle: boolean }>(
+    `/api/v1/items/${id}/bundle`,
+    { method: 'PUT', body: JSON.stringify({ components }) },
+  );
 }
 
 /** 删除物品：后端返回 409 ITEM_IN_USE 表示已被单据/库存引用。 */

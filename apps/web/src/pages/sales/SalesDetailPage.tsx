@@ -113,11 +113,36 @@ export function SalesDetailPage() {
   // 只统计本单现存的行：清单改过之后，旧勾选不会虚增计数。
   const pickedCount = order.items.filter((l) => picking.picked.has(l.id)).length;
 
+  // 组合商品归组：同一 bundleItemId 的多行折叠成一行摘要，供取货时看整包内容。
+  const bundleSummaries = (() => {
+    const map = new Map<string, { bundleItemId: string; bundleItemName: string; contents: SalesOrderItemDto[] }>();
+    for (const line of order.items) {
+      if (!line.bundleItemId) continue;
+      const entry = map.get(line.bundleItemId) ?? {
+        bundleItemId: line.bundleItemId,
+        bundleItemName: line.bundleItemName ?? line.bundleItemId,
+        contents: [],
+      };
+      entry.contents.push(line);
+      map.set(line.bundleItemId, entry);
+    }
+    return [...map.values()];
+  })();
+
   const itemColumns: ResponsiveTableColumn<SalesOrderItemDto>[] = [
     {
       key: 'itemName',
       header: t('sales.itemName'),
-      render: (l) => <ItemLink itemId={l.itemId} itemName={l.itemName} />,
+      render: (l) => (
+        <div className="flex flex-col">
+          {l.bundleItemName && (
+            <span className="text-xs text-neutral-500">
+              {t('items.bundleBadge')}：{l.bundleItemName}
+            </span>
+          )}
+          <ItemLink itemId={l.itemId} itemName={l.itemName} />
+        </div>
+      ),
     },
     {
       key: 'spec',
@@ -311,6 +336,20 @@ export function SalesDetailPage() {
             </Button>
           )}
         </div>
+        {bundleSummaries.length > 0 && (
+          <div className="flex flex-col gap-1 rounded-lg bg-neutral-50 p-3">
+            {bundleSummaries.map((bundle) => (
+              <Caption1 key={bundle.bundleItemId} className="text-neutral-700">
+                {t('sales.bundleSummary', {
+                  name: bundle.bundleItemName,
+                  contents: bundle.contents
+                    .map((c) => `${c.itemName ?? c.itemId} ×${c.qty}`)
+                    .join('、'),
+                })}
+              </Caption1>
+            ))}
+          </div>
+        )}
         <ResponsiveTable
           columns={itemColumns}
           items={order.items}

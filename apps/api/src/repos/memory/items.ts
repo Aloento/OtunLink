@@ -1,5 +1,6 @@
 // 物品内存仓库（items + item_images）。
-import type { CreateItemInput, ItemImageRecord, ItemListQuery, ItemListResult, ItemRecord, ItemRepository, UpdateItemInput } from '../../types';
+import { ErrorCodes } from '@otunlink/shared';
+import type { BundleComponentRecord, CreateItemInput, ItemImageRecord, ItemListQuery, ItemListResult, ItemRecord, ItemRepository, UpdateItemInput } from '../../types';
 import { cloneFile } from './files';
 import { normalizeEmpty, randomSkuCode, uuid } from './helpers';
 
@@ -8,11 +9,44 @@ const BARCODE_CONFLICT_MESSAGE = 'BARCODE_CONFLICT: barcode already taken by an 
 
 export class MemoryItemRepository implements ItemRepository {
   private rows = new Map<string, ItemRecord>();
+  private bundles = new Map<string, BundleComponentRecord[]>();
   private images = new Map<string, ItemImageRecord[]>();
   private referenceCheckers: ((itemId: string) => boolean)[] = [];
 
   constructor(seed: ItemRecord[] = []) {
     for (const row of seed) this.rows.set(row.id, cloneItem(row));
+  }
+
+  async listBundleComponents(itemId: string): Promise<BundleComponentRecord[]> {
+    return (this.bundles.get(itemId) ?? []).map((c) => ({ ...c }));
+  }
+
+  async setBundleComponents(
+    itemId: string,
+    components: { componentItemId: string; qty: string }[],
+  ): Promise<BundleComponentRecord[]> {
+    if (components.some((c) => c.componentItemId === itemId)) {
+      throw new Error(ErrorCodes.ITEM_BUNDLE_SELF_REFERENCE);
+    }
+    const unique = new Map<string, string>();
+    for (const c of components) unique.set(c.componentItemId, c.qty);
+    const rows: BundleComponentRecord[] = [];
+    let order = 0;
+    for (const [componentItemId, qty] of unique) {
+      const item = this.rows.get(componentItemId);
+      rows.push({
+        id: uuid(),
+        bundleItemId: itemId,
+        componentItemId,
+        componentName: item?.name ?? null,
+        componentMinSaleUnit: item?.minSaleUnit ?? null,
+        qty,
+        sortOrder: order,
+      });
+      order += 1;
+    }
+    this.bundles.set(itemId, rows);
+    return rows.map((c) => ({ ...c }));
   }
 
   addReferenceChecker(checker: (itemId: string) => boolean): void {

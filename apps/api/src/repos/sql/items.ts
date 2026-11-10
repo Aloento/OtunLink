@@ -1,9 +1,9 @@
 // 物品仓库（items + item_images）。
 import { ErrorCodes } from '@otunlink/shared';
 import type { SqlExecutor } from '@otunlink/db';
-import type { CreateItemInput, ItemImageRecord, ItemListQuery, ItemListResult, ItemRecord, ItemRepository, UpdateItemInput } from '../../types';
+import type { BundleComponentRecord, CreateItemInput, ItemImageRecord, ItemListQuery, ItemListResult, ItemRecord, ItemRepository, UpdateItemInput } from '../../types';
 import { col, nn, quote } from './helpers';
-import { mapFile, mapItem } from './mappers';
+import { mapBundleComponent, mapFile, mapItem } from './mappers';
 
 const SKU_ALPHANUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
@@ -36,6 +36,41 @@ function ensureItemSku(raw: string | null | undefined, name: string): string {
 
 export function createItemsRepo(exec: SqlExecutor): ItemRepository {
   const items: ItemRepository = {
+    async listBundleComponents(itemId: string): Promise<BundleComponentRecord[]> {
+      const { rows } = await exec.query(
+        `SELECT bc.*, i.name AS component_name, i.min_sale_unit AS component_min_sale_unit
+           FROM bundle_components bc
+           LEFT JOIN items i ON i.id = bc.component_item_id
+          WHERE bc.bundle_item_id = ${quote(itemId)}
+          ORDER BY bc.sort_order ASC, bc.created_at ASC`,
+      );
+      return rows.map(mapBundleComponent);
+    },
+    async setBundleComponents(
+      itemId: string,
+      components: { componentItemId: string; qty: string }[],
+    ): Promise<BundleComponentRecord[]> {
+      const unique = new Map<string, string>();
+      for (const c of components) unique.set(c.componentItemId, c.qty);
+      if (unique.has(itemId)) throw new Error(ErrorCodes.ITEM_BUNDLE_SELF_REFERENCE);
+      await exec.query('BEGIN');
+      try {
+        await exec.query(`DELETE FROM bundle_components WHERE bundle_item_id = ${quote(itemId)}`);
+        let order = 0;
+        for (const [componentItemId, qty] of unique) {
+          await exec.query(
+            `INSERT INTO bundle_components (bundle_item_id, component_item_id, qty, sort_order)
+             VALUES (${quote(itemId)}, ${quote(componentItemId)}, ${quote(qty)}, ${order})`,
+          );
+          order += 1;
+        }
+        await exec.query('COMMIT');
+      } catch (err) {
+        await exec.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+      return items.listBundleComponents(itemId);
+    },
     async findById(id: string): Promise<ItemRecord | null> {
       const { rows } = await exec.query(`SELECT * FROM items WHERE id = ${quote(id)} LIMIT 1`);
       return rows[0] ? mapItem(rows[0]) : null;

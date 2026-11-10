@@ -1,6 +1,6 @@
 // 数据库行 → 领域记录映射（与 types.ts 中的记录类型一一对应）。
 import { expiryRemainingDays, type MinSaleUnit } from '@otunlink/shared';
-import type { AuditLogRecord, DiscrepancyReviewItemRecord, DiscrepancyReviewRecord, EmailLogRecord, FileRecord, InboundOrderItemRecord, InboundOrderRecord, ItemRecord, NotificationRecord, OutboundOrderItemRecord, OutboundOrderRecord, PartnershipRecord, PaymentRecord, RetailPriceHistoryRecord, RetailPriceRecord, ReturnOrderItemRecord, ReturnOrderRecord, SalesBatchAllocationRecord, SalesOrderItemRecord, SalesOrderRecord, ShipmentItemRecord, ShipmentRecord, ShipmentTrackingRecord, StockBatchRecord, StockMovementRecord, StockRowRecord, UnitRecord, UserRecord } from '../../types';
+import type { AuditLogRecord, BundleComponentRecord, DiscrepancyReviewItemRecord, DiscrepancyReviewRecord, EmailLogRecord, FileRecord, InboundOrderItemRecord, InboundOrderRecord, ItemRecord, NotificationRecord, OutboundOrderItemRecord, OutboundOrderRecord, PartnershipRecord, PaymentRecord, RetailPriceHistoryRecord, RetailPriceRecord, ReturnOrderItemRecord, ReturnOrderRecord, SalesBatchAllocationRecord, SalesOrderItemRecord, SalesOrderRecord, ShipmentItemRecord, ShipmentRecord, ShipmentTrackingRecord, StockBatchRecord, StockMovementRecord, StockRowRecord, UnitRecord, UserRecord } from '../../types';
 import { parseJson, toYMD } from './helpers';
 
 export function mapUser(row: Record<string, unknown>): UserRecord {
@@ -450,6 +450,22 @@ export function mapSalesItem(row: Record<string, unknown>): SalesOrderItemRecord
     listPriceCurrency: row.list_price_currency != null ? String(row.list_price_currency) : null,
     price: row.price != null ? String(row.price) : null,
     lineTotal: row.line_total != null ? String(row.line_total) : null,
+    bundleItemId: row.bundle_item_id != null ? String(row.bundle_item_id) : null,
+    bundleItemName: row.bundle_item_name != null ? String(row.bundle_item_name) : null,
+  };
+}
+
+export function mapBundleComponent(row: Record<string, unknown>): BundleComponentRecord {
+  return {
+    id: String(row.id),
+    bundleItemId: String(row.bundle_item_id),
+    componentItemId: String(row.component_item_id),
+    componentName: row.component_name != null ? String(row.component_name) : null,
+    componentMinSaleUnit: row.component_min_sale_unit
+      ? (String(row.component_min_sale_unit) as MinSaleUnit)
+      : null,
+    qty: row.qty != null ? String(row.qty) : '0',
+    sortOrder: Number(row.sort_order ?? 0),
   };
 }
 

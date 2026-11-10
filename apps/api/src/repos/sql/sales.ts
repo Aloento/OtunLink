@@ -5,7 +5,7 @@ import { ITEM_SPEC_SQL } from '../item-spec';
 import { INSUFFICIENT_STOCK, SALES_LINE_INVALID, SALES_STATE_CONFLICT, STOCK_BATCH_NOT_FOUND } from './errors';
 import { inClause, nn, quote, round2num } from './helpers';
 import { mapPayment, mapSalesAllocation, mapSalesItem, mapSalesOrder } from './mappers';
-import { calcTotal, computeSalesLines, errorWithLineDetails } from './sales-lines';
+import { calcTotal, computeSalesLines, errorWithLineDetails, expandBundleLines } from './sales-lines';
 import { nextSalesNo } from './sequences';
 
   async function readSalesOrder(
@@ -57,9 +57,11 @@ export function createSalesRepo(exec: SqlExecutor): SalesRepository {
       const { rows } = await exec.query(
         `SELECT oi.*, i.name AS item_name,
                 ${ITEM_SPEC_SQL} AS spec,
-                i.min_sale_unit AS min_sale_unit
+                i.min_sale_unit AS min_sale_unit,
+                bi.name AS bundle_item_name
          FROM sales_order_items oi
          LEFT JOIN items i ON i.id = oi.item_id
+         LEFT JOIN items bi ON bi.id = oi.bundle_item_id
          WHERE oi.sales_order_id = ${quote(salesOrderId)}
          ORDER BY oi.created_at ASC, oi.id ASC`,
       );
@@ -87,7 +89,10 @@ export function createSalesRepo(exec: SqlExecutor): SalesRepository {
       const salesNo = await nextSalesNo(exec);
       await exec.query('BEGIN');
       try {
-        const lines = await computeSalesLines(exec, input.sellerUnitId, input.currency, input.items, (l) => l.qty);
+        const lines = await expandBundleLines(
+          exec,
+          await computeSalesLines(exec, input.sellerUnitId, input.currency, input.items, (l) => l.qty),
+        );
         const { rows } = await exec.query(
           `INSERT INTO sales_orders
              (sales_no, seller_unit_id, buyer_unit_id, source, delivery_method,
@@ -106,10 +111,10 @@ export function createSalesRepo(exec: SqlExecutor): SalesRepository {
         for (const line of lines) {
           await exec.query(
             `INSERT INTO sales_order_items
-               (sales_order_id, item_id, qty, list_price, list_price_currency, price, line_total)
+               (sales_order_id, item_id, qty, list_price, list_price_currency, price, line_total, bundle_item_id)
              VALUES (${quote(order.id)}, ${quote(line.itemId)}, ${quote(line.qty)},
                      ${quote(line.listPrice)}, ${quote(line.listPriceCurrency)},
-                     ${quote(line.price)}, ${quote(line.lineTotal)})`,
+                     ${quote(line.price)}, ${quote(line.lineTotal)}, ${quote(line.bundleItemId ?? null)})`,
           );
         }
         await exec.query('COMMIT');
@@ -133,12 +138,15 @@ export function createSalesRepo(exec: SqlExecutor): SalesRepository {
         const order = mapSalesOrder(locked[0]);
 
         if (input.items) {
-          const lines = await computeSalesLines(
+          const lines = await expandBundleLines(
             exec,
-            order.sellerUnitId,
-            input.currency ?? order.currency,
-            input.items,
-            (l) => l.qty,
+            await computeSalesLines(
+              exec,
+              order.sellerUnitId,
+              input.currency ?? order.currency,
+              input.items,
+              (l) => l.qty,
+            ),
           );
           await exec.query(
             `DELETE FROM sales_order_items WHERE sales_order_id = ${quote(id)}`,
@@ -146,10 +154,10 @@ export function createSalesRepo(exec: SqlExecutor): SalesRepository {
           for (const line of lines) {
             await exec.query(
               `INSERT INTO sales_order_items
-                 (sales_order_id, item_id, qty, list_price, list_price_currency, price, line_total)
+                 (sales_order_id, item_id, qty, list_price, list_price_currency, price, line_total, bundle_item_id)
                VALUES (${quote(id)}, ${quote(line.itemId)}, ${quote(line.qty)},
                        ${quote(line.listPrice)}, ${quote(line.listPriceCurrency)},
-                       ${quote(line.price)}, ${quote(line.lineTotal)})`,
+                       ${quote(line.price)}, ${quote(line.lineTotal)}, ${quote(line.bundleItemId ?? null)})`,
             );
           }
         }

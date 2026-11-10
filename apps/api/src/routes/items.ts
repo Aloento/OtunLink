@@ -1,6 +1,7 @@
 import {
   ErrorCodes,
   itemAttachImagesSchema,
+  itemBundleSchema,
   itemCreateSchema,
   itemPatchSchema,
   Permissions,
@@ -84,8 +85,58 @@ export function itemsRouter(): Hono<AppEnv> {
     const item = await repos.items.findById(c.req.param('id'));
     if (!item) return notFound(c, '物品不存在');
 
-    const images = await repos.items.listImages(item.id);
-    return ok(c, { ...itemDto(item), images: images.map(itemImageDto) });
+    const [images, bundleComponents] = await Promise.all([
+      repos.items.listImages(item.id),
+      repos.items.listBundleComponents(item.id),
+    ]);
+    return ok(c, {
+      ...itemDto(item),
+      images: images.map(itemImageDto),
+      bundleComponents,
+      isBundle: bundleComponents.length > 0,
+    });
+  });
+
+  // 组合商品定义：整表替换组件清单；传空数组即取消组合商品身份。
+  router.put('/:id/bundle', write, async (c) => {
+    const repos = c.get('repos');
+    if (!repos) return dbUnavailable(c);
+
+    const item = await repos.items.findById(c.req.param('id'));
+    if (!item) return notFound(c, '物品不存在');
+
+    const body = await readJson(c);
+    if (body === undefined) return validationError(c, '请求体不是合法 JSON');
+
+    const parsed = itemBundleSchema.safeParse(body);
+    if (!parsed.success) return validationError(c, '参数不合法', parsed.error.flatten());
+
+    const componentIds = parsed.data.components.map((comp) => comp.itemId);
+    if (new Set(componentIds).size !== componentIds.length) {
+      return validationError(c, '同一物品不能重复作为组件');
+    }
+    for (const componentId of componentIds) {
+      const component = await repos.items.findById(componentId);
+      if (!component) return validationError(c, `组件物品不存在（${componentId}）`);
+      // 组合商品不允许嵌套：组件自身不能再是组合商品。
+      const nested = await repos.items.listBundleComponents(componentId);
+      if (nested.length > 0) {
+        return error(c, 409, ErrorCodes.ITEM_BUNDLE_NESTED, '组合商品不能嵌套组合商品');
+      }
+    }
+
+    try {
+      const rows = await repos.items.setBundleComponents(
+        item.id,
+        parsed.data.components.map((comp) => ({ componentItemId: comp.itemId, qty: comp.qty })),
+      );
+      return ok(c, { bundleComponents: rows, isBundle: rows.length > 0 });
+    } catch (cause) {
+      if (cause instanceof Error && cause.message === ErrorCodes.ITEM_BUNDLE_SELF_REFERENCE) {
+        return error(c, 409, ErrorCodes.ITEM_BUNDLE_SELF_REFERENCE, '组合商品不能把自己作为组件');
+      }
+      throw cause;
+    }
   });
 
   router.post('/', write, async (c) => {

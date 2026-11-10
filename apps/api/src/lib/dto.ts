@@ -472,6 +472,9 @@ export function salesOrderItemDto(item: SalesOrderItemRecord, orderCurrency: str
         item.price !== item.listPrice ||
         (item.listPriceCurrency ?? orderCurrency) !== orderCurrency),
     lineTotal: item.lineTotal,
+    // 组合商品归组：有值表示该行由组合商品展开而来。
+    bundleItemId: item.bundleItemId ?? null,
+    bundleItemName: item.bundleItemName ?? null,
   };
 }
 

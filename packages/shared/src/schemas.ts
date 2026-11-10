@@ -112,6 +112,21 @@ export const itemCreateSchema = z.object({
   fileIds: z.array(z.uuid()).max(20).optional(),
 });
 
+/** 组合商品组件定义（PUT /items/:id/bundle）：整表替换。 */
+export const itemBundleSchema = z.object({
+  components: z
+    .array(
+      z.object({
+        itemId: z.string().trim().min(1).max(64),
+        qty: z
+          .union([z.number(), z.string()])
+          .transform((v) => String(v))
+          .refine((v) => /^\d+(\.\d{1,2})?$/.test(v) && Number(v) > 0, '数量必须是大于 0 的数字'),
+      }),
+    )
+    .max(50),
+});
+
 /** 关联图片到物品（POST /items/:id/images）。 */
 export const itemAttachImagesSchema = z.object({
   fileIds: z.array(z.uuid()).min(1).max(20),
@@ -470,6 +485,7 @@ export type UnitPatchInput = z.infer<typeof unitPatchSchema>;
 export type ItemCreateInput = z.infer<typeof itemCreateSchema>;
 export type ItemPatchInput = z.infer<typeof itemPatchSchema>;
 export type ItemAttachImagesInput = z.infer<typeof itemAttachImagesSchema>;
+export type ItemBundleInput = z.infer<typeof itemBundleSchema>;
 export type ShipmentCreateInput = z.infer<typeof shipmentCreateSchema>;
 export type ShipmentPatchInput = z.infer<typeof shipmentPatchSchema>;
 export type ShipmentTrackingInput = z.infer<typeof shipmentTrackingSchema>;

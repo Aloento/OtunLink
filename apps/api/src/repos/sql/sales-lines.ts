@@ -2,7 +2,7 @@
 import type { SqlExecutor } from '@otunlink/db';
 import type { CreateSalesRepoInput } from '../../types';
 import { SALES_LINE_INVALID } from './errors';
-import { quote, roundMoney } from './helpers';
+import { quote, round2num, roundMoney } from './helpers';
 
 export type SalesLineIssueReason = 'NO_LIST_PRICE' | 'CURRENCY_MISMATCH' | 'NO_BATCH_STOCK' | 'QTY_EXCEEDS_STOCK';
 export interface SalesLineIssue {
@@ -35,6 +35,7 @@ export async function computeSalesLines(
   listPriceCurrency: string | null;
   price: string | null;
   lineTotal: string | null;
+  bundleItemId: string | null;
 }[]> {
   const itemIds = [...new Set(items.map((l) => l.itemId))];
   const retail = new Map<string, { price: string; currency: string; itemName: string | null }>();
@@ -73,6 +74,7 @@ export async function computeSalesLines(
     return {
       itemId: line.itemId,
       qty: qtyValue,
+      bundleItemId: null as string | null,
       listPrice: snapshot?.price ?? null,
       listPriceCurrency: snapshot?.currency ?? null,
       price,
@@ -86,4 +88,73 @@ export async function computeSalesLines(
 export function calcTotal(lines: { lineTotal: string | null }[], discountPercent: string, freight: string): string {
   const subtotal = lines.reduce((sum, l) => sum + Number(l.lineTotal ?? 0), 0);
   return roundMoney(subtotal * (1 - Number(discountPercent) / 100) + Number(freight));
+}
+
+
+/**
+ * 组合商品展开：把「组合商品」行替换成组件行，保留组合商品金额总额与归组关系。
+ * 组件行价格按组件数量占比分摊整行金额（尾差落在最后一个组件），
+ * 出库/批次分配/拣货都作用在真实组件上，销售行仍能按 bundleItemId 折叠回组合商品。
+ */
+export async function expandBundleLines<
+  T extends {
+    itemId: string;
+    qty: string;
+    listPrice: string | null;
+    listPriceCurrency: string | null;
+    price: string | null;
+    lineTotal: string | null;
+    bundleItemId?: string | null;
+  },
+>(exec: SqlExecutor, lines: T[]): Promise<T[]> {
+  const ids = [...new Set(lines.map((l) => l.itemId))];
+  if (ids.length === 0) return lines;
+  const { rows } = await exec.query(
+    `SELECT bundle_item_id, component_item_id, qty
+       FROM bundle_components
+      WHERE bundle_item_id IN (${ids.map((id) => quote(id)).join(', ')})
+      ORDER BY sort_order ASC, created_at ASC`,
+  );
+  if (rows.length === 0) return lines;
+
+  const byBundle = new Map<string, { componentItemId: string; qty: number }[]>();
+  for (const row of rows) {
+    const bundleId = String(row.bundle_item_id);
+    const list = byBundle.get(bundleId) ?? [];
+    list.push({ componentItemId: String(row.component_item_id), qty: Number(row.qty) });
+    byBundle.set(bundleId, list);
+  }
+
+  const out: T[] = [];
+  for (const line of lines) {
+    const components = byBundle.get(line.itemId);
+    if (!components || components.length === 0) {
+      out.push(line);
+      continue;
+    }
+    const bundleQty = Number(line.qty);
+    const bundleTotal = line.price === null ? null : Number(line.price) * bundleQty;
+    const weightSum = components.reduce((sum, c) => sum + c.qty, 0) || 1;
+    let allocated = 0;
+    components.forEach((component, index) => {
+      const compQty = round2num(bundleQty * component.qty);
+      const isLast = index === components.length - 1;
+      const share =
+        bundleTotal === null
+          ? null
+          : isLast
+            ? round2num(bundleTotal - allocated)
+            : round2num((bundleTotal * component.qty) / weightSum);
+      if (share !== null) allocated = round2num(allocated + share);
+      out.push({
+        ...line,
+        itemId: component.componentItemId,
+        qty: String(compQty),
+        price: share === null || compQty === 0 ? null : roundMoney(share / compQty),
+        lineTotal: share === null ? null : roundMoney(share),
+        bundleItemId: line.itemId,
+      });
+    });
+  }
+  return out;
 }

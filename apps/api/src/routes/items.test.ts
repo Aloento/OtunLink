@@ -456,4 +456,74 @@ describe('items 物品目录 API', () => {
     const deleted = await app.request('/api/v1/items/source', { headers: auth('collector') });
     expect(deleted.status).toBe(404);
   });
+
+  it('组合商品：定义组件并在详情中返回', async () => {
+    const { app } = makeApp({
+      users: [collector],
+      items: [item({ id: 'bundle', name: '一人食速食包' }), item({ id: 'c1', name: '蟹味棒' }), item({ id: 'c2', name: '榨菜' })],
+    });
+    const res = await app.request('/api/v1/items/bundle/bundle', {
+      method: 'PUT',
+      headers: json('collector'),
+      body: JSON.stringify({ components: [{ itemId: 'c1', qty: '3' }, { itemId: 'c2', qty: 2 }] }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { isBundle: boolean; bundleComponents: { componentItemId: string; qty: string }[] } };
+    expect(body.data.isBundle).toBe(true);
+    expect(body.data.bundleComponents.map((c) => c.componentItemId)).toEqual(['c1', 'c2']);
+    expect(body.data.bundleComponents[1]!.qty).toBe('2');
+
+    const detail = await app.request('/api/v1/items/bundle', { headers: auth('collector') });
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({ data: { isBundle: true, bundleComponents: [{ componentItemId: 'c1' }, { componentItemId: 'c2' }] } });
+  });
+
+  it('组合商品：把自己作为组件返回 409', async () => {
+    const { app } = makeApp({ users: [collector], items: [item({ id: 'bundle', name: '组合包' })] });
+    const res = await app.request('/api/v1/items/bundle/bundle', {
+      method: 'PUT',
+      headers: json('collector'),
+      body: JSON.stringify({ components: [{ itemId: 'bundle', qty: '1' }] }),
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: { code: 'ITEM_BUNDLE_SELF_REFERENCE' } });
+  });
+
+  it('组合商品：不允许嵌套组合商品', async () => {
+    const { app } = makeApp({
+      users: [collector],
+      items: [item({ id: 'outer', name: '外层包' }), item({ id: 'inner', name: '内层包' }), item({ id: 'leaf', name: '单品' })],
+    });
+    await app.request('/api/v1/items/inner/bundle', {
+      method: 'PUT',
+      headers: json('collector'),
+      body: JSON.stringify({ components: [{ itemId: 'leaf', qty: '1' }] }),
+    });
+    const res = await app.request('/api/v1/items/outer/bundle', {
+      method: 'PUT',
+      headers: json('collector'),
+      body: JSON.stringify({ components: [{ itemId: 'inner', qty: '1' }] }),
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: { code: 'ITEM_BUNDLE_NESTED' } });
+  });
+
+  it('组合商品：传空数组取消组合身份', async () => {
+    const { app } = makeApp({
+      users: [collector],
+      items: [item({ id: 'bundle', name: '组合包' }), item({ id: 'c1', name: '单品' })],
+    });
+    await app.request('/api/v1/items/bundle/bundle', {
+      method: 'PUT',
+      headers: json('collector'),
+      body: JSON.stringify({ components: [{ itemId: 'c1', qty: '1' }] }),
+    });
+    const res = await app.request('/api/v1/items/bundle/bundle', {
+      method: 'PUT',
+      headers: json('collector'),
+      body: JSON.stringify({ components: [] }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ data: { isBundle: false, bundleComponents: [] } });
+  });
 });

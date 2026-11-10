@@ -32,6 +32,9 @@ export interface SalesOrderItemDto {
   /** 该行是否填写了行级改价（价格未沿用默认零售价快照）。 */
   priceOverridden: boolean;
   lineTotal: string | null;
+  /** 该行由哪个组合商品展开而来（普通行 null）；界面据此折叠显示组合商品。 */
+  bundleItemId: string | null;
+  bundleItemName: string | null;
 }
 
 export interface SalesBatchAllocationDto {
