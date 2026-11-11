@@ -1,21 +1,20 @@
-import { Button, Select, Spinner, Tab, TabList, Text, Title1 } from '@fluentui/react-components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-import {
-  RETURN_STATUSES,
-  type ReturnOrderDto,
-  type ReturnSourceType,
-  type ReturnStatus,
-} from '@otunlink/shared';
+import { RETURN_STATUSES, type ReturnOrderDto, type ReturnStatus } from '@otunlink/shared';
 
 import { listReturns } from '../../api/returns';
-import { useLocale } from '../../i18n/LocaleProvider';
-import { formatDateTime } from '../../i18n/format';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { formatDateTime } from '../../i18n/format';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { PageHeader } from '../../ui/page-header';
+import { Pagination } from '../../ui/pagination';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
 
 const PAGE_SIZE = 20;
 
@@ -52,7 +51,7 @@ export function ReturnsListPage() {
       key: 'returnNo',
       header: t('returns.returnNo'),
       render: (order) => (
-        <Link to={`/returns/${order.id}`} className="font-medium text-blue-600 hover:underline">
+        <Link to={`/returns/${order.id}`} className="font-medium text-brand-700 hover:underline">
           {order.returnNo}
         </Link>
       ),
@@ -85,10 +84,10 @@ export function ReturnsListPage() {
         <span
           className={
             order.status === 'CANCELLED' || order.status === 'REJECTED'
-              ? 'text-neutral-400'
+              ? 'text-ink-subtle'
               : order.status === 'RETURNED' || order.status === 'CLOSED'
-                ? 'text-green-600'
-                : 'text-amber-600'
+                ? 'text-success-600'
+                : 'text-warning-700'
           }
         >
           {t(`returns.statuses.${order.status}`)}
@@ -111,74 +110,77 @@ export function ReturnsListPage() {
     setPage(1);
   };
 
+  // 两个来源 Tab 共用同一段列表渲染逻辑（分页条 + 表格），避免各写一份。
+  const renderList = () => (
+    <>
+      <ResponsiveTable
+        columns={columns}
+        items={data?.items ?? []}
+        rowKey={(order) => order.id}
+        emptyText={t('returns.empty')}
+        label={t('returns.title')}
+      />
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onChange={setPage}
+        totalLabel={t('returns.total', { total })}
+      />
+    </>
+  );
+
+  // 加载 / 失败 / 列表三态；两个面板共用，避免状态分支重复。
+  const renderPanel = () =>
+    isLoading ? (
+      <Spinner label={t('common.loading')} />
+    ) : isError ? (
+      <p role="alert" className="text-sm text-danger-600">
+        {t('errors.UNKNOWN')}
+      </p>
+    ) : (
+      renderList()
+    );
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">{t('returns.title')}</Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton queryKey={['return-orders', 'list']} />
-          <Select
-            value={status}
-            onChange={(_, d) => {
-              setStatus(d.value as ReturnStatus | '');
-              setPage(1);
-            }}
-            className="min-w-40"
-            aria-label={t('returns.status')}
-          >
-            <option value="">{t('returns.allStatuses')}</option>
-            {statuses.map((s) => (
-              <option key={s} value={s}>
-                {t(`returns.statuses.${s}`)}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
+      <PageHeader
+        title={t('returns.title')}
+        actions={
+          <>
+            <RefreshButton queryKey={['return-orders', 'list']} />
+            <Select
+              value={status}
+              onValueChange={(value) => {
+                setStatus(value as ReturnStatus | '');
+                setPage(1);
+              }}
+              className="min-w-40"
+              aria-label={t('returns.status')}
+            >
+              <option value="">{t('returns.allStatuses')}</option>
+              {statuses.map((s) => (
+                <option key={s} value={s}>
+                  {t(`returns.statuses.${s}`)}
+                </option>
+              ))}
+            </Select>
+          </>
+        }
+      />
 
-      <TabList selectedValue={source} onTabSelect={(_, d) => switchSource(d.value as SourceTab)}>
-        <Tab value="SHIPMENT">{t('returns.tabShipment')}</Tab>
-        <Tab value="SALES">{t('returns.tabSales')}</Tab>
-      </TabList>
+      <Tabs
+        value={source}
+        onValueChange={(next) => switchSource(next as SourceTab)}
+        className="flex flex-col gap-4"
+      >
+        <TabsList>
+          <TabsTrigger value="SHIPMENT">{t('returns.tabShipment')}</TabsTrigger>
+          <TabsTrigger value="SALES">{t('returns.tabSales')}</TabsTrigger>
+        </TabsList>
 
-      {isLoading ? (
-        <Spinner label={t('common.loading')} />
-      ) : isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
-      ) : (
-        <>
-          <ResponsiveTable
-            columns={columns}
-            items={data?.items ?? []}
-            rowKey={(order) => order.id}
-            emptyText={t('returns.empty')}
-          />
-          <div className="flex items-center justify-between text-sm text-neutral-600">
-            <span>{t('returns.total', { total })}</span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                ←
-              </Button>
-              <span>
-                {page} / {totalPages}
-              </span>
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                →
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
+        <TabsContent value="SHIPMENT">{renderPanel()}</TabsContent>
+        <TabsContent value="SALES">{renderPanel()}</TabsContent>
+      </Tabs>
     </div>
   );
 }

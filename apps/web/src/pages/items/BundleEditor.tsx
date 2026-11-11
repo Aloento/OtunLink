@@ -1,9 +1,13 @@
-import { Button, Caption1, Combobox, Field, Input, Option, Spinner } from '@fluentui/react-components';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { listItems, setItemBundle, type BundleComponentDto } from '../../api/items';
+import { Button } from '../../ui/button';
+import { Card } from '../../ui/card';
+import { Combobox } from '../../ui/combobox';
+import { Field } from '../../ui/field';
+import { Input } from '../../ui/input';
 
 interface Row {
   itemId: string;
@@ -39,7 +43,15 @@ export function BundleEditor({
   });
 
   const selectedIds = new Set(rows.map((row) => row.itemId));
-  const options = (candidates?.items ?? []).filter((item) => item.id !== itemId);
+  const options = (candidates?.items ?? [])
+    .filter((item) => item.id !== itemId)
+    // 已加入的组件置灰但仍留在列表里（保留「搜索 → 选择 → 追加行」的原有语义）。
+    .map((item) => ({
+      value: item.id,
+      label: item.name,
+      description: item.sku ?? undefined,
+      disabled: selectedIds.has(item.id),
+    }));
 
   const addRow = (id: string, name: string) => {
     setRows((prev) => (prev.some((row) => row.itemId === id) ? prev : [...prev, { itemId: id, name, qty: '1' }]));
@@ -64,54 +76,67 @@ export function BundleEditor({
   };
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4">
+    <Card className="flex flex-col gap-3">
       <div>
-        <h2 className="text-base font-semibold">{t('items.bundleTitle')}</h2>
-        <Caption1 className="text-neutral-600">{t('items.bundleHint')}</Caption1>
+        <h2 className="text-base font-semibold text-ink">{t('items.bundleTitle')}</h2>
+        <p className="text-xs text-ink-muted">{t('items.bundleHint')}</p>
       </div>
 
-      {error && <span className="text-sm text-red-600">{error}</span>}
-      {savedMsg && <span className="text-sm text-green-700">{savedMsg}</span>}
+      {error && (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
+      )}
+      {savedMsg && (
+        <p role="status" className="text-sm text-success-600">
+          {savedMsg}
+        </p>
+      )}
 
       <Field label={t('items.bundleAddComponent')}>
         <Combobox
-          freeform
           value={search}
+          onValueChange={setSearch}
+          options={options}
+          onSelect={(option) => addRow(option.value, option.label)}
           placeholder={t('items.bundleSearchPlaceholder')}
-          onChange={(event) => setSearch(event.target.value)}
-          onOptionSelect={(_, data) => {
-            if (data.optionValue) addRow(data.optionValue, data.optionText ?? data.optionValue);
-          }}
-        >
-          {isFetching && <Option key="loading" value="" disabled text={t('common.loading')} />}
-          {options.map((item) => (
-            <Option key={item.id} value={item.id} text={item.name} disabled={selectedIds.has(item.id)}>
-              {item.name}
-            </Option>
-          ))}
-        </Combobox>
+          loading={isFetching}
+          loadingText={t('common.loading')}
+          emptyText={t('items.empty')}
+          aria-label={t('items.bundleAddComponent')}
+        />
       </Field>
 
       {rows.length === 0 ? (
-        <Caption1 className="text-neutral-500">{t('items.bundleEmpty')}</Caption1>
+        <p className="text-sm text-ink-subtle">{t('items.bundleEmpty')}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((row) => (
-            <li key={row.itemId} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-sm">{row.name}</span>
-              <span className="text-sm text-neutral-500">×</span>
+            <li key={row.itemId} className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+              <span className="min-w-0 flex-1 truncate text-sm text-ink">{row.name}</span>
+              <span aria-hidden className="text-sm text-ink-subtle">
+                ×
+              </span>
               <Input
-                className="w-24"
+                className="w-24 shrink-0"
                 value={row.qty}
                 inputMode="decimal"
-                onChange={(_, data) =>
+                aria-label={`${row.name} ${t('inventory.qty')}`}
+                onChange={(event) =>
                   setRows((prev) =>
-                    prev.map((item) => (item.itemId === row.itemId ? { ...item, qty: data.value } : item)),
+                    prev.map((item) =>
+                      item.itemId === row.itemId ? { ...item, qty: event.target.value } : item,
+                    ),
                   )
                 }
               />
               <Button
-                appearance="subtle"
+                size="sm"
+                variant="subtle"
+                className="shrink-0"
+                // 每行一个「移除」：把组件名拼进可访问名称，否则屏幕阅读器只会读到
+                // 一串彼此无法区分的「移除, 按钮」。
+                aria-label={`${t('common.remove')} ${row.name}`}
                 onClick={() => setRows((prev) => prev.filter((item) => item.itemId !== row.itemId))}
               >
                 {t('common.remove')}
@@ -121,12 +146,12 @@ export function BundleEditor({
         </ul>
       )}
 
-      <div className="flex items-center gap-3">
-        <Button appearance="primary" disabled={saving} onClick={() => void save()}>
-          {saving ? <Spinner size="tiny" /> : t('items.bundleSave')}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="primary" loading={saving} onClick={() => void save()}>
+          {t('items.bundleSave')}
         </Button>
-        <Caption1 className="text-neutral-500">{t('items.bundleSaveHint')}</Caption1>
+        <p className="text-xs text-ink-subtle">{t('items.bundleSaveHint')}</p>
       </div>
-    </section>
+    </Card>
   );
 }

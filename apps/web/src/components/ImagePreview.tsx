@@ -1,17 +1,13 @@
-import {
-  Button,
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-} from '@fluentui/react-components';
 import { useQuery } from '@tanstack/react-query';
+import { ZoomIn, ZoomOut } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getFileUrl } from '../api/items';
+import { Button } from '../ui/button';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 
+// 图片预览：缩略图点击 → 模态查看，可切换 1:1 缩放。
 export function ImagePreview({
   fileId,
   alt,
@@ -44,40 +40,45 @@ export function ImagePreview({
     <>
       <button
         type="button"
-        className="m-0 cursor-zoom-in rounded border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+        className="m-0 cursor-zoom-in rounded border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
         onClick={() => setOpen(true)}
         aria-label={t('items.imagePreview.open')}
       >
-        <img src={thumbnail} alt={alt ?? ''} className={className} />
+        <img src={thumbnail} alt={alt ?? ''} className={className} loading="lazy" decoding="async" />
       </button>
-      <Dialog open={open} onOpenChange={(_, state) => !state.open && close()}>
-        <DialogSurface className="max-w-[calc(100vw-2rem)]">
-          <DialogBody>
+
+      <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())} closeLabel={t('common.close')}>
+        <DialogContent className="max-w-[calc(100vw-2rem)]">
+          <DialogHeader>
             <DialogTitle>{t('items.imagePreview.title')}</DialogTitle>
-            <DialogContent className="flex max-h-[80vh] max-w-[90vw] items-center justify-center overflow-auto p-0">
-              <button
-                type="button"
-                className="m-0 cursor-zoom-in border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                onClick={() => setZoomed((value) => !value)}
-                aria-label={t(zoomed ? 'items.imagePreview.zoomOut' : 'items.imagePreview.zoomIn')}
-              >
-                <img
-                  src={fullImage}
-                  alt={alt ?? ''}
-                  className={zoomed ? 'max-w-none cursor-zoom-out' : 'max-h-[75vh] max-w-full object-contain'}
-                />
-              </button>
-            </DialogContent>
-            <div className="flex justify-between gap-2 pt-3">
-              <Button appearance="subtle" onClick={() => setZoomed((value) => !value)}>
-                {t(zoomed ? 'items.imagePreview.zoomOut' : 'items.imagePreview.zoomIn')}
-              </Button>
-              <Button appearance="secondary" onClick={close}>
-                {t('common.close')}
-              </Button>
-            </div>
+          </DialogHeader>
+          <DialogBody className="flex max-h-[75vh] items-center justify-center overflow-auto p-0">
+            <button
+              type="button"
+              className="m-0 cursor-zoom-in border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+              onClick={() => setZoomed((value) => !value)}
+              aria-label={t(zoomed ? 'items.imagePreview.zoomOut' : 'items.imagePreview.zoomIn')}
+            >
+              <img
+                src={fullImage}
+                alt={alt ?? ''}
+                className={zoomed ? 'max-w-none cursor-zoom-out' : 'max-h-[75vh] max-w-full object-contain'}
+              />
+            </button>
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter className="justify-between">
+            <Button
+              variant="subtle"
+              icon={zoomed ? <ZoomOut aria-hidden className="size-4" /> : <ZoomIn aria-hidden className="size-4" />}
+              onClick={() => setZoomed((value) => !value)}
+            >
+              {t(zoomed ? 'items.imagePreview.zoomOut' : 'items.imagePreview.zoomIn')}
+            </Button>
+            <Button variant="secondary" onClick={close}>
+              {t('common.close')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </>
   );

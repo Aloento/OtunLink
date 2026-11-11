@@ -1,4 +1,4 @@
-import { Button, Spinner, Text } from '@fluentui/react-components';
+import { X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,6 +7,8 @@ import type { FileDto } from '@otunlink/shared';
 import { errorI18nKey, isApiError } from '../api/http';
 import { uploadItemImage } from '../api/items';
 import { compressImageFile, makeThumbnailBlob } from '../lib/image-compress';
+import { Button } from '../ui/button';
+import { Spinner } from '../ui/spinner';
 import { FileImage } from './FileImage';
 
 // 图片上传：浏览器 Canvas 压缩（最长边 1600px / ≤2MB）+ 320px 缩略图，
@@ -46,9 +48,7 @@ export function ImageUpload({
           );
           appended.push(dto);
         } catch (cause) {
-          setError(
-            isApiError(cause) ? t(errorI18nKey(cause.code)) : t('items.upload.failed'),
-          );
+          setError(isApiError(cause) ? t(errorI18nKey(cause.code)) : t('items.upload.failed'));
           break;
         }
       }
@@ -64,17 +64,21 @@ export function ImageUpload({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-3">
-        {value.map((file) => (
+        {value.map((file, index) => (
           <div key={file.id} className="group relative">
-            <FileImage fileId={file.id} className="h-20 w-20 rounded object-cover" alt={file.id} />
+            {/* 缩略图本身是装饰性的（文件 id 对用户无意义），序号信息交给删除按钮的可访问名称。 */}
+            <FileImage fileId={file.id} className="size-20 rounded object-cover" alt="" />
             <button
               type="button"
-              aria-label={t('items.upload.remove')}
+              aria-label={`${t('items.upload.remove')} ${index + 1}`}
               title={t('items.upload.remove')}
               onClick={() => remove(file.id)}
-              className="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-neutral-700 text-xs text-white group-hover:flex"
+              // 用 opacity 而不是 display 隐藏：`hidden` 会让按钮退出 Tab 顺序，
+              // 键盘用户根本没有办法删掉已上传的图片（WCAG 2.1.1）。
+              // size-6 = 24×24，满足 2.5.8 的最小点击目标；触摸设备没有 hover，始终显示。
+              className="absolute -end-2 -top-2 flex size-6 items-center justify-center rounded-full bg-ink-soft text-white opacity-0 transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
             >
-              ×
+              <X aria-hidden className="size-3.5" />
             </button>
           </div>
         ))}
@@ -85,14 +89,14 @@ export function ImageUpload({
         type="file"
         accept="image/*"
         multiple
-        className="hidden"
-        onChange={(e) => void handleFiles(e.target.files)}
+        className="sr-only"
+        onChange={(event) => void handleFiles(event.target.files)}
       />
 
       <div className="flex items-center gap-3">
         <Button
-          type="button"
-          appearance="secondary"
+          variant="secondary"
+          size="sm"
           disabled={busy !== null}
           onClick={() => inputRef.current?.click()}
         >
@@ -102,13 +106,15 @@ export function ImageUpload({
               ? t('items.upload.uploading')
               : t('items.upload.add')}
         </Button>
-        {busy !== null && <Spinner size="tiny" />}
+        {busy !== null ? <Spinner size="sm" /> : null}
       </div>
 
-      <Text size={100} className="text-neutral-500">
-        {t('items.upload.hint')}
-      </Text>
-      {error && <Text className="text-red-600">{error}</Text>}
+      <p className="text-xs text-ink-subtle">{t('items.upload.hint')}</p>
+      {error ? (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

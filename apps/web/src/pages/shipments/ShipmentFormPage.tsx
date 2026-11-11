@@ -1,13 +1,3 @@
-import {
-  Button,
-  Field,
-  Input,
-  Select,
-  Spinner,
-  Text,
-  Textarea,
-  Title1,
-} from '@fluentui/react-components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,15 +5,22 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { CURRENCIES, type ItemDto, type MinSaleUnit } from '@otunlink/shared';
 
-import { useSession } from '../../auth/SessionProvider';
-import { RefreshButton } from '../../components/RefreshButton';
-import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
 import { errorI18nKey, isApiError } from '../../api/http';
 import { listItems } from '../../api/items';
+import { refreshAfterWrite } from '../../api/queryClient';
 import { createShipment, getShipment, updateShipment, type ShipmentCreateInput } from '../../api/shipments';
 import { listUnits, type UnitDto } from '../../api/units';
-import { refreshAfterWrite } from '../../api/queryClient';
+import { useSession } from '../../auth/SessionProvider';
+import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
+import { RefreshButton } from '../../components/RefreshButton';
 import { specUnitOf, unitLabel } from '../../i18n/units';
+import { Button } from '../../ui/button';
+import { Field } from '../../ui/field';
+import { Input } from '../../ui/input';
+import { PageHeader } from '../../ui/page-header';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
+import { Textarea } from '../../ui/textarea';
 
 interface TrackingLine {
   key: string;
@@ -305,15 +302,19 @@ export function ShipmentFormPage() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-4">
-      <Title1 as="h1">{isEdit ? t('shipments.editTitle') : t('shipments.createTitle')}</Title1>
+      <PageHeader title={isEdit ? t('shipments.editTitle') : t('shipments.createTitle')} />
 
-      {error && <Text className="text-red-600">{error}</Text>}
+      {error && (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
+      )}
 
       <div className={`grid grid-cols-1 items-start gap-4 sm:grid-cols-2 ${FIELD_OVERFLOW_GUARD}`}>
         <Field label={t('shipments.shipper')} required>
           <Select
             value={form.shipperUnitId}
-            onChange={(_, d) => set('shipperUnitId', d.value)}
+            onValueChange={(value) => set('shipperUnitId', value)}
             disabled={Boolean(me?.scopeUnitId)}
           >
             <option value="">—</option>
@@ -325,7 +326,7 @@ export function ShipmentFormPage() {
           </Select>
         </Field>
         <Field label={t('shipments.receiver')} required>
-          <Select value={form.receiverUnitId} onChange={(_, d) => set('receiverUnitId', d.value)}>
+          <Select value={form.receiverUnitId} onValueChange={(value) => set('receiverUnitId', value)}>
             <option value="">—</option>
             {receiverUnits.map((u) => (
               <option key={u.id} value={u.id}>
@@ -340,11 +341,11 @@ export function ShipmentFormPage() {
             min={1}
             inputMode="numeric"
             value={form.boxesCount}
-            onChange={(_, d) => set('boxesCount', sanitizeIntegerInput(d.value))}
+            onChange={(e) => set('boxesCount', sanitizeIntegerInput(e.target.value))}
           />
         </Field>
         <Field label={t('shipments.currency')}>
-          <Select value={form.currency} onChange={(_, d) => set('currency', d.value)}>
+          <Select value={form.currency} onValueChange={(value) => set('currency', value)}>
             {CURRENCIES.map((currency) => (
               <option key={currency} value={currency}>
                 {currency}
@@ -356,46 +357,57 @@ export function ShipmentFormPage() {
           <Input
             type="date"
             value={form.expectedArrivalDate}
-            onChange={(_, d) => set('expectedArrivalDate', d.value)}
+            onChange={(e) => set('expectedArrivalDate', e.target.value)}
           />
         </Field>
         <Field label={t('shipments.remark')} className="sm:col-span-2">
-          <Textarea value={form.remark} onChange={(_, d) => set('remark', d.value)} rows={2} />
+          <Textarea value={form.remark} onChange={(e) => set('remark', e.target.value)} rows={2} />
         </Field>
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <Text as="h2" weight="semibold" size={400}>
-            {t('shipments.trackings')}
-          </Text>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-ink">{t('shipments.trackings')}</h2>
           <Button
-            size="small"
-            appearance="secondary"
+            size="sm"
+            variant="secondary"
             onClick={() => setTrackings((prev) => [...prev, emptyTracking()])}
           >
             {t('shipments.addTracking')}
           </Button>
         </div>
-        {trackings.map((tr) => (
-          <div key={tr.key} className={`${LINE_GRID_CLASS} rounded border border-neutral-200 p-3 sm:grid-cols-[1fr_1fr_1fr_auto]`}>
+        {trackings.map((tr, index) => (
+          <div
+            key={tr.key}
+            className={`${LINE_GRID_CLASS} rounded-lg border border-line p-3 sm:grid-cols-[1fr_1fr_1fr_auto]`}
+          >
             <Field label={t('shipments.carrier')} required>
-              <Input value={tr.carrier} onChange={(_, d) => setTracking(tr.key, 'carrier', d.value)} />
+              <Input
+                aria-label={`${t('shipments.carrier')} ${index + 1}`}
+                value={tr.carrier}
+                onChange={(e) => setTracking(tr.key, 'carrier', e.target.value)}
+              />
             </Field>
             <Field label={t('shipments.trackingNo')} required>
               <Input
+                aria-label={`${t('shipments.trackingNo')} ${index + 1}`}
                 value={tr.trackingNo}
-                onChange={(_, d) => setTracking(tr.key, 'trackingNo', d.value)}
+                onChange={(e) => setTracking(tr.key, 'trackingNo', e.target.value)}
               />
             </Field>
             <Field label={t('shipments.trackingNote')}>
-              <Input value={tr.note} onChange={(_, d) => setTracking(tr.key, 'note', d.value)} />
+              <Input
+                aria-label={`${t('shipments.trackingNote')} ${index + 1}`}
+                value={tr.note}
+                onChange={(e) => setTracking(tr.key, 'note', e.target.value)}
+              />
             </Field>
             <div className="flex items-end">
               <Button
-                size="small"
-                appearance="subtle"
+                size="sm"
+                variant="subtle"
                 disabled={trackings.length <= 1}
+                aria-label={`${t('shipments.remove')} ${tr.trackingNo.trim() || index + 1}`}
                 onClick={() => setTrackings((prev) => prev.filter((x) => x.key !== tr.key))}
               >
                 {t('shipments.remove')}
@@ -407,36 +419,35 @@ export function ShipmentFormPage() {
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Text as="h2" weight="semibold" size={400}>
-            {t('shipments.items')}
-          </Text>
-          <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-ink">{t('shipments.items')}</h2>
+          <div className="flex flex-wrap items-center gap-2">
             <RefreshButton queryKey={['items', 'picker']} additionalKeys={[['units', 'list']]} />
             <Input
               value={itemSearch}
               placeholder={t('shipments.itemSearchPlaceholder')}
-              onChange={(_, d) => setItemSearch(d.value)}
-              className="min-w-44"
+              aria-label={t('shipments.itemSearchPlaceholder')}
+              onChange={(e) => setItemSearch(e.target.value)}
+              className="w-full sm:w-64"
             />
-            <Link to="/items/new" target="_blank" rel="noopener noreferrer">
-              <Button size="small" appearance="secondary">
+            <Button asChild size="sm" variant="secondary">
+              <Link to="/items/new" target="_blank" rel="noopener noreferrer">
                 {t('shipments.newItem')}
-              </Button>
-            </Link>
+              </Link>
+            </Button>
             <Button
-              size="small"
-              appearance="secondary"
+              size="sm"
+              variant="secondary"
               onClick={() => setLines((prev) => [...prev, emptyItem()])}
             >
               {t('shipments.addItem')}
             </Button>
           </div>
         </div>
-        {lines.map((line) => (
-          <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
+        {lines.map((line, index) => (
+          <div key={line.key} className="flex flex-col gap-2 rounded-lg border border-line p-3">
             <div className={`${LINE_GRID_CLASS} sm:grid-cols-3`}>
               <Field label={t('shipments.itemName')} required className="sm:col-span-1">
-                <Select value={line.itemId} onChange={(_, d) => pickItem(line.key, d.value)}>
+                <Select value={line.itemId} onValueChange={(value) => pickItem(line.key, value)}>
                   <option value="">{t('shipments.selectItem')}</option>
                   {(itemPage?.items ?? []).map((item) => (
                     <option key={item.id} value={item.id}>
@@ -452,7 +463,7 @@ export function ShipmentFormPage() {
                   inputMode="numeric"
                   min={0}
                   value={line.expectedQty}
-                  onChange={(_, d) => setLine(line.key, 'expectedQty', sanitizeIntegerInput(d.value))}
+                  onChange={(e) => setLine(line.key, 'expectedQty', sanitizeIntegerInput(e.target.value))}
                 />
               </Field>
               <Field label={t('shipments.unitPrice')}>
@@ -460,7 +471,7 @@ export function ShipmentFormPage() {
                   type="number"
                   inputMode="decimal"
                   value={line.unitPrice}
-                  onChange={(_, d) => setLine(line.key, 'unitPrice', sanitizeDecimalInput(d.value))}
+                  onChange={(e) => setLine(line.key, 'unitPrice', sanitizeDecimalInput(e.target.value))}
                 />
               </Field>
             </div>
@@ -470,14 +481,14 @@ export function ShipmentFormPage() {
                   <Input
                     type="date"
                     value={line.productionDate}
-                    onChange={(_, d) => setLine(line.key, 'productionDate', d.value)}
+                    onChange={(e) => setLine(line.key, 'productionDate', e.target.value)}
                   />
                 </Field>
                 <Field label={t('shipments.expiryDate')} required>
                   <Input
                     type="date"
                     value={line.expiryDate}
-                    onChange={(_, d) => setLine(line.key, 'expiryDate', d.value)}
+                    onChange={(e) => setLine(line.key, 'expiryDate', e.target.value)}
                   />
                 </Field>
               </div>
@@ -486,14 +497,15 @@ export function ShipmentFormPage() {
               <Field label={t('shipments.lineNote')}>
                 <Input
                   value={line.lineNote}
-                  onChange={(_, d) => setLine(line.key, 'lineNote', d.value)}
+                  onChange={(e) => setLine(line.key, 'lineNote', e.target.value)}
                 />
               </Field>
               <div className="flex items-end">
                 <Button
-                  size="small"
-                  appearance="subtle"
+                  size="sm"
+                  variant="subtle"
                   disabled={lines.length <= 1}
+                  aria-label={`${t('shipments.remove')} ${line.name.trim() || index + 1}`}
                   onClick={() => setLines((prev) => prev.filter((x) => x.key !== line.key))}
                 >
                   {t('shipments.remove')}
@@ -504,19 +516,22 @@ export function ShipmentFormPage() {
         ))}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button
-          appearance="primary"
+          variant="primary"
           disabled={saving || !form.shipperUnitId || !form.receiverUnitId}
           onClick={() => void submit()}
         >
           {t('shipments.save')}
         </Button>
-        <Link to={isEdit ? `/shipments/${params.id}` : '/shipments'}>
-          <Button appearance="secondary" disabled={saving}>
-            {t('shipments.cancel')}
-          </Button>
-        </Link>
+        <Button
+          asChild
+          variant="secondary"
+          aria-disabled={saving || undefined}
+          className={saving ? 'pointer-events-none opacity-50' : undefined}
+        >
+          <Link to={isEdit ? `/shipments/${params.id}` : '/shipments'}>{t('shipments.cancel')}</Link>
+        </Button>
       </div>
     </div>
   );

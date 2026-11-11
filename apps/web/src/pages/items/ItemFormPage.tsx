@@ -1,16 +1,3 @@
-import {
-  Button,
-  Checkbox,
-  Combobox,
-  Field,
-  Input,
-  Option,
-  Select,
-  Spinner,
-  Text,
-  Textarea,
-  Title1,
-} from '@fluentui/react-components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,10 +22,18 @@ import {
   updateItem,
 } from '../../api/items';
 import { ImageUpload } from '../../components/ImageUpload';
-import { FIELD_OVERFLOW_GUARD } from '../../components/lineGrid';
 import { ScannerDialog } from '../../components/ScannerDialog';
 import { BundleEditor } from './BundleEditor';
 import { isGtin } from '../../lib/gtin';
+import { Button } from '../../ui/button';
+import { Checkbox } from '../../ui/checkbox';
+import { Combobox } from '../../ui/combobox';
+import { Field } from '../../ui/field';
+import { Input } from '../../ui/input';
+import { PageHeader } from '../../ui/page-header';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
+import { Textarea } from '../../ui/textarea';
 
 interface FormState {
   name: string;
@@ -68,6 +63,11 @@ const EMPTY_FORM: FormState = {
   status: 'ACTIVE',
 };
 
+// 条码输入行是「输入框 + 扫码按钮」的组合，Field 只能包单个控件，
+// 所以这一行按 Field 的排版自己接线 label / aria-describedby / role="alert"。
+const BARCODE_INPUT_ID = 'item-barcode';
+const BARCODE_ERROR_ID = 'item-barcode-error';
+
 // 物品新建/编辑表单。图片经 ImageUpload 先压缩上传，新建时随物品提交，
 // 编辑时保存图片关联的完整集合。
 export function ItemFormPage() {
@@ -82,6 +82,8 @@ export function ItemFormPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  // 条码错误只在用户离开输入框或提交被拒后才显示（不在首个渲染就标红）。
+  const [barcodeInteracted, setBarcodeInteracted] = useState(false);
 
   const { data: detail, isLoading } = useQuery({
     queryKey: ['items', params.id],
@@ -110,6 +112,7 @@ export function ItemFormPage() {
       status: detail.status,
     });
     setFiles(detail.images.map((image) => image.file!).filter(Boolean));
+    setBarcodeInteracted(false);
   }, [detail]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -123,6 +126,7 @@ export function ItemFormPage() {
   const submit = async () => {
     if (!form.name.trim()) return;
     if (form.barcode.trim() && !isGtin(form.barcode.trim())) {
+      setBarcodeInteracted(true);
       setError(t('items.barcodeInvalid'));
       return;
     }
@@ -181,54 +185,78 @@ export function ItemFormPage() {
     return <Spinner label={t('common.loading')} />;
   }
 
+  const barcodeInvalid =
+    barcodeInteracted && form.barcode.trim() !== '' && !isGtin(form.barcode.trim());
+
   return (
     <div className="flex max-w-2xl flex-col gap-4">
-      <Title1 as="h1">{isEdit ? t('items.editTitle') : t('items.createTitle')}</Title1>
+      <PageHeader title={isEdit ? t('items.editTitle') : t('items.createTitle')} />
 
-      {error && <Text className="text-red-600">{error}</Text>}
+      {error && (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
+      )}
 
-      {/* items-start：Field 根节点是 display:grid，条码校验信息多出一行时会把同行控件挤下去 */}
-      <div className={`grid grid-cols-1 items-start gap-4 sm:grid-cols-2 ${FIELD_OVERFLOW_GUARD}`}>
+      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
         <Field label={t('items.name')} required>
-          <Input value={form.name} onChange={(_, d) => set('name', d.value)} />
+          <Input value={form.name} onChange={(event) => set('name', event.target.value)} />
         </Field>
         <Field label={t('items.sku')}>
-          <Input value={form.sku} onChange={(_, d) => set('sku', d.value)} />
+          <Input value={form.sku} onChange={(event) => set('sku', event.target.value)} />
         </Field>
-        <Field
-          label={t('items.barcode')}
-          validationState={form.barcode && !isGtin(form.barcode) ? 'error' : undefined}
-          validationMessage={form.barcode && !isGtin(form.barcode) ? t('items.barcodeInvalid') : undefined}
-        >
-          <div className="flex gap-2">
-            <Input
-              value={form.barcode}
-              maxLength={14}
-              inputMode="numeric"
-              onChange={(_, d) => set('barcode', d.value.replace(/\D/g, ''))}
-            />
-            <Button type="button" appearance="secondary" onClick={() => setScanOpen(true)}>
+
+        {/* 条码：输入框 + 扫码按钮同一行，错误文案挂在输入框下方（不挤动按钮）。 */}
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor={BARCODE_INPUT_ID} className="text-sm font-medium text-ink-soft">
+            {t('items.barcode')}
+          </label>
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <Input
+                id={BARCODE_INPUT_ID}
+                value={form.barcode}
+                maxLength={14}
+                inputMode="numeric"
+                aria-invalid={barcodeInvalid || undefined}
+                aria-describedby={barcodeInvalid ? BARCODE_ERROR_ID : undefined}
+                onBlur={() => setBarcodeInteracted(true)}
+                onChange={(event) => set('barcode', event.target.value.replace(/\D/g, ''))}
+              />
+              {barcodeInvalid && (
+                <p
+                  id={BARCODE_ERROR_ID}
+                  role="alert"
+                  className="mt-1.5 text-xs font-medium text-danger-600"
+                >
+                  {t('items.barcodeInvalid')}
+                </p>
+              )}
+            </div>
+            <Button variant="secondary" className="shrink-0" onClick={() => setScanOpen(true)}>
               {t('items.scan')}
             </Button>
           </div>
-        </Field>
+        </div>
+
         <Field label={t('items.category')}>
           <Combobox
-            freeform
             value={form.category}
-            onChange={(event) => set('category', event.target.value)}
-            onOptionSelect={(_, d) => set('category', d.optionValue ?? d.optionText ?? '')}
+            onValueChange={(value) => set('category', value)}
+            options={categories.map((category) => ({ value: category, label: category }))}
+            onSelect={(option) => set('category', option.value)}
             placeholder={t('items.categoryPlaceholder')}
-          >
-            {categories.map((c) => (
-              <Option key={c} value={c}>
-                {c}
-              </Option>
-            ))}
-          </Combobox>
+            emptyText={t('items.categoryPlaceholder')}
+            aria-label={t('items.category')}
+            className="min-w-0"
+          />
         </Field>
+
         <Field label={t('items.specUnit')}>
-          <Select value={form.specUnit} onChange={(_, d) => set('specUnit', d.value as SpecUnit)}>
+          <Select
+            value={form.specUnit}
+            onValueChange={(value) => set('specUnit', value as SpecUnit)}
+          >
             {SPEC_UNITS.map((unit) => (
               <option key={unit} value={unit}>
                 {t(`items.specUnits.${unit}`)}
@@ -236,13 +264,14 @@ export function ItemFormPage() {
             ))}
           </Select>
         </Field>
+
         <Field label={t('items.innerUnit')}>
           <Select
             value={form.innerUnit}
-            onChange={(_, d) => {
-              const value = d.value as SpecUnit | '';
-              set('innerUnit', value);
-              if (!value && form.minSaleUnit === 'INNER') set('minSaleUnit', 'SPEC');
+            onValueChange={(value) => {
+              const unit = value as SpecUnit | '';
+              set('innerUnit', unit);
+              if (!unit && form.minSaleUnit === 'INNER') set('minSaleUnit', 'SPEC');
             }}
           >
             <option value="">—</option>
@@ -253,11 +282,19 @@ export function ItemFormPage() {
             ))}
           </Select>
         </Field>
+
         <Field label={t('items.innerCount')}>
-          <Input value={form.innerCount} onChange={(_, d) => set('innerCount', d.value)} />
+          <Input
+            value={form.innerCount}
+            onChange={(event) => set('innerCount', event.target.value)}
+          />
         </Field>
+
         <Field label={t('items.minSaleUnit')}>
-          <Select value={form.minSaleUnit} onChange={(_, d) => set('minSaleUnit', d.value as MinSaleUnit)}>
+          <Select
+            value={form.minSaleUnit}
+            onValueChange={(value) => set('minSaleUnit', value as MinSaleUnit)}
+          >
             {MIN_SALE_UNITS.map((unit) => (
               <option key={unit} value={unit} disabled={unit === 'INNER' && !form.innerUnit}>
                 {t(`items.minSaleUnits.${unit}`)}
@@ -265,43 +302,59 @@ export function ItemFormPage() {
             ))}
           </Select>
         </Field>
+
         <Field label={t('items.status')}>
-          <Select value={form.status} onChange={(_, d) => set('status', d.value as ItemStatus)}>
+          <Select
+            value={form.status}
+            onValueChange={(value) => set('status', value as ItemStatus)}
+          >
             <option value="ACTIVE">{t('items.statusActive')}</option>
             <option value="INACTIVE">{t('items.statusInactive')}</option>
           </Select>
         </Field>
-        <div className="sm:col-span-2">
+
+        <div className="flex items-center sm:col-span-2">
           <Checkbox
+            id="item-perishable"
             checked={form.isPerishable}
-            onChange={(_, d) => set('isPerishable', d.checked === true)}
+            onChange={(event) => set('isPerishable', event.currentTarget.checked)}
             label={t('items.isPerishable')}
           />
         </div>
+
         <Field label={t('items.description')} className="sm:col-span-2">
           <Textarea
             value={form.description}
-            onChange={(_, d) => set('description', d.value)}
+            onChange={(event) => set('description', event.target.value)}
             rows={3}
           />
         </Field>
       </div>
 
-      <Field label={t('items.images')}>
+      <Field label={t('items.images')} unlabeled>
         <ImageUpload value={files} onChange={setFiles} />
       </Field>
 
       {isEdit && detail && <BundleEditor itemId={detail.id} initial={detail.bundleComponents} />}
 
-      <div className="flex items-center gap-3">
-        <Button appearance="primary" disabled={saving || !form.name.trim()} onClick={() => void submit()}>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="primary"
+          loading={saving}
+          disabled={!form.name.trim()}
+          onClick={() => void submit()}
+        >
           {t('items.save')}
         </Button>
-        <Link to={isEdit ? `/items/${params.id}` : '/items'}>
-          <Button appearance="secondary" disabled={saving}>
+        <Button asChild variant="secondary">
+          <Link
+            to={isEdit ? `/items/${params.id}` : '/items'}
+            aria-disabled={saving || undefined}
+            className={saving ? 'pointer-events-none opacity-50' : undefined}
+          >
             {t('items.cancel')}
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
 
       <ScannerDialog open={scanOpen} onClose={() => setScanOpen(false)} onScan={handleScan} />

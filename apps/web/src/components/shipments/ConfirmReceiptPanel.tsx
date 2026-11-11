@@ -1,16 +1,3 @@
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Input,
-  Spinner,
-  Text,
-  Textarea,
-} from '@fluentui/react-components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,6 +6,18 @@ import type { FileDto, ShipmentDetailDto } from '@otunlink/shared';
 import { errorI18nKey, isApiError } from '../../api/http';
 import { confirmReceipt } from '../../api/shipments';
 import { ImageUpload } from '../ImageUpload';
+import { Button } from '../../ui/button';
+import { Card, CardHeader } from '../../ui/card';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../ui/dialog';
+import { Input } from '../../ui/input';
+import { Textarea } from '../../ui/textarea';
 
 // 确认收货面板：READY 发货单 → 确认收货（备注/照片/逐行批次号），
 // 服务端自动建档 DRAFT 入库单并置发货单为 INBOUNDED。
@@ -67,65 +66,72 @@ export function ConfirmReceiptPanel({
   if (shipment.status !== 'READY' || !canConfirm) return null;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Text as="h2" weight="semibold" size={400}>
-          {t('shipments.confirmReceipt.title')}
-        </Text>
-        <Button appearance="primary" onClick={() => setOpen(true)}>
-          {t('shipments.confirmReceipt.action')}
-        </Button>
-      </div>
+    <Card>
+      <CardHeader
+        title={t('shipments.confirmReceipt.title')}
+        actions={
+          <Button variant="primary" onClick={() => setOpen(true)}>
+            {t('shipments.confirmReceipt.action')}
+          </Button>
+        }
+      />
 
-      <Dialog open={open} onOpenChange={(_e, data) => setOpen(data.open)}>
-        <DialogSurface>
-          <DialogBody>
+      <Dialog open={open} onOpenChange={setOpen} closeLabel={t('common.close')}>
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>{t('shipments.confirmReceipt.title')}</DialogTitle>
-            <DialogContent>
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  {shipment.items.map((item) => (
-                    <div key={item.id} className="flex flex-col gap-1 rounded border border-neutral-200 p-3">
-                      <div className="font-medium">{item.name}</div>
-                      <Text size={200} className="text-neutral-500">
-                        {t('shipments.expectedQty')}: {item.expectedQty}
-                        {item.expiryDate ? ` · ${t('shipments.expiryDate')}: ${item.expiryDate}` : ''}
-                      </Text>
-                      <Input
-                        placeholder={t('shipments.confirmReceipt.batchNoPlaceholder')}
-                        value={batchNos[item.id] ?? ''}
-                        onChange={(_e, data) =>
-                          setBatchNos((prev) => ({ ...prev, [item.id]: data.value }))
-                        }
-                        className="max-w-sm"
-                      />
-                    </div>
-                  ))}
-                </div>
-                <Textarea
-                  placeholder={t('shipments.confirmReceipt.remarkPlaceholder')}
-                  value={remark}
-                  onChange={(_e, data) => setRemark(data.value)}
-                  resize="vertical"
-                />
-                <div className="flex flex-col gap-1">
-                  <Text size={300}>{t('shipments.confirmReceipt.photos')}</Text>
-                  <ImageUpload value={photos} onChange={setPhotos} />
-                </div>
+          </DialogHeader>
+          <DialogBody>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                {shipment.items.map((item, index) => (
+                  <div key={item.id} className="flex flex-col gap-1 rounded-lg border border-line p-3">
+                    <div className="font-medium text-ink">{item.name}</div>
+                    <p className="text-xs text-ink-muted">
+                      {t('shipments.expectedQty')}: {item.expectedQty}
+                      {item.expiryDate ? ` · ${t('shipments.expiryDate')}: ${item.expiryDate}` : ''}
+                    </p>
+                    <Input
+                      aria-label={`${t('shipments.confirmReceipt.batchNoPlaceholder')} ${item.name}`}
+                      placeholder={t('shipments.confirmReceipt.batchNoPlaceholder')}
+                      value={batchNos[item.id] ?? ''}
+                      data-autofocus={index === 0 ? true : undefined}
+                      onChange={(e) =>
+                        setBatchNos((prev) => ({ ...prev, [item.id]: e.target.value }))
+                      }
+                      className="max-w-sm"
+                    />
+                  </div>
+                ))}
               </div>
-            </DialogContent>
-            {error && <Text className="px-1 text-red-600">{error}</Text>}
-            <DialogActions>
-              <Button appearance="secondary" disabled={submitting} onClick={() => setOpen(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button appearance="primary" disabled={submitting} onClick={() => void handleSubmit()}>
-                {submitting ? <Spinner size="tiny" /> : t('shipments.confirmReceipt.action')}
-              </Button>
-            </DialogActions>
+              <Textarea
+                aria-label={t('shipments.confirmReceipt.remarkPlaceholder')}
+                placeholder={t('shipments.confirmReceipt.remarkPlaceholder')}
+                value={remark}
+                data-autofocus={shipment.items.length === 0 ? true : undefined}
+                onChange={(e) => setRemark(e.target.value)}
+              />
+              <div className="flex flex-col gap-1">
+                <p className="text-sm text-ink-soft">{t('shipments.confirmReceipt.photos')}</p>
+                <ImageUpload value={photos} onChange={setPhotos} />
+              </div>
+            </div>
+            {error && (
+              <p role="alert" className="mt-3 text-sm text-danger-600">
+                {error}
+              </p>
+            )}
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter>
+            <Button variant="secondary" disabled={submitting} onClick={() => setOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="primary" loading={submitting} onClick={() => void handleSubmit()}>
+              {t('shipments.confirmReceipt.action')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
-    </div>
+    </Card>
   );
 }

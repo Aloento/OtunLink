@@ -1,4 +1,3 @@
-import { Badge, Button, Spinner, Text, Title1 } from '@fluentui/react-components';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +11,11 @@ import { RefreshButton } from '../components/RefreshButton';
 import { useSession } from '../auth/SessionProvider';
 import { useLocale } from '../i18n/LocaleProvider';
 import { formatDateTime } from '../i18n/format';
+import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+import { PageHeader } from '../ui/page-header';
+import { Pagination } from '../ui/pagination';
+import { Spinner } from '../ui/spinner';
 
 const PAGE_SIZE = 20;
 
@@ -50,57 +54,63 @@ export function NotificationsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <Title1 as="h1">{t('notifications.title')}</Title1>
-          <Text size={200} className="text-neutral-500">
+      <PageHeader
+        title={t('notifications.title')}
+        description={
+          <span className="text-xs text-ink-subtle">
             {me ? `${me.name} · ${t(`roles.${me.role ?? ''}`)}` : ''}
-          </Text>
-        </div>
-        <div className="flex items-center gap-2">
-          <RefreshButton
-            queryKey={['notifications', 'list']}
-            additionalKeys={[['notifications', 'unread-count'], ['notifications', 'dashboard']]}
-          />
-          <Button
-            size="small"
-            appearance={filter === 'all' ? 'primary' : 'secondary'}
-            onClick={() => {
-              setFilter('all');
-              setPage(1);
-            }}
-          >
-            {t('notifications.all')}
-          </Button>
-          <Button
-            size="small"
-            appearance={filter === 'unread' ? 'primary' : 'secondary'}
-            onClick={() => {
-              setFilter('unread');
-              setPage(1);
-            }}
-          >
-            {t('notifications.unread')}
-          </Button>
-          <Button
-            size="small"
-            appearance="subtle"
-            disabled={markRead.isPending || items.every((n) => n.readAt !== null)}
-            onClick={markAllRead}
-          >
-            {t('notifications.markAllRead')}
-          </Button>
-        </div>
-      </div>
+          </span>
+        }
+        actions={
+          <>
+            <RefreshButton
+              queryKey={['notifications', 'list']}
+              additionalKeys={[['notifications', 'unread-count'], ['notifications', 'dashboard']]}
+            />
+            <Button
+              size="sm"
+              variant={filter === 'all' ? 'primary' : 'secondary'}
+              aria-pressed={filter === 'all'}
+              onClick={() => {
+                setFilter('all');
+                setPage(1);
+              }}
+            >
+              {t('notifications.all')}
+            </Button>
+            <Button
+              size="sm"
+              variant={filter === 'unread' ? 'primary' : 'secondary'}
+              aria-pressed={filter === 'unread'}
+              onClick={() => {
+                setFilter('unread');
+                setPage(1);
+              }}
+            >
+              {t('notifications.unread')}
+            </Button>
+            <Button
+              size="sm"
+              variant="subtle"
+              disabled={markRead.isPending || items.every((n) => n.readAt !== null)}
+              onClick={markAllRead}
+            >
+              {t('notifications.markAllRead')}
+            </Button>
+          </>
+        }
+      />
 
       {isLoading ? (
         <Spinner label={t('common.loading')} />
       ) : isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.UNKNOWN')}
+        </p>
       ) : items.length === 0 ? (
-        <Text className="text-neutral-500">
+        <p className="text-sm text-ink-subtle">
           {unreadOnly ? t('notifications.noUnread') : t('notifications.empty')}
-        </Text>
+        </p>
       ) : (
         <ul className="flex flex-col gap-2">
           {items.map((n) => (
@@ -110,30 +120,12 @@ export function NotificationsPage() {
       )}
 
       {total > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm text-neutral-600">
-          <span>{t('notifications.total', { total })}</span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="small"
-              appearance="secondary"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              ←
-            </Button>
-            <span>
-              {page} / {totalPages}
-            </span>
-            <Button
-              size="small"
-              appearance="secondary"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              →
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onChange={setPage}
+          totalLabel={t('notifications.total', { total })}
+        />
       )}
     </div>
   );
@@ -152,32 +144,31 @@ function NotificationItem({
   const { locale } = useLocale();
   const unread = item.readAt === null;
   return (
-    <li className="flex items-start gap-3 rounded-lg border border-neutral-200 bg-white p-3">
-      {unread && <Badge appearance="filled" color="brand" size="tiny" />}
+    <li className="flex items-start gap-3 rounded-card border border-line bg-surface p-3">
+      {unread && <Badge tone="danger">{t('notifications.unread')}</Badge>}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={unread ? 'font-semibold' : 'font-medium text-neutral-600'}>
+          <span className={unread ? 'font-semibold text-ink' : 'font-medium text-ink-muted'}>
             {item.title}
           </span>
-          <span className="text-xs text-neutral-400">{formatDateTime(item.createdAt, locale)}</span>
+          <span className="text-xs text-ink-subtle">{formatDateTime(item.createdAt, locale)}</span>
         </div>
-        {item.content && (
-          <Text size={200} className="mt-1 block text-neutral-600">
-            {item.content}
-          </Text>
-        )}
+        {item.content && <p className="mt-1 text-xs text-ink-muted">{item.content}</p>}
         {item.link && (
-          <Link to={item.link} className="mt-1 inline-block text-sm text-blue-600 hover:underline">
+          <Link
+            to={item.link}
+            aria-label={`${t('notifications.viewDetail')} · ${item.title}`}
+            className="mt-1 inline-block text-sm text-brand-700 hover:underline"
+          >
             {t('notifications.viewDetail')}
           </Link>
         )}
       </div>
       {unread && (
-        <Button size="small" appearance="subtle" disabled={busy} onClick={() => onRead([item.id])}>
+        <Button size="sm" variant="subtle" disabled={busy} onClick={() => onRead([item.id])}>
           {t('notifications.markRead')}
         </Button>
       )}
     </li>
   );
 }
-

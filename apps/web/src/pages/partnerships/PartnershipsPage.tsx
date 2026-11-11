@@ -1,17 +1,3 @@
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Field,
-  Select,
-  Spinner,
-  Text,
-  Title1,
-} from '@fluentui/react-components';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +17,23 @@ import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { Button } from '../../ui/button';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../ui/dialog';
+import { Field } from '../../ui/field';
+import { PageHeader } from '../../ui/page-header';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
+
+// 破坏性确认的初始焦点落在「取消」上，避免回车误删。
+const autofocusCancel = { 'data-autofocus': '' } as Record<string, string>;
 
 // 可售客户（零售合作方）管理：仓库把零售加入自己的「可售客户」列表即签约生效。
 // 仅 WAREHOUSE（自己仓库）/ ADMIN（全量）可见；签约无需零售同意、无状态字段。
@@ -143,124 +146,156 @@ export function PartnershipsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">{t('partnerships.title')}</Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton
-            queryKey={['partnerships', 'list']}
-            additionalKeys={[['partnerships', 'candidates'], ['units', 'list']]}
-          />
-          <Button appearance="primary" onClick={openAdd}>
-            {t('partnerships.add')}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={t('partnerships.title')}
+        actions={
+          <>
+            <RefreshButton
+              queryKey={['partnerships', 'list']}
+              additionalKeys={[['partnerships', 'candidates'], ['units', 'list']]}
+            />
+            <Button variant="primary" onClick={openAdd}>
+              {t('partnerships.add')}
+            </Button>
+          </>
+        }
+      />
 
       {partnershipsQuery.isLoading ? (
         <Spinner label={t('common.loading')} />
       ) : partnershipsQuery.isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.UNKNOWN')}
+        </p>
       ) : (
         <ResponsiveTable
           columns={columns}
           items={rows}
           rowKey={(row) => row.id}
           emptyText={t('partnerships.empty')}
+          label={t('partnerships.title')}
           actions={(row) => (
-            <Button size="small" appearance="secondary" onClick={() => setRemoveTarget(row)}>
+            <Button
+              size="sm"
+              variant="danger"
+              aria-label={`${t('partnerships.remove')} ${row.retailerUnitName ?? row.retailerUnitId}`}
+              onClick={() => setRemoveTarget(row)}
+            >
               {t('partnerships.remove')}
             </Button>
           )}
         />
       )}
 
-      <Dialog open={draft !== null} onOpenChange={(_, d) => !d.open && setDraft(null)}>
-        <DialogSurface>
-          <DialogBody>
+      <Dialog
+        open={draft !== null}
+        onOpenChange={(open) => {
+          if (!open) setDraft(null);
+        }}
+        closeLabel={t('common.close')}
+      >
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>{t('partnerships.addTitle')}</DialogTitle>
-            <DialogContent>
-              <div className="flex flex-col gap-3">
-                {isAdmin && (
-                  <Field label={t('partnerships.warehouse')} required>
-                    <Select
-                      value={draft?.warehouseUnitId ?? ''}
-                      onChange={(_, d) =>
-                        setDraft((prev) => (prev ? { ...prev, warehouseUnitId: d.value } : prev))
-                      }
-                    >
-                      <option value="">{t('partnerships.selectWarehouse')}</option>
-                      {warehouses.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                )}
-                <Field label={t('partnerships.retailer')} required>
+          </DialogHeader>
+          <DialogBody>
+            <div className="flex flex-col gap-3">
+              {isAdmin && (
+                <Field label={t('partnerships.warehouse')} required>
                   <Select
-                    value={draft?.retailerUnitId ?? ''}
-                    onChange={(_, d) =>
-                      setDraft((prev) => (prev ? { ...prev, retailerUnitId: d.value } : prev))
+                    {...{ 'data-autofocus': '' }}
+                    value={draft?.warehouseUnitId ?? ''}
+                    onValueChange={(value) =>
+                      setDraft((prev) => (prev ? { ...prev, warehouseUnitId: value } : prev))
                     }
                   >
-                    <option value="">{t('partnerships.selectRetailer')}</option>
-                    {candidates.map((u) => (
+                    <option value="">{t('partnerships.selectWarehouse')}</option>
+                    {warehouses.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name}
                       </option>
                     ))}
                   </Select>
                 </Field>
-                {addError && <Text className="text-red-600">{addError}</Text>}
-              </div>
-            </DialogContent>
-            <DialogActions>
-              <Button
-                appearance="primary"
-                disabled={addMutation.isPending || !canAdd}
-                onClick={() => addMutation.mutate()}
-              >
-                {addMutation.isPending ? <Spinner size="tiny" /> : t('partnerships.save')}
-              </Button>
-              <Button appearance="secondary" onClick={() => setDraft(null)}>
-                {t('partnerships.cancel')}
-              </Button>
-            </DialogActions>
+              )}
+              <Field label={t('partnerships.retailer')} required>
+                <Select
+                  {...{ 'data-autofocus': isAdmin ? undefined : '' }}
+                  value={draft?.retailerUnitId ?? ''}
+                  onValueChange={(value) =>
+                    setDraft((prev) => (prev ? { ...prev, retailerUnitId: value } : prev))
+                  }
+                >
+                  <option value="">{t('partnerships.selectRetailer')}</option>
+                  {candidates.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              {addError && (
+                <p role="alert" className="text-sm text-danger-600">
+                  {addError}
+                </p>
+              )}
+            </div>
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter>
+            <Button variant="primary" loading={addMutation.isPending} disabled={!canAdd} onClick={() => addMutation.mutate()}>
+              {t('partnerships.save')}
+            </Button>
+            <Button variant="secondary" onClick={() => setDraft(null)}>
+              {t('partnerships.cancel')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
-      <Dialog open={removeTarget !== null} onOpenChange={(_, d) => !d.open && setRemoveTarget(null)}>
-        <DialogSurface>
-          <DialogBody>
+      <Dialog
+        open={removeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        closeLabel={t('common.close')}
+      >
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>{t('partnerships.removeTitle')}</DialogTitle>
-            <DialogContent>
-              <Text>
-                {removeTarget
-                  ? `${removeTarget.retailerUnitName ?? removeTarget.retailerUnitId}${
-                      isAdmin
-                        ? ` · ${removeTarget.warehouseUnitName ?? removeTarget.warehouseUnitId}`
-                        : ''
-                    }`
-                  : ''}
-              </Text>
-              {removeError && <Text className="text-red-600">{removeError}</Text>}
-            </DialogContent>
-            <DialogActions>
-              <Button
-                appearance="primary"
-                disabled={removeMutation.isPending}
-                onClick={() => removeMutation.mutate()}
-              >
-                {removeMutation.isPending ? <Spinner size="tiny" /> : t('partnerships.removeConfirm')}
-              </Button>
-              <Button appearance="secondary" onClick={() => setRemoveTarget(null)}>
-                {t('partnerships.cancel')}
-              </Button>
-            </DialogActions>
+            <DialogDescription>
+              {removeTarget
+                ? `${removeTarget.retailerUnitName ?? removeTarget.retailerUnitId}${
+                    isAdmin
+                      ? ` · ${removeTarget.warehouseUnitName ?? removeTarget.warehouseUnitId}`
+                      : ''
+                  }`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            {removeError && (
+              <p role="alert" className="text-sm text-danger-600">
+                {removeError}
+              </p>
+            )}
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter>
+            <Button
+              {...autofocusCancel}
+              variant="secondary"
+              onClick={() => setRemoveTarget(null)}
+            >
+              {t('partnerships.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              loading={removeMutation.isPending}
+              onClick={() => removeMutation.mutate()}
+            >
+              {t('partnerships.removeConfirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );

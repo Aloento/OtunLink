@@ -1,13 +1,3 @@
-import {
-  Button,
-  Caption1,
-  Checkbox,
-  Field,
-  Input,
-  Spinner,
-  Text,
-  Title1,
-} from '@fluentui/react-components';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,6 +27,14 @@ import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
 import { unitLabel } from '../../i18n/units';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { Button } from '../../ui/button';
+import { Card, CardHeader } from '../../ui/card';
+import { Checkbox } from '../../ui/checkbox';
+import { ConfirmDialog } from '../../ui/confirm-dialog';
+import { Field } from '../../ui/field';
+import { Input } from '../../ui/input';
+import { PageHeader } from '../../ui/page-header';
+import { Spinner } from '../../ui/spinner';
 import { usePickedLines } from './pickingState';
 
 // 销售单详情（状态机）：草稿可编辑/发送（FEFO 预览可覆盖），
@@ -60,6 +58,10 @@ export function SalesDetailPage() {
   };
 
   const [actionError, setActionError] = useState<string | null>(null);
+  // 删除 / 取消 / 确认收款这三种一次性动作统一走 <ConfirmDialog>：
+  // 删除是不可撤销的破坏性动作（tone="danger"，初始焦点在「取消」），
+  // 取消与确认收款只改变状态机状态，保持主操作色。
+  const [confirm, setConfirm] = useState<'delete' | 'cancel' | 'receipt' | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteSalesOrder(id!),
@@ -98,7 +100,12 @@ export function SalesDetailPage() {
   const picking = usePickedLines(id);
 
   if (isLoading) return <Spinner label={t('common.loading')} />;
-  if (isError || !order) return <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>;
+  if (isError || !order)
+    return (
+      <p role="alert" className="text-sm text-danger-600">
+        {t('errors.UNKNOWN')}
+      </p>
+    );
 
   const canSend = hasPermission(me?.role, Permissions.SALES_SEND) && order.status === 'DRAFT';
   const canCancel =
@@ -136,7 +143,7 @@ export function SalesDetailPage() {
       render: (l) => (
         <div className="flex flex-col">
           {l.bundleItemName && (
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-ink-subtle">
               {t('items.bundleBadge')}：{l.bundleItemName}
             </span>
           )}
@@ -149,28 +156,46 @@ export function SalesDetailPage() {
       header: t('sales.spec'),
       render: (l) => unitLabel(t, l.spec, l.minSaleUnit),
     },
-    { key: 'qty', header: t('sales.qty'), render: (l) => l.qty },
+    {
+      key: 'qty',
+      header: t('sales.qty'),
+      // 数量/金额右对齐 + 等宽数字，逐行比较时个位对齐。
+      render: (l) => <span className="block text-end tabular-nums">{l.qty}</span>,
+    },
     {
       key: 'listPrice',
       header: t('sales.listPrice'),
-      render: (l) => (l.listPrice === null ? '—' : `${l.listPrice} ${l.listPriceCurrency ?? order.currency}`),
+      render: (l) => (
+        <span className="block text-end tabular-nums">
+          {l.listPrice === null ? '—' : `${l.listPrice} ${l.listPriceCurrency ?? order.currency}`}
+        </span>
+      ),
     },
     {
       key: 'price',
       header: t('sales.price'),
-      render: (l) => (l.price === null ? '—' : `${l.price} ${l.priceCurrency}`),
+      render: (l) => (
+        <span className="block text-end tabular-nums">
+          {l.price === null ? '—' : `${l.price} ${l.priceCurrency}`}
+        </span>
+      ),
     },
-    { key: 'lineTotal', header: t('sales.lineTotal'), render: (l) => l.lineTotal ?? '—' },
+    {
+      key: 'lineTotal',
+      header: t('sales.lineTotal'),
+      render: (l) => <span className="block text-end tabular-nums">{l.lineTotal ?? '—'}</span>,
+    },
     // 末列：拣货勾选。逐行勾掉已取到的货，买到哪件一眼可见。
     {
       key: 'picked',
       header: t('sales.picked'),
       render: (l) => (
         <Checkbox
-          size="large"
+          id={`picked-${l.id}`}
           checked={picking.picked.has(l.id)}
           onChange={() => picking.toggle(l.id)}
-          aria-label={t('sales.picked')}
+          // 逐行勾选框：可访问名称必须带上物品名，否则整列都是同一个「已拣货」。
+          aria-label={`${t('sales.picked')} ${l.itemName ?? l.itemId}`}
         />
       ),
     },
@@ -184,169 +209,171 @@ export function SalesDetailPage() {
     },
     { key: 'batchNo', header: t('sales.batchNo'), render: (l) => l.batchNo ?? l.batchId },
     { key: 'expiry', header: t('sales.expiry'), render: (l) => l.expiryDate ?? '—' },
-    { key: 'qty', header: t('sales.allocatedQty'), render: (l) => l.qty },
+    {
+      key: 'qty',
+      header: t('sales.allocatedQty'),
+      render: (l) => <span className="block text-end tabular-nums">{l.qty}</span>,
+    },
   ];
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">
-          {t('sales.detail')} · {order.salesNo}
-        </Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton queryKey={['sales-orders', id]} />
-          {canSend && (
-            <Link to={`/sales/${order.id}/edit`}>
-              <Button appearance="secondary">{t('sales.editTitle')}</Button>
-            </Link>
-          )}
-          {canSend && (
-            <Button
-              appearance="secondary"
-              disabled={deleteMutation.isPending}
-              onClick={() => {
-                if (window.confirm(t('sales.deleteConfirm'))) deleteMutation.mutate();
-              }}
-            >
-              {deleteMutation.isPending ? <Spinner size="tiny" /> : t('sales.delete')}
-            </Button>
-          )}
-          {canCancel && (
-            <Button
-              appearance="secondary"
-              disabled={cancelMutation.isPending}
-              onClick={() => {
-                if (window.confirm(t('sales.cancelConfirm'))) cancelMutation.mutate();
-              }}
-            >
-              {t('sales.cancelOrder')}
-            </Button>
-          )}
-          {canConfirm && (
-            <Button
-              appearance="primary"
-              disabled={confirmMutation.isPending}
-              onClick={() => {
-                if (window.confirm(t('sales.confirmReceiptConfirm'))) confirmMutation.mutate();
-              }}
-            >
-              {t('sales.confirmReceipt')}
-            </Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={`${t('sales.detail')} · ${order.salesNo}`}
+        actions={
+          <>
+            <RefreshButton queryKey={['sales-orders', id]} />
+            {canSend && (
+              <Button asChild variant="secondary">
+                <Link to={`/sales/${order.id}/edit`}>{t('sales.editTitle')}</Link>
+              </Button>
+            )}
+            {canSend && (
+              <Button
+                variant="secondary"
+                loading={deleteMutation.isPending}
+                onClick={() => setConfirm('delete')}
+              >
+                {t('sales.delete')}
+              </Button>
+            )}
+            {canCancel && (
+              <Button
+                variant="secondary"
+                loading={cancelMutation.isPending}
+                onClick={() => setConfirm('cancel')}
+              >
+                {t('sales.cancelOrder')}
+              </Button>
+            )}
+            {canConfirm && (
+              <Button
+                variant="primary"
+                loading={confirmMutation.isPending}
+                onClick={() => setConfirm('receipt')}
+              >
+                {t('sales.confirmReceipt')}
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      {actionError && <Text className="text-red-600">{actionError}</Text>}
+      {actionError && (
+        <p role="alert" className="text-sm text-danger-600">
+          {actionError}
+        </p>
+      )}
 
-      <div className="grid grid-cols-1 gap-3 rounded border border-neutral-200 p-4 text-sm sm:grid-cols-2">
-        <div>
-          <span className="text-neutral-500">{t('sales.source')}：</span>
-          {t(`sales.sources.${order.source}`)}
+      <dl className="grid grid-cols-1 gap-3 rounded-card border border-line bg-surface p-4 text-sm sm:grid-cols-2">
+        <div className="min-w-0 break-words">
+          <dt className="inline text-ink-muted">{t('sales.source')}：</dt>
+          <dd className="inline">{t(`sales.sources.${order.source}`)}</dd>
         </div>
-        <div>
-          <span className="text-neutral-500">{t('sales.status')}：</span>
-          {t(`sales.statuses.${order.status}`)}
+        <div className="min-w-0 break-words">
+          <dt className="inline text-ink-muted">{t('sales.status')}：</dt>
+          <dd className="inline">{t(`sales.statuses.${order.status}`)}</dd>
         </div>
-        <div>
-          <span className="text-neutral-500">{t('sales.seller')}：</span>
-          {order.sellerUnitName ?? order.sellerUnitId}
+        <div className="min-w-0 break-words">
+          <dt className="inline text-ink-muted">{t('sales.seller')}：</dt>
+          <dd className="inline">{order.sellerUnitName ?? order.sellerUnitId}</dd>
         </div>
-        <div>
-          <span className="text-neutral-500">{t('sales.buyer')}：</span>
-          {order.buyerUnitName ?? order.buyerUnitId}
+        <div className="min-w-0 break-words">
+          <dt className="inline text-ink-muted">{t('sales.buyer')}：</dt>
+          <dd className="inline">{order.buyerUnitName ?? order.buyerUnitId}</dd>
         </div>
-        <div>
-          <span className="text-neutral-500">{t('sales.deliveryMethod')}：</span>
-          {t(`sales.deliveryMethods.${order.deliveryMethod}`)}
+        <div className="min-w-0 break-words">
+          <dt className="inline text-ink-muted">{t('sales.deliveryMethod')}：</dt>
+          <dd className="inline">{t(`sales.deliveryMethods.${order.deliveryMethod}`)}</dd>
         </div>
         {order.deliveryAddress && (
-          <div>
-            <span className="text-neutral-500">{t('sales.deliveryAddress')}：</span>
-            {order.deliveryAddress}
+          <div className="min-w-0 break-words">
+            <dt className="inline text-ink-muted">{t('sales.deliveryAddress')}：</dt>
+            <dd className="inline">{order.deliveryAddress}</dd>
           </div>
         )}
         {order.carrier && (
-          <div>
-            <span className="text-neutral-500">{t('sales.carrier')}：</span>
-            {order.carrier}
+          <div className="min-w-0 break-words">
+            <dt className="inline text-ink-muted">{t('sales.carrier')}：</dt>
+            <dd className="inline">{order.carrier}</dd>
           </div>
         )}
         {order.trackingNo && (
-          <div>
-            <span className="text-neutral-500">{t('sales.trackingNo')}：</span>
-            {order.trackingNo}
+          <div className="min-w-0 break-words">
+            <dt className="inline text-ink-muted">{t('sales.trackingNo')}：</dt>
+            <dd className="inline">{order.trackingNo}</dd>
           </div>
         )}
-        <div>
-          <span className="text-neutral-500">{t('sales.freight')}：</span>
-          {order.freight ?? '0'}
+        <div className="min-w-0 break-words">
+          <dt className="inline text-ink-muted">{t('sales.freight')}：</dt>
+          <dd className="inline tabular-nums">{order.freight ?? '0'}</dd>
         </div>
-        <div>
-          <span className="text-neutral-500">{t('sales.discountPercent')}：</span>
-          {order.discountPercent}
+        <div className="min-w-0 break-words">
+          <dt className="inline text-ink-muted">{t('sales.discountPercent')}：</dt>
+          <dd className="inline tabular-nums">{order.discountPercent}</dd>
         </div>
-        <div>
-          <span className="text-neutral-500">{t('sales.currency')}：</span>
-          {order.currency}
+        <div className="min-w-0 break-words">
+          <dt className="inline text-ink-muted">{t('sales.currency')}：</dt>
+          <dd className="inline">{order.currency}</dd>
         </div>
-        <div>
-          <span className="text-neutral-500">{t('sales.totalAmount')}：</span>
-          {order.totalAmount === null ? '—' : `${order.totalAmount} ${order.currency}`}
+        <div className="min-w-0 break-words">
+          <dt className="inline text-ink-muted">{t('sales.totalAmount')}：</dt>
+          <dd className="inline tabular-nums">
+            {order.totalAmount === null ? '—' : `${order.totalAmount} ${order.currency}`}
+          </dd>
         </div>
-        <div>
-          <span className="text-neutral-500">{t('sales.createdAt')}：</span>
-          {order.createdAt ? formatDateTime(order.createdAt, locale) : '—'}
+        <div className="min-w-0 break-words">
+          <dt className="inline text-ink-muted">{t('sales.createdAt')}：</dt>
+          <dd className="inline">{order.createdAt ? formatDateTime(order.createdAt, locale) : '—'}</dd>
         </div>
         {order.sentAt && (
-          <div>
-            <span className="text-neutral-500">{t('sales.sentAt')}：</span>
-            {formatDateTime(order.sentAt, locale)}
+          <div className="min-w-0 break-words">
+            <dt className="inline text-ink-muted">{t('sales.sentAt')}：</dt>
+            <dd className="inline">{formatDateTime(order.sentAt, locale)}</dd>
           </div>
         )}
         {order.confirmedAt && (
-          <div>
-            <span className="text-neutral-500">{t('sales.confirmedAt')}：</span>
-            {formatDateTime(order.confirmedAt, locale)}
+          <div className="min-w-0 break-words">
+            <dt className="inline text-ink-muted">{t('sales.confirmedAt')}：</dt>
+            <dd className="inline">{formatDateTime(order.confirmedAt, locale)}</dd>
           </div>
         )}
         {order.remark && (
-          <div className="sm:col-span-2">
-            <span className="text-neutral-500">{t('sales.remark')}：</span>
-            {order.remark}
+          <div className="min-w-0 break-words sm:col-span-2">
+            <dt className="inline text-ink-muted">{t('sales.remark')}：</dt>
+            <dd className="inline">{order.remark}</dd>
           </div>
         )}
-      </div>
+      </dl>
 
-      <div>
+      <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-baseline gap-2">
-            <Text as="h2" weight="semibold" size={400}>
-              {t('sales.items')}
-            </Text>
+            <h2 className="text-base font-semibold text-ink">{t('sales.items')}</h2>
             {order.items.length > 0 && (
-              <Caption1 className="text-neutral-500">
+              <span className="text-xs text-ink-subtle tabular-nums">
                 {t('sales.pickedCount', { done: pickedCount, total: order.items.length })}
-              </Caption1>
+              </span>
             )}
           </div>
           {/* 勾选是本地状态，明确给一个清空入口：重打一份清单或换一单取货时不必逐行点掉。 */}
           {pickedCount > 0 && (
-            <Button size="small" appearance="subtle" onClick={picking.clear}>
+            <Button size="sm" variant="subtle" onClick={picking.clear}>
               {t('sales.clearPicked')}
             </Button>
           )}
         </div>
         {bundleSummaries.length > 0 && (
-          <div className="flex flex-col gap-1 rounded-lg bg-neutral-50 p-3">
+          <div className="flex flex-col gap-1 rounded-lg bg-surface-muted p-3">
             {bundleSummaries.map((bundle) => (
-              <Caption1 key={bundle.bundleItemId} className="text-neutral-700">
+              <p key={bundle.bundleItemId} className="text-xs text-ink-soft">
                 {t('sales.bundleSummary', {
                   name: bundle.bundleItemName,
                   contents: bundle.contents
                     .map((c) => `${c.itemName ?? c.itemId} ×${c.qty}`)
                     .join('、'),
                 })}
-              </Caption1>
+              </p>
             ))}
           </div>
         )}
@@ -355,22 +382,22 @@ export function SalesDetailPage() {
           items={order.items}
           rowKey={(l) => l.id}
           emptyText={t('sales.noItems')}
+          label={t('sales.items')}
         />
         {order.items.length > 0 && (
-          <Caption1 className="text-neutral-500">{t('sales.pickedHint')}</Caption1>
+          <p className="text-xs text-ink-subtle">{t('sales.pickedHint')}</p>
         )}
       </div>
 
       {order.allocations.length > 0 && (
-        <div>
-          <Text as="h2" weight="semibold" size={400}>
-            {t('sales.allocations')}
-          </Text>
+        <div className="flex flex-col gap-2">
+          <h2 className="text-base font-semibold text-ink">{t('sales.allocations')}</h2>
           <ResponsiveTable
             columns={allocColumns}
             items={order.allocations}
             rowKey={(l) => l.id}
             emptyText={t('sales.noAllocations')}
+            label={t('sales.allocations')}
           />
         </div>
       )}
@@ -388,46 +415,84 @@ export function SalesDetailPage() {
       )}
 
       {order.payment && (
-        <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
-          <Text as="h2" weight="semibold" size={400}>
-            {t('sales.payment')}
-          </Text>
-          <div className="text-sm">
-            <div>
-              <span className="text-neutral-500">{t('sales.paymentAmount')}：</span>
-              {order.payment.amount} {order.payment.currency}
+        <Card className="flex flex-col gap-2">
+          <CardHeader title={t('sales.payment')} className="mb-0" />
+          <dl className="flex flex-col gap-1 text-sm">
+            <div className="min-w-0 break-words">
+              <dt className="inline text-ink-muted">{t('sales.paymentAmount')}：</dt>
+              <dd className="inline tabular-nums">
+                {order.payment.amount} {order.payment.currency}
+              </dd>
             </div>
             {order.payment.methodNote && (
-              <div>
-                <span className="text-neutral-500">{t('sales.paymentMethod')}：</span>
-                {order.payment.methodNote}
+              <div className="min-w-0 break-words">
+                <dt className="inline text-ink-muted">{t('sales.paymentMethod')}：</dt>
+                <dd className="inline">{order.payment.methodNote}</dd>
               </div>
             )}
-            <div>
-              <span className="text-neutral-500">{t('sales.uploadedAt')}：</span>
-              {order.payment.uploadedAt ? formatDateTime(order.payment.uploadedAt, locale) : '—'}
+            <div className="min-w-0 break-words">
+              <dt className="inline text-ink-muted">{t('sales.uploadedAt')}：</dt>
+              <dd className="inline">
+                {order.payment.uploadedAt ? formatDateTime(order.payment.uploadedAt, locale) : '—'}
+              </dd>
             </div>
             {order.payment.refundNote && (
-              <div className="text-red-600">
-                <span className="text-neutral-500">{t('sales.refundNote')}：</span>
-                {order.payment.refundNote}
+              <div className="min-w-0 break-words text-danger-600">
+                <dt className="inline text-ink-muted">{t('sales.refundNote')}：</dt>
+                <dd className="inline">{order.payment.refundNote}</dd>
               </div>
             )}
             {order.payment.proofFileId && (
               <div className="mt-2 flex items-center gap-3">
-                <span className="text-neutral-500">{t('sales.paymentProofImage')}：</span>
-                <FileImage
-                  fileId={order.payment.proofFileId}
-                  className="h-24 w-24 rounded object-cover"
-                  alt={t('sales.paymentProofImage')}
-                />
+                <dt className="shrink-0 text-ink-muted">{t('sales.paymentProofImage')}：</dt>
+                <dd>
+                  <FileImage
+                    fileId={order.payment.proofFileId}
+                    className="h-24 w-24 rounded-lg object-cover"
+                    alt={t('sales.paymentProofImage')}
+                  />
+                </dd>
               </div>
             )}
-          </div>
-        </div>
+          </dl>
+        </Card>
       )}
 
       <AfterSaleSection order={order} />
+
+      <ConfirmDialog
+        open={confirm !== null}
+        onOpenChange={(next) => !next && setConfirm(null)}
+        title={
+          confirm === 'delete'
+            ? t('sales.deleteConfirm')
+            : confirm === 'cancel'
+              ? t('sales.cancelConfirm')
+              : t('sales.confirmReceiptConfirm')
+        }
+        confirmLabel={
+          confirm === 'delete'
+            ? t('sales.delete')
+            : confirm === 'cancel'
+              ? t('sales.cancelOrder')
+              : t('sales.confirmReceipt')
+        }
+        tone={confirm === 'delete' ? 'danger' : 'primary'}
+        busy={
+          confirm === 'delete'
+            ? deleteMutation.isPending
+            : confirm === 'cancel'
+              ? cancelMutation.isPending
+              : confirmMutation.isPending
+        }
+        onConfirm={() => {
+          const kind = confirm;
+          setConfirm(null);
+          if (kind === 'delete') deleteMutation.mutate();
+          else if (kind === 'cancel') cancelMutation.mutate();
+          else if (kind === 'receipt') confirmMutation.mutate();
+        }}
+      />
     </div>
   );
 }
@@ -456,29 +521,29 @@ function AfterSaleSection({ order }: { order: SalesOrderDetailDto }) {
   };
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
-      <Text as="h2" weight="semibold" size={400}>
-        {t('sales.afterSale')}
-      </Text>
+    <Card className="flex flex-col gap-2">
+      <CardHeader title={t('sales.afterSale')} className="mb-0" />
       {isLoading ? (
-        <Spinner size="tiny" label={t('common.loading')} />
+        <Spinner size="sm" label={t('common.loading')} />
       ) : (returns?.items.length ?? 0) === 0 ? (
-        <Text size={200} className="text-neutral-500">
-          {t('sales.noAfterSale')}
-        </Text>
+        <p className="text-xs text-ink-subtle">{t('sales.noAfterSale')}</p>
       ) : (
         <div className="flex flex-col gap-1 text-sm">
           {returns?.items.map((r) => (
-            <Link key={r.id} to={`/returns/${r.id}`} className="flex flex-wrap items-center gap-2 text-blue-600 hover:underline">
+            <Link
+              key={r.id}
+              to={`/returns/${r.id}`}
+              className="flex flex-wrap items-center gap-2 text-brand-700 hover:underline"
+            >
               <span>{r.returnNo}</span>
-              <span className="text-neutral-500">{t(`returns.statuses.${r.status}`)}</span>
-              <span className="text-neutral-500">{r.createdAt ? formatDateTime(r.createdAt, locale) : '—'}</span>
+              <span className="text-ink-subtle">{t(`returns.statuses.${r.status}`)}</span>
+              <span className="text-ink-subtle">{r.createdAt ? formatDateTime(r.createdAt, locale) : '—'}</span>
             </Link>
           ))}
         </div>
       )}
       {canCreate && <SalesReturnForm order={order} onCreated={refresh} />}
-    </div>
+    </Card>
   );
 }
 
@@ -541,31 +606,33 @@ function SalesReturnForm({
   };
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-neutral-100 p-3">
-      <Text weight="semibold">{t('sales.startAfterSale')}</Text>
+    <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface-muted p-3">
+      <h3 className="text-sm font-semibold text-ink">{t('sales.startAfterSale')}</h3>
       <div className="flex flex-col gap-1">
         {order.items.map((line) => {
           const row = lines[line.id] ?? { qty: '', reason: '' };
+          const lineName = line.itemName ?? line.itemId;
           return (
             <div key={line.id} className="flex flex-wrap items-center gap-2">
-              <span className="min-w-40 truncate text-sm">{line.itemName ?? line.itemId}</span>
+              <span className="min-w-40 truncate text-sm text-ink-soft">{lineName}</span>
               <Input
-                size="small"
                 type="number"
                 min={0}
-                style={{ maxWidth: 120 }}
+                className="w-28"
                 value={row.qty}
-                onChange={(_, d) =>
-                  setLines((prev) => ({ ...prev, [line.id]: { ...row, qty: d.value } }))
+                // 每行一对输入框：名称里带上物品，屏幕阅读器才能定位到具体哪一行。
+                aria-label={`${t('sales.afterSaleQtyPlaceholder')} ${lineName}`}
+                onChange={(e) =>
+                  setLines((prev) => ({ ...prev, [line.id]: { ...row, qty: e.target.value } }))
                 }
                 placeholder={t('sales.afterSaleQtyPlaceholder')}
               />
               <Input
-                size="small"
-                style={{ maxWidth: 260 }}
+                className="w-60"
                 value={row.reason}
-                onChange={(_, d) =>
-                  setLines((prev) => ({ ...prev, [line.id]: { ...row, reason: d.value } }))
+                aria-label={`${t('sales.afterSaleLineReason')} ${lineName}`}
+                onChange={(e) =>
+                  setLines((prev) => ({ ...prev, [line.id]: { ...row, reason: e.target.value } }))
                 }
                 placeholder={t('sales.afterSaleLineReason')}
               />
@@ -575,14 +642,19 @@ function SalesReturnForm({
       </div>
       <Input
         value={reason}
-        onChange={(_, d) => setReason(d.value)}
+        onChange={(e) => setReason(e.target.value)}
+        aria-label={t('sales.afterSaleReason')}
         placeholder={t('sales.afterSaleReason')}
       />
       <ImageUpload value={photos} onChange={setPhotos} />
-      {error && <Text className="text-red-600">{error}</Text>}
+      {error && (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
+      )}
       <div>
-        <Button appearance="primary" disabled={saving} onClick={() => void submit()}>
-          {saving ? <Spinner size="tiny" /> : t('sales.startAfterSale')}
+        <Button variant="primary" loading={saving} onClick={() => void submit()}>
+          {t('sales.startAfterSale')}
         </Button>
       </div>
     </div>
@@ -673,15 +745,11 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
   };
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
-      <Text as="h2" weight="semibold" size={400}>
-        {t('sales.fefoPreview')}
-      </Text>
-      <Text size={200} className="text-neutral-500">
-        {t('sales.fefoHint')}
-      </Text>
+    <Card className="flex flex-col gap-2">
+      <CardHeader title={t('sales.fefoPreview')} className="mb-0" />
+      <p className="text-xs text-ink-subtle">{t('sales.fefoHint')}</p>
       {isLoading ? (
-        <Spinner size="tiny" label={t('common.loading')} />
+        <Spinner size="sm" label={t('common.loading')} />
       ) : (
         order.items.map((line) => {
           const plan = suggestions[line.itemId] ?? {};
@@ -693,31 +761,30 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
               return ea.localeCompare(eb) || a.batchId.localeCompare(b.batchId);
             });
           return (
-            <div key={line.id} className="flex flex-col gap-1 rounded border border-neutral-100 p-2">
-              <Text weight="semibold">
+            <div key={line.id} className="flex flex-col gap-1 rounded-lg border border-line p-2">
+              <h3 className="text-sm font-semibold text-ink">
                 {line.itemName ?? line.itemId} × {line.qty}
-              </Text>
+              </h3>
               {batchRows.length === 0 ? (
-                <Text size={200} className="text-amber-600">
-                  {t('sales.errors.noBatchStock')}
-                </Text>
+                <p className="text-xs font-medium text-warning-700">{t('sales.errors.noBatchStock')}</p>
               ) : (
                 batchRows.map((row) => (
                   <div key={row.batchId} className="flex flex-wrap items-center gap-2 text-sm">
                     <span className="w-40 truncate">{row.batchNo ?? row.batchId}</span>
-                    <span className="text-neutral-500">
+                    <span className="text-ink-muted tabular-nums">
                       {row.expiryDate ?? '—'} · {t('inventory.qty')} {row.qty}
                     </span>
-                    <span className="text-neutral-400">
+                    <span className="text-ink-subtle tabular-nums">
                       {t('sales.fefoSuggest')} {plan[row.batchId] ?? '0'}
                     </span>
                     <Input
-                      size="small"
                       type="number"
                       min={0}
-                      style={{ maxWidth: 120 }}
+                      className="w-28"
                       value={manual[row.batchId] ?? ''}
-                      onChange={(_, d) => setManual((prev) => ({ ...prev, [row.batchId]: d.value }))}
+                      // 每个批次一行：名称里带上批次号，避免整页都是同一个「手工数量」。
+                      aria-label={`${t('sales.manualQty')} ${row.batchNo ?? row.batchId}`}
+                      onChange={(e) => setManual((prev) => ({ ...prev, [row.batchId]: e.target.value }))}
                       placeholder={t('sales.manualQty')}
                     />
                   </div>
@@ -727,28 +794,28 @@ function SendPanel({ order, onSent }: { order: SalesOrderDetailDto; onSent: () =
           );
         })
       )}
-      {error && <Text className="text-red-600">{error}</Text>}
+      {error && (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
+      )}
       {lineErrors && lineErrors.length > 0 && (
-        <div className="flex flex-col gap-1">
+        <div role="alert" className="flex flex-col gap-1 text-sm text-danger-600">
           {lineErrors.map((e, i) => (
-            <div key={`${e.index}-${i}`} className="text-red-600">
-              {e.message}
-            </div>
+            <p key={`${e.index}-${i}`}>{e.message}</p>
           ))}
         </div>
       )}
-      <div className="flex items-center gap-2">
-        <Button appearance="primary" disabled={sending} onClick={() => void send()}>
-          {sending ? <Spinner size="tiny" /> : t('sales.send')}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="primary" loading={sending} onClick={() => void send()}>
+          {t('sales.send')}
         </Button>
-        <Button appearance="secondary" disabled={sending} onClick={() => setManual({})}>
+        <Button variant="secondary" disabled={sending} onClick={() => setManual({})}>
           {t('sales.fefoAuto')}
         </Button>
-        <Text size={200} className="text-neutral-500">
-          {t('sales.sendConfirm')}
-        </Text>
+        <p className="text-xs text-warning-700">{t('sales.sendConfirm')}</p>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -790,30 +857,34 @@ function PaymentPanel({ order, onUploaded }: { order: SalesOrderDetailDto; onUpl
   };
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
-      <Text as="h2" weight="semibold" size={400}>
-        {t('sales.uploadPayment')}
-      </Text>
+    <Card className="flex flex-col gap-2">
+      <CardHeader title={t('sales.uploadPayment')} className="mb-0" />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label={t('sales.paymentAmount')} required>
-          <Input type="number" min={0} value={amount} onChange={(_, d) => setAmount(d.value)} />
+          <Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
         <Field label={t('sales.paymentMethod')}>
-          <Input value={methodNote} onChange={(_, d) => setMethodNote(d.value)} />
+          <Input value={methodNote} onChange={(e) => setMethodNote(e.target.value)} />
         </Field>
-        <Field label={t('sales.paymentProof')} className="sm:col-span-2">
+        <Field label={t('sales.paymentProof')} className="sm:col-span-2" unlabeled>
           <ImageUpload value={proofs} onChange={setProofs} />
         </Field>
       </div>
-      {error && <Text className="text-red-600">{error}</Text>}
+      {error && (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
+      )}
       {justUploaded && (
-        <Text className="text-green-700">{t('sales.paymentUploadedHint')}</Text>
+        <p role="status" className="text-sm text-success-600">
+          {t('sales.paymentUploadedHint')}
+        </p>
       )}
       <div className="flex items-center gap-2">
-        <Button appearance="primary" disabled={saving} onClick={() => void upload()}>
-          {saving ? <Spinner size="tiny" /> : t('sales.uploadPayment')}
+        <Button variant="primary" loading={saving} onClick={() => void upload()}>
+          {t('sales.uploadPayment')}
         </Button>
       </div>
-    </div>
+    </Card>
   );
 }

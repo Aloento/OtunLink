@@ -1,10 +1,3 @@
-import {
-  Button,
-  Input,
-  Spinner,
-  Text,
-  Title1,
-} from '@fluentui/react-components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +11,11 @@ import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { formatDateTime } from '../../i18n/format';
 import { useLocale } from '../../i18n/LocaleProvider';
+import { Field } from '../../ui/field';
+import { Input } from '../../ui/input';
+import { PageHeader } from '../../ui/page-header';
+import { Pagination } from '../../ui/pagination';
+import { Spinner } from '../../ui/spinner';
 
 const PAGE_SIZE = 20;
 
@@ -67,50 +65,67 @@ export function AuditLogsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Title1 as="h1">{t('admin.auditLogs.title')}</Title1>
+      <PageHeader title={t('admin.auditLogs.title')} />
 
-      <div className="flex flex-wrap gap-3">
-        <Input
-          value={filters.entityType ?? ''}
-          placeholder={t('admin.auditLogs.entityType')}
-          onChange={(_, d) => set('entityType')(d.value)}
-          className="min-w-52"
-        />
-        <Input
-          value={filters.entityId ?? ''}
-          placeholder={t('admin.auditLogs.entityId')}
-          onChange={(_, d) => set('entityId')(d.value)}
-          className="min-w-52"
-        />
-        <Input
-          value={filters.actorId ?? ''}
-          placeholder={t('admin.auditLogs.actorId')}
-          onChange={(_, d) => set('actorId')(d.value)}
-          className="min-w-52"
-        />
-        <Input
-          type="date"
-          value={filters.from ?? ''}
-          onChange={(_, d) => {
-            set('from')(d.value);
-            setPage(1);
-          }}
-        />
-        <Input
-          type="date"
-          value={filters.to ?? ''}
-          onChange={(_, d) => {
-            set('to')(d.value);
-            setPage(1);
-          }}
-        />
+      <div className="flex flex-wrap items-center gap-3">
+        <Field label={t('admin.auditLogs.entityType')} srOnlyLabel className="w-full sm:w-52">
+          <Input
+            value={filters.entityType ?? ''}
+            placeholder={t('admin.auditLogs.entityType')}
+            onChange={(event) => set('entityType')(event.target.value)}
+          />
+        </Field>
+        <Field label={t('admin.auditLogs.entityId')} srOnlyLabel className="w-full sm:w-52">
+          <Input
+            value={filters.entityId ?? ''}
+            placeholder={t('admin.auditLogs.entityId')}
+            onChange={(event) => set('entityId')(event.target.value)}
+          />
+        </Field>
+        <Field label={t('admin.auditLogs.actorId')} srOnlyLabel className="w-full sm:w-52">
+          <Input
+            value={filters.actorId ?? ''}
+            placeholder={t('admin.auditLogs.actorId')}
+            onChange={(event) => set('actorId')(event.target.value)}
+          />
+        </Field>
+        <Field
+          label={`${t('admin.auditLogs.createdAt')} ≥`}
+          srOnlyLabel
+          className="w-full sm:w-40"
+        >
+          <Input
+            type="date"
+            value={filters.from ?? ''}
+            onChange={(event) => {
+              set('from')(event.target.value);
+              setPage(1);
+            }}
+          />
+        </Field>
+        <Field
+          label={`${t('admin.auditLogs.createdAt')} ≤`}
+          srOnlyLabel
+          className="w-full sm:w-40"
+        >
+          <Input
+            type="date"
+            value={filters.to ?? ''}
+            onChange={(event) => {
+              set('to')(event.target.value);
+              setPage(1);
+            }}
+          />
+        </Field>
         <RefreshButton queryKey={['admin', 'audit-logs']} />
       </div>
 
       {isLoading ? (
         <Spinner label={t('common.loading')} />
       ) : isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.UNKNOWN')}
+        </p>
       ) : (
         <>
           <ResponsiveTable
@@ -118,31 +133,14 @@ export function AuditLogsPage() {
             items={data?.items ?? []}
             rowKey={(l) => l.id}
             emptyText={t('admin.auditLogs.empty')}
+            label={t('admin.auditLogs.title')}
           />
-          <div className="flex items-center justify-between text-sm text-neutral-600">
-            <span>{t('admin.auditLogs.total', { total })}</span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                ←
-              </Button>
-              <span>
-                {page} / {totalPages}
-              </span>
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                →
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onChange={setPage}
+            totalLabel={t('admin.auditLogs.total', { total })}
+          />
         </>
       )}
     </div>

@@ -1,5 +1,4 @@
 import { useIsAuthenticated } from '@azure/msal-react';
-import { Body1, Button, Caption1, Title3 } from '@fluentui/react-components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
@@ -11,6 +10,7 @@ import { useSession } from '../auth/SessionProvider';
 import { FullPageSpinner } from '../components/FullPageSpinner';
 import { ForbiddenPage } from '../components/ForbiddenPage';
 import { PendingPage } from '../pages/PendingPage';
+import { Button } from '../ui/button';
 import { canAccessPermissions } from './access';
 import { LOGIN_PATH } from './routes';
 
@@ -44,18 +44,20 @@ interface SessionErrorProps {
 function SessionErrorPage({ title, body, detail, actionLabel, onAction }: SessionErrorProps) {
   const { t } = useTranslation();
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6">
-      <Title3>{title}</Title3>
-      <Body1 className="text-center">{body}</Body1>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+      <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
+      <p className="max-w-xl text-sm text-ink-muted">{body}</p>
       {/* 诊断信息：以前两种完全不同的故障共用一句「服务器或网络异常」，导致无法区分
           「授权过期」与「接口 5xx」。这里把错误码/HTTP 状态直接摊开，便于自助排查。 */}
       {detail ? (
         <div className="flex max-w-xl flex-col items-center gap-1 text-center">
-          <Caption1>{t('session.detailLabel')}</Caption1>
-          <code className="break-all rounded bg-neutral-100 px-2 py-1 text-xs">{detail}</code>
+          <span className="text-xs text-ink-subtle">{t('session.detailLabel')}</span>
+          <code className="rounded bg-surface-muted px-2 py-1 text-xs break-all text-ink-soft">
+            {detail}
+          </code>
         </div>
       ) : null}
-      <Button appearance="primary" onClick={onAction}>
+      <Button variant="primary" onClick={onAction}>
         {actionLabel}
       </Button>
     </div>

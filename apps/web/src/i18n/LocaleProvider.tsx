@@ -5,8 +5,7 @@ import type { AppLocale } from '@otunlink/shared';
 import { changeLocale, readStoredLocale } from './index';
 
 // 语言上下文：持有当前语言状态并联动 i18next 与 document.documentElement.lang。
-// 注：当前 Fluent UI v9.74 的 FluentProvider 已移除 locale 属性（无内置文案本地化机制），
-// 因此 Fluent 层面的本地化仅通过 html lang 与组件内 t() 实现。
+// 文案本地化只有一条路径：组件内 t() + html lang（不再有组件库层面的 locale 注入）。
 
 interface LocaleContextValue {
   locale: AppLocale;

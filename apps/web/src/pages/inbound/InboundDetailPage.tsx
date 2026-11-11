@@ -1,4 +1,3 @@
-import { Button, Body1, Spinner, Text, Title1 } from '@fluentui/react-components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +14,11 @@ import { formatDateTime } from '../../i18n/format';
 import { ItemLink } from '../../components/ItemLink';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { RefreshButton } from '../../components/RefreshButton';
+import { Button } from '../../ui/button';
+import { Card } from '../../ui/card';
+import { ConfirmDialog } from '../../ui/confirm-dialog';
+import { PageHeader } from '../../ui/page-header';
+import { Spinner } from '../../ui/spinner';
 
 // 入库单详情：批次清单 + 草稿过账（建档批次 / 写库存台账）。
 export function InboundDetailPage() {
@@ -28,6 +32,7 @@ export function InboundDetailPage() {
 
   const [posting, setPosting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -51,7 +56,6 @@ export function InboundDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(t('inbound.deleteConfirm'))) return;
     setDeleting(true);
     setError(null);
     try {
@@ -61,17 +65,20 @@ export function InboundDetailPage() {
     } catch (cause) {
       setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));
       setDeleting(false);
+      setConfirmDelete(false);
     }
   };
 
   if (isLoading) return <Spinner label={t('common.loading')} />;
   if (isError || !data) {
     return (
-      <div className="flex flex-col gap-3">
-        <Text className="text-red-600">{t('errors.NOT_FOUND')}</Text>
-        <Link to="/inbound">
-          <Button appearance="secondary">{t('inbound.back')}</Button>
-        </Link>
+      <div className="flex flex-col items-start gap-3">
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.NOT_FOUND')}
+        </p>
+        <Button asChild variant="secondary">
+          <Link to="/inbound">{t('inbound.back')}</Link>
+        </Button>
       </div>
     );
   }
@@ -96,10 +103,14 @@ export function InboundDetailPage() {
     {
       key: 'batchNo',
       header: t('inbound.batchNo'),
-      render: (item) => item.batchNo ?? <Text className="text-neutral-400">—</Text>,
+      render: (item) => item.batchNo ?? <span className="text-ink-subtle">—</span>,
     },
-    { key: 'qty', header: t('inbound.qty'), render: (item) => item.qty },
-    { key: 'unitCost', header: t('inbound.unitCost'), render: (item) => item.unitCost },
+    { key: 'qty', header: t('inbound.qty'), render: (item) => <span className="block text-end tabular-nums">{item.qty}</span> },
+    {
+      key: 'unitCost',
+      header: t('inbound.unitCost'),
+      render: (item) => <span className="block text-end tabular-nums">{item.unitCost}</span>,
+    },
     {
       key: 'productionDate',
       header: t('inbound.productionDate'),
@@ -110,58 +121,72 @@ export function InboundDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">
-          {t('inbound.detail')} · {data.inboundNo}
-        </Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton queryKey={['inbound-orders', id]} />
-          <Link to="/inbound">
-            <Button appearance="secondary">{t('inbound.back')}</Button>
-          </Link>
-          {data.status === 'DRAFT' && canPost && (
-            <Button appearance="primary" disabled={posting} onClick={() => void handlePost()}>
-              {posting ? <Spinner size="tiny" /> : t('inbound.post')}
+      <PageHeader
+        title={`${t('inbound.detail')} · ${data.inboundNo}`}
+        actions={
+          <>
+            <RefreshButton queryKey={['inbound-orders', id]} />
+            <Button asChild variant="secondary">
+              <Link to="/inbound">{t('inbound.back')}</Link>
             </Button>
-          )}
-          {data.status === 'DRAFT' && canPost && (
-            <Button appearance="secondary" disabled={deleting} onClick={() => void handleDelete()}>
-              {deleting ? <Spinner size="tiny" /> : t('inbound.delete')}
-            </Button>
-          )}
-        </div>
-      </div>
+            {data.status === 'DRAFT' && canPost && (
+              <>
+                <Button variant="primary" loading={posting} onClick={() => void handlePost()}>
+                  {t('inbound.post')}
+                </Button>
+                <Button variant="secondary" disabled={deleting} onClick={() => setConfirmDelete(true)}>
+                  {t('inbound.delete')}
+                </Button>
+              </>
+            )}
+          </>
+        }
+      />
 
-      {error && <Text className="text-red-600">{error}</Text>}
-
-      {data.status === 'DRAFT' && canPost && (
-        <Text size={200} className="text-amber-700">
-          {t('inbound.postConfirm')}
-        </Text>
+      {error && (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
       )}
 
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-        {rows.map(([label, value]) => (
-          <div key={label} className="flex items-baseline justify-between border-b border-neutral-200 py-1">
-            <dt className="text-sm text-neutral-500">{label}</dt>
-            <dd className="text-sm font-medium text-neutral-900">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      {data.status === 'DRAFT' && canPost && (
+        <p className="text-sm text-warning-700">{t('inbound.postConfirm')}</p>
+      )}
 
-      {data.remark && <Body1>{data.remark}</Body1>}
+      <Card>
+        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {rows.map(([label, value]) => (
+            <div key={label} className="min-w-0">
+              <dt className="text-xs text-ink-subtle">{label}</dt>
+              <dd className="text-sm wrap-break-word text-ink">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
+
+      {data.remark && <p className="text-sm text-ink-soft">{data.remark}</p>}
 
       <div className="flex flex-col gap-2">
-        <Text as="h2" weight="semibold" size={400}>
-          {t('inbound.items')}
-        </Text>
+        <h2 className="text-base font-semibold text-ink">{t('inbound.items')}</h2>
         <ResponsiveTable
           columns={columns}
           items={data.items}
           rowKey={(item) => item.id}
           emptyText={t('inbound.noItems')}
+          label={t('inbound.items')}
         />
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={t('inbound.delete')}
+        description={<p className="text-sm text-ink-muted">{t('inbound.deleteConfirm')}</p>}
+        confirmLabel={t('inbound.delete')}
+        tone="danger"
+        busy={deleting}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

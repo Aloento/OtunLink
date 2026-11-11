@@ -1,5 +1,5 @@
-import { Button, Field, Input, Select, Spinner, Text, Textarea, Title1 } from '@fluentui/react-components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -15,6 +15,14 @@ import { RefreshButton } from '../../components/RefreshButton';
 import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
 import { useSession } from '../../auth/SessionProvider';
 import { specUnitOf, unitLabel } from '../../i18n/units';
+import { Button } from '../../ui/button';
+import { Combobox } from '../../ui/combobox';
+import { Field } from '../../ui/field';
+import { Input } from '../../ui/input';
+import { PageHeader } from '../../ui/page-header';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
+import { Textarea } from '../../ui/textarea';
 
 interface ItemLine {
   key: string;
@@ -60,6 +68,9 @@ export function InboundFormPage() {
   const [remark, setRemark] = useState('');
   const [lines, setLines] = useState<ItemLine[]>([emptyLine()]);
   const [itemSearch, setItemSearch] = useState('');
+  // 每行选择器里显示的文本（物品名），与共享的服务端搜索词 itemSearch 分开：
+  // 查询键仍然是 ['items','picker',itemSearch]，输入即触发服务端过滤。
+  const [lineQueries, setLineQueries] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,7 +79,7 @@ export function InboundFormPage() {
     queryFn: () => listUnits(),
   });
 
-  const { data: itemPage } = useQuery({
+  const { data: itemPage, isFetching: itemsFetching } = useQuery({
     queryKey: ['items', 'picker', itemSearch],
     queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
   });
@@ -113,6 +124,10 @@ export function InboundFormPage() {
       ),
     );
   };
+
+  // 至少保留一行，避免提交空清单。
+  const removeLine = (key: string) =>
+    setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== key) : prev));
 
   const buildPayload = (): InboundManualCreateInput | null => {
     if (!warehouseUnitId) {
@@ -159,17 +174,27 @@ export function InboundFormPage() {
 
   if (unitsLoading) return <Spinner label={t('common.loading')} />;
 
+  const itemOptions = (itemPage?.items ?? []).map((item) => ({
+    value: item.id,
+    label: item.name,
+    description: item.sku ?? undefined,
+  }));
+
   return (
     <div className="flex max-w-3xl flex-col gap-4">
-      <Title1 as="h1">{t('inbound.manualCreateTitle')}</Title1>
+      <PageHeader title={t('inbound.manualCreateTitle')} />
 
-      {error && <Text className="text-red-600">{error}</Text>}
+      {error && (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
+      )}
 
       <div className={`grid grid-cols-1 items-start gap-4 sm:grid-cols-2 ${FIELD_OVERFLOW_GUARD}`}>
         <Field label={t('inbound.warehouse')} required>
           <Select
             value={warehouseUnitId}
-            onChange={(_, d) => setWarehouseUnitId(d.value)}
+            onValueChange={setWarehouseUnitId}
             disabled={Boolean(me?.scopeUnitId)}
           >
             <option value="">—</option>
@@ -181,7 +206,7 @@ export function InboundFormPage() {
           </Select>
         </Field>
         <Field label={t('inbound.counterparty')}>
-          <Select value={counterpartyUnitId} onChange={(_, d) => setCounterpartyUnitId(d.value)}>
+          <Select value={counterpartyUnitId} onValueChange={setCounterpartyUnitId}>
             <option value="">—</option>
             {counterparties.map((u) => (
               <option key={u.id} value={u.id}>
@@ -191,119 +216,138 @@ export function InboundFormPage() {
           </Select>
         </Field>
         <Field label={t('inbound.remark')} className="sm:col-span-2">
-          <Textarea value={remark} onChange={(_, d) => setRemark(d.value)} rows={2} />
+          <Textarea value={remark} onChange={(e) => setRemark(e.target.value)} rows={2} />
         </Field>
       </div>
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Text as="h2" weight="semibold" size={400}>
-            {t('inbound.items')}
-          </Text>
-          <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-ink">{t('inbound.items')}</h2>
+          <div className="flex flex-wrap items-center gap-2">
             <RefreshButton queryKey={['items', 'picker']} additionalKeys={[['units', 'list']]} />
-            <Input
-              value={itemSearch}
-              placeholder={t('items.itemSearchPlaceholder')}
-              onChange={(_, d) => setItemSearch(d.value)}
-              className="min-w-44"
-            />
             <Button
-              size="small"
-              appearance="secondary"
+              size="sm"
+              variant="secondary"
               onClick={() => setLines((prev) => [...prev, emptyLine()])}
             >
               {t('inbound.addLine')}
             </Button>
           </div>
         </div>
-        {lines.map((line) => (
-          <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-            <div className={`${LINE_GRID_CLASS} sm:grid-cols-3`}>
-              <Field label={t('inbound.itemName')} required>
-                <Select value={line.itemId} onChange={(_, d) => pickItem(line.key, d.value)}>
-                  <option value="">—</option>
-                  {(itemPage?.items ?? []).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                      {item.sku ? ` · ${item.sku}` : ''}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field
-                label={`${t('inbound.qty')}${
-                  (() => {
-                    const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
-                    const unit = specUnitOf(item);
-                    return unit ? ` (${unitLabel(t, unit, item?.minSaleUnit)})` : '';
-                  })()
-                }`}
-                required
+
+        {lines.map((line, index) => {
+          const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
+          const unit = specUnitOf(item);
+          const unitSuffix = unit ? ` (${unitLabel(t, unit, item?.minSaleUnit)})` : '';
+
+          return (
+            <div
+              key={line.key}
+              className="flex flex-col gap-3 rounded-card border border-line bg-surface p-3"
+            >
+              <div className={`${LINE_GRID_CLASS} sm:grid-cols-3`}>
+                <Field label={t('inbound.itemName')} required>
+                  <Combobox
+                    value={lineQueries[line.key] ?? ''}
+                    onValueChange={(next) => {
+                      setLineQueries((prev) => ({ ...prev, [line.key]: next }));
+                      setItemSearch(next);
+                    }}
+                    options={itemOptions}
+                    onSelect={(option) => {
+                      pickItem(line.key, option.value);
+                      setLineQueries((prev) => ({ ...prev, [line.key]: option.label }));
+                    }}
+                    placeholder={t('items.itemSearchPlaceholder')}
+                    loading={itemsFetching}
+                    loadingText={t('common.loading')}
+                    emptyText={t('items.empty')}
+                    aria-label={t('inbound.itemName')}
+                    className="min-w-0"
+                  />
+                </Field>
+                <Field label={`${t('inbound.qty')}${unitSuffix}`} required>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={line.qty}
+                    onChange={(e) => setLine(line.key, 'qty', e.target.value)}
+                  />
+                </Field>
+                <Field label={t('inbound.unitCost')}>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={line.unitCost}
+                    onChange={(e) => setLine(line.key, 'unitCost', e.target.value)}
+                  />
+                </Field>
+              </div>
+
+              <div
+                className={`${LINE_GRID_CLASS} ${line.isPerishable ? 'sm:grid-cols-4' : 'sm:grid-cols-2'}`}
               >
-                <Input
-                  type="number"
-                  min={0}
-                  value={line.qty}
-                  onChange={(_, d) => setLine(line.key, 'qty', d.value)}
+                <Field label={t('inbound.batchNo')}>
+                  <Input
+                    value={line.batchNo}
+                    placeholder={t('inbound.batchNoPlaceholder')}
+                    onChange={(e) => setLine(line.key, 'batchNo', e.target.value)}
+                  />
+                </Field>
+                {line.isPerishable && (
+                  <>
+                    <Field label={t('inbound.productionDate')}>
+                      <Input
+                        type="date"
+                        value={line.productionDate}
+                        onChange={(e) => setLine(line.key, 'productionDate', e.target.value)}
+                      />
+                    </Field>
+                    <Field label={t('inbound.expiryDate')}>
+                      <Input
+                        type="date"
+                        value={line.expiryDate}
+                        onChange={(e) => setLine(line.key, 'expiryDate', e.target.value)}
+                      />
+                    </Field>
+                  </>
+                )}
+                <Field label={t('inbound.lineNote')}>
+                  <Input
+                    value={line.lineNote}
+                    onChange={(e) => setLine(line.key, 'lineNote', e.target.value)}
+                  />
+                </Field>
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  // 每行一个图标按钮：把行标识拼进可访问名称（物品名，未选时退行号）。
+                  aria-label={`${t('common.remove')} ${item?.name ?? index + 1}`}
+                  icon={<Trash2 aria-hidden className="size-4" />}
+                  disabled={lines.length === 1}
+                  onClick={() => removeLine(line.key)}
                 />
-              </Field>
-              <Field label={t('inbound.unitCost')}>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={line.unitCost}
-                  onChange={(_, d) => setLine(line.key, 'unitCost', d.value)}
-                />
-              </Field>
+              </div>
             </div>
-            <div className={`${LINE_GRID_CLASS} ${line.isPerishable ? 'sm:grid-cols-4' : 'sm:grid-cols-2'}`}>
-              <Field label={t('inbound.batchNo')}>
-                <Input
-                  value={line.batchNo}
-                  placeholder={t('inbound.batchNoPlaceholder')}
-                  onChange={(_, d) => setLine(line.key, 'batchNo', d.value)}
-                />
-              </Field>
-              {line.isPerishable && (
-                <>
-                  <Field label={t('inbound.productionDate')}>
-                    <Input
-                      type="date"
-                      value={line.productionDate}
-                      onChange={(_, d) => setLine(line.key, 'productionDate', d.value)}
-                    />
-                  </Field>
-                  <Field label={t('inbound.expiryDate')}>
-                    <Input
-                      type="date"
-                      value={line.expiryDate}
-                      onChange={(_, d) => setLine(line.key, 'expiryDate', d.value)}
-                    />
-                  </Field>
-                </>
-              )}
-              <Field label={t('inbound.lineNote')}>
-                <Input
-                  value={line.lineNote}
-                  onChange={(_, d) => setLine(line.key, 'lineNote', d.value)}
-                />
-              </Field>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div className="flex items-center gap-3">
-        <Button appearance="primary" disabled={saving} onClick={() => void submit()}>
-          {saving ? <Spinner size="tiny" /> : t('inbound.createAndPost')}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="primary" loading={saving} onClick={() => void submit()}>
+          {t('inbound.createAndPost')}
         </Button>
-        <Link to="/inbound">
-          <Button appearance="secondary" disabled={saving}>
-            {t('inbound.cancel')}
-          </Button>
-        </Link>
+        <Button
+          asChild
+          variant="secondary"
+          className={saving ? 'pointer-events-none opacity-50' : undefined}
+        >
+          <Link to="/inbound">{t('inbound.cancel')}</Link>
+        </Button>
       </div>
     </div>
   );

@@ -1,18 +1,3 @@
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Field,
-  Input,
-  Select,
-  Spinner,
-  Text,
-  Title1,
-} from '@fluentui/react-components';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,13 +18,30 @@ import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { formatDateTime } from '../../i18n/format';
+import { useLocale } from '../../i18n/LocaleProvider';
 import { unitLabel } from '../../i18n/units';
+import { Button } from '../../ui/button';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../ui/dialog';
+import { Field } from '../../ui/field';
+import { Input } from '../../ui/input';
+import { PageHeader } from '../../ui/page-header';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
 
 const CURRENCIES = ['CNY', 'USD', 'EUR'] as const;
 
 // 零售价管理：仓库 × 物品当前价 + 历史留痕；unit_cost 仅只读展示。
 export function RetailPricesPage() {
   const { t } = useTranslation();
+  const { locale } = useLocale();
   const { me } = useSession();
   const queryClient = useQueryClient();
 
@@ -145,27 +147,42 @@ export function RetailPricesPage() {
     {
       key: 'price',
       header: t('retailPrices.price'),
-      render: (row) => `${row.currency} ${row.price}`,
+      // 金额右对齐 + 等宽数字，便于逐行比较价位。
+      render: (row) => (
+        <span className="block text-end tabular-nums">{`${row.currency} ${row.price}`}</span>
+      ),
     },
     {
       key: 'unitCost',
       header: t('retailPrices.unitCost'),
-      render: (row) => (row.unitCost === null ? '—' : row.unitCost),
+      render: (row) => (
+        <span className="block text-end tabular-nums">{row.unitCost === null ? '—' : row.unitCost}</span>
+      ),
     },
     {
       key: 'updatedByName',
       header: t('retailPrices.updatedByName'),
       render: (row) => row.updatedByName ?? row.updatedBy ?? '—',
     },
-    { key: 'updatedAt', header: t('retailPrices.updatedAt'), render: (row) => row.updatedAt },
+    {
+      key: 'updatedAt',
+      header: t('retailPrices.updatedAt'),
+      render: (row) => formatDateTime(row.updatedAt, locale),
+    },
   ];
 
   const historyColumns: ResponsiveTableColumn<RetailPriceHistoryDto>[] = [
-    { key: 'updatedAt', header: t('retailPrices.updatedAt'), render: (row) => row.updatedAt },
+    {
+      key: 'updatedAt',
+      header: t('retailPrices.updatedAt'),
+      render: (row) => formatDateTime(row.updatedAt, locale),
+    },
     {
       key: 'price',
       header: t('retailPrices.price'),
-      render: (row) => `${row.currency} ${row.price}`,
+      render: (row) => (
+        <span className="block text-end tabular-nums">{`${row.currency} ${row.price}`}</span>
+      ),
     },
     {
       key: 'updatedByName',
@@ -182,26 +199,31 @@ export function RetailPricesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">{t('retailPrices.title')}</Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton
-            queryKey={['retail-prices']}
-            additionalKeys={[['items', 'picker'], ['units', 'list'], ['partnerships', 'list']]}
-          />
-          <Text size={200} className="text-neutral-500">
-            {t('retailPrices.unitCostHint')}
-          </Text>
-          {canWrite && (
-            <Button appearance="primary" onClick={openCreate}>
-              {t('retailPrices.add')}
-            </Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={t('retailPrices.title')}
+        actions={
+          <>
+            <RefreshButton
+              queryKey={['retail-prices']}
+              additionalKeys={[['items', 'picker'], ['units', 'list'], ['partnerships', 'list']]}
+            />
+            <p className="text-xs text-ink-subtle">{t('retailPrices.unitCostHint')}</p>
+            {canWrite && (
+              <Button variant="primary" onClick={openCreate}>
+                {t('retailPrices.add')}
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Select value={unitId} onChange={(_, d) => setUnitId(d.value)} aria-label={t('retailPrices.unit')}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <Select
+          value={unitId}
+          onValueChange={setUnitId}
+          className="w-full sm:w-56"
+          aria-label={t('retailPrices.unit')}
+        >
           <option value="">{t('retailPrices.allUnits')}</option>
           {warehouses.map((u) => (
             <option key={u.id} value={u.id}>
@@ -209,7 +231,12 @@ export function RetailPricesPage() {
             </option>
           ))}
         </Select>
-        <Select value={itemId} onChange={(_, d) => setItemId(d.value)} aria-label={t('retailPrices.item')}>
+        <Select
+          value={itemId}
+          onValueChange={setItemId}
+          className="w-full sm:w-56"
+          aria-label={t('retailPrices.item')}
+        >
           <option value="">{t('retailPrices.allItems')}</option>
           {(itemPage?.items ?? []).map((item) => (
             <option key={item.id} value={item.id}>
@@ -222,20 +249,35 @@ export function RetailPricesPage() {
       {pricesQuery.isLoading ? (
         <Spinner label={t('common.loading')} />
       ) : pricesQuery.isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.UNKNOWN')}
+        </p>
       ) : (
         <ResponsiveTable
           columns={columns}
           items={pricesQuery.data?.items ?? []}
           rowKey={(row) => row.id}
           emptyText={t('retailPrices.empty')}
+          label={t('retailPrices.title')}
           actions={(row) => (
-            <div className="flex items-center gap-2">
-              <Button size="small" appearance="secondary" onClick={() => setHistoryOf(row)}>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                // 每行都有「历史 / 编辑」：把物品名拼进可访问名称，否则屏幕阅读器只听到
+                // 同一串无法区分的按钮名。
+                aria-label={`${t('retailPrices.history')} ${row.itemName ?? row.itemId}`}
+                onClick={() => setHistoryOf(row)}
+              >
                 {t('retailPrices.history')}
               </Button>
               {canWrite && (
-                <Button size="small" appearance="primary" onClick={() => openEdit(row)}>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  aria-label={`${t('retailPrices.edit')} ${row.itemName ?? row.itemId}`}
+                  onClick={() => openEdit(row)}
+                >
                   {t('retailPrices.edit')}
                 </Button>
               )}
@@ -244,114 +286,136 @@ export function RetailPricesPage() {
         />
       )}
 
-      <Dialog open={draft !== null} onOpenChange={(_, d) => !d.open && setDraft(null)}>
-        <DialogSurface>
-          <DialogBody>
+      <Dialog
+        open={draft !== null}
+        onOpenChange={(open) => {
+          if (!open) setDraft(null);
+        }}
+        closeLabel={t('common.close')}
+      >
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>
               {draft?.mode === 'create' ? t('retailPrices.createTitle') : t('retailPrices.editTitle')}
             </DialogTitle>
-            <DialogContent>
-              {draft && (
-                <div className="flex flex-col gap-3">
-                  {draft.mode === 'edit' ? (
-                    <Text>
-                      {draft.unitName ?? draft.unitId} · {draft.itemName ?? draft.itemId}
-                    </Text>
-                  ) : (
-                    <>
-                      <Field label={t('retailPrices.unit')} required>
-                        <Select
-                          value={draft.unitId}
-                          onChange={(_, d) =>
-                            setDraft((prev) => (prev ? { ...prev, unitId: d.value, unitName: null } : prev))
-                          }
-                        >
-                          <option value="">{t('retailPrices.selectUnit')}</option>
-                          {warehouses.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.name}
-                            </option>
-                          ))}
-                        </Select>
-                      </Field>
-                      <Field label={t('retailPrices.item')} required>
-                        <Select
-                          value={draft.itemId}
-                          onChange={(_, d) =>
-                            setDraft((prev) => (prev ? { ...prev, itemId: d.value, itemName: null } : prev))
-                          }
-                        >
-                          <option value="">{t('retailPrices.selectItem')}</option>
-                          {(itemPage?.items ?? []).map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))}
-                        </Select>
-                      </Field>
-                    </>
-                  )}
-                  <Field label={t('retailPrices.price')} required>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={priceInput}
-                      onChange={(_, d) => setPriceInput(d.value)}
-                    />
-                  </Field>
-                  <Field label={t('retailPrices.currency')}>
-                    <Select value={currencyInput} onChange={(_, d) => setCurrencyInput(d.value)}>
-                      {CURRENCIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  {errorMessage && <Text className="text-red-600">{errorMessage}</Text>}
-                </div>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button
-                appearance="primary"
-                disabled={saveMutation.isPending || !canSave}
-                onClick={() => saveMutation.mutate()}
-              >
-                {saveMutation.isPending ? <Spinner size="tiny" /> : t('retailPrices.save')}
-              </Button>
-              <Button appearance="secondary" onClick={() => setDraft(null)}>
-                {t('retailPrices.cancel')}
-              </Button>
-            </DialogActions>
+          </DialogHeader>
+          <DialogBody>
+            {draft && (
+              <div className="flex flex-col gap-3">
+                {draft.mode === 'edit' ? (
+                  <p className="text-sm text-ink-soft">
+                    {draft.unitName ?? draft.unitId} · {draft.itemName ?? draft.itemId}
+                  </p>
+                ) : (
+                  <>
+                    <Field label={t('retailPrices.unit')} required>
+                      <Select
+                        value={draft.unitId}
+                        onValueChange={(value) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, unitId: value, unitName: null } : prev,
+                          )
+                        }
+                      >
+                        <option value="">{t('retailPrices.selectUnit')}</option>
+                        {warehouses.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label={t('retailPrices.item')} required>
+                      <Select
+                        value={draft.itemId}
+                        onValueChange={(value) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, itemId: value, itemName: null } : prev,
+                          )
+                        }
+                      >
+                        <option value="">{t('retailPrices.selectItem')}</option>
+                        {(itemPage?.items ?? []).map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  </>
+                )}
+                <Field label={t('retailPrices.price')} required>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={priceInput}
+                    onChange={(event) => setPriceInput(event.target.value)}
+                  />
+                </Field>
+                <Field label={t('retailPrices.currency')}>
+                  <Select value={currencyInput} onValueChange={setCurrencyInput}>
+                    {CURRENCIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                {errorMessage && (
+                  <p role="alert" className="text-sm text-danger-600">
+                    {errorMessage}
+                  </p>
+                )}
+              </div>
+            )}
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDraft(null)}>
+              {t('retailPrices.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              loading={saveMutation.isPending}
+              disabled={!canSave}
+              onClick={() => saveMutation.mutate()}
+            >
+              {t('retailPrices.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
-      <Dialog open={historyOf !== null} onOpenChange={(_, d) => !d.open && setHistoryOf(null)}>
-        <DialogSurface>
-          <DialogBody>
+      <Dialog
+        open={historyOf !== null}
+        onOpenChange={(open) => {
+          if (!open) setHistoryOf(null);
+        }}
+        closeLabel={t('common.close')}
+      >
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>{t('retailPrices.historyTitle')}</DialogTitle>
-            <DialogContent>
-              {historyQuery.isLoading ? (
-                <Spinner label={t('common.loading')} />
-              ) : (
-                <ResponsiveTable
-                  columns={historyColumns}
-                  items={historyQuery.data?.items ?? []}
-                  rowKey={(row) => row.id}
-                  emptyText={t('retailPrices.noHistory')}
-                />
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button appearance="secondary" onClick={() => setHistoryOf(null)}>
-                {t('retailPrices.close')}
-              </Button>
-            </DialogActions>
+          </DialogHeader>
+          <DialogBody>
+            {historyQuery.isLoading ? (
+              <Spinner label={t('common.loading')} />
+            ) : (
+              <ResponsiveTable
+                columns={historyColumns}
+                items={historyQuery.data?.items ?? []}
+                rowKey={(row) => row.id}
+                emptyText={t('retailPrices.noHistory')}
+                label={t('retailPrices.historyTitle')}
+              />
+            )}
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setHistoryOf(null)}>
+              {t('retailPrices.close')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );

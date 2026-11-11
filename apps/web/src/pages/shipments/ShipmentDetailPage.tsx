@@ -1,11 +1,3 @@
-import {
-  Badge,
-  Body1,
-  Button,
-  Spinner,
-  Text,
-  Title1,
-} from '@fluentui/react-components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,20 +5,25 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Permissions, hasPermission, type ShipmentItemDto } from '@otunlink/shared';
 
-import { useSession } from '../../auth/SessionProvider';
 import { errorI18nKey, isApiError } from '../../api/http';
-import { deleteShipment, getShipment, sendShipment, startCounting } from '../../api/shipments';
 import { refreshAfterWrite } from '../../api/queryClient';
-import { useLocale } from '../../i18n/LocaleProvider';
-import { formatDateTime } from '../../i18n/format';
-import { unitLabel } from '../../i18n/units';
+import { deleteShipment, getShipment, sendShipment, startCounting } from '../../api/shipments';
+import { useSession } from '../../auth/SessionProvider';
 import { ItemLink } from '../../components/ItemLink';
-import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { RefreshButton } from '../../components/RefreshButton';
+import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { ConfirmReceiptPanel } from '../../components/shipments/ConfirmReceiptPanel';
 import { ReturnCreatePanel } from '../../components/shipments/ReturnCreatePanel';
 import { ShipmentCountPanel } from '../../components/shipments/ShipmentCountPanel';
 import { ShipmentReviewsSection } from '../../components/shipments/ShipmentReviewsSection';
+import { formatDateTime } from '../../i18n/format';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { unitLabel } from '../../i18n/units';
+import { Badge } from '../../ui/badge';
+import { Button } from '../../ui/button';
+import { ConfirmDialog } from '../../ui/confirm-dialog';
+import { PageHeader } from '../../ui/page-header';
+import { Spinner } from '../../ui/spinner';
 
 // 发货单详情：字段 + 物流单号 + 清单（效期列 + 实收/差异高亮）
 // + 转交/编辑按钮 + 点货面板 + 差异修订审批。
@@ -42,6 +39,7 @@ export function ShipmentDetailPage() {
   const [sending, setSending] = useState(false);
   const [starting, setStarting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -96,7 +94,6 @@ export function ShipmentDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(t('shipments.deleteConfirm'))) return;
     setDeleting(true);
     setError(null);
     try {
@@ -112,11 +109,15 @@ export function ShipmentDetailPage() {
   if (isLoading) return <Spinner label={t('common.loading')} />;
   if (isError || !data) {
     return (
-      <div className="flex flex-col gap-3">
-        <Text className="text-red-600">{t('errors.NOT_FOUND')}</Text>
-        <Link to="/shipments">
-          <Button appearance="secondary">{t('shipments.back')}</Button>
-        </Link>
+      <div className="flex flex-col items-start gap-3">
+        {/* 失败态同样要有页面级标题：否则该状态下整页没有 <h1>，按标题导航的用户无从定位。 */}
+        <PageHeader title={t('shipments.detail')} className="w-full" />
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.NOT_FOUND')}
+        </p>
+        <Button asChild variant="secondary">
+          <Link to="/shipments">{t('shipments.back')}</Link>
+        </Button>
       </div>
     );
   }
@@ -146,26 +147,35 @@ export function ShipmentDetailPage() {
       header: t('shipments.itemSpec'),
       render: (item) => unitLabel(t, item.spec, item.minSaleUnit),
     },
-    { key: 'qty', header: t('shipments.expectedQty'), render: (item) => item.expectedQty },
+    {
+      key: 'qty',
+      header: t('shipments.expectedQty'),
+      render: (item) => <span className="tabular-nums">{item.expectedQty}</span>,
+    },
     {
       key: 'actual',
       header: t('shipments.counting.actualQty'),
       render: (item) =>
         item.actualQty === null ? (
-          <Text className="text-neutral-400">—</Text>
+          <span className="text-ink-subtle">—</span>
         ) : itemDiff(item) === 0 ? (
-          item.actualQty
+          <span className="tabular-nums">{item.actualQty}</span>
         ) : (
-          <span className="font-semibold text-red-600">
+          <span className="font-semibold tabular-nums text-danger-600">
             {item.actualQty}
-            <Badge appearance="tint" color="danger" className="ml-2">
+            <Badge tone="danger" className="ms-2">
               {itemDiff(item) > 0 ? '+' : ''}
               {itemDiff(item)}
             </Badge>
           </span>
         ),
     },
-    { key: 'price', header: t('shipments.unitPrice'), render: (item) => item.unitPrice ?? '—' },
+    {
+      key: 'price',
+      header: t('shipments.unitPrice'),
+      render: (item) =>
+        item.unitPrice === null ? '—' : <span className="tabular-nums">{item.unitPrice}</span>,
+    },
     {
       key: 'productionDate',
       header: t('shipments.productionDate'),
@@ -179,73 +189,75 @@ export function ShipmentDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">
-          {t('shipments.detail')} · {data.shipmentNo}
-        </Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton queryKey={['shipments', id]} />
-          <Link to="/shipments">
-            <Button appearance="secondary">{t('shipments.back')}</Button>
-          </Link>
-          {data.status === 'DRAFT' && canEdit && (
-            <Link to={`/shipments/${id}/edit`}>
-              <Button appearance="primary">{t('shipments.edit')}</Button>
-            </Link>
-          )}
-          {data.status === 'DRAFT' && canSend && (
-            <Button appearance="primary" disabled={sending} onClick={() => void handleSend()}>
-              {t('shipments.send')}
+      <PageHeader
+        title={`${t('shipments.detail')} · ${data.shipmentNo}`}
+        actions={
+          <>
+            <RefreshButton queryKey={['shipments', id]} />
+            <Button asChild variant="secondary">
+              <Link to="/shipments">{t('shipments.back')}</Link>
             </Button>
-          )}
-          {data.status === 'DRAFT' && canEdit && (
-            <Button appearance="secondary" disabled={deleting} onClick={() => void handleDelete()}>
-              {deleting ? <Spinner size="tiny" /> : t('shipments.delete')}
-            </Button>
-          )}
-          {data.status === 'SENT' && canCount && (
-            <Button appearance="primary" disabled={starting} onClick={() => void handleStartCounting()}>
-              {starting ? <Spinner size="tiny" /> : t('shipments.counting.start')}
-            </Button>
-          )}
-        </div>
-      </div>
+            {data.status === 'DRAFT' && canEdit && (
+              <Button asChild variant="primary">
+                <Link to={`/shipments/${id}/edit`}>{t('shipments.edit')}</Link>
+              </Button>
+            )}
+            {data.status === 'DRAFT' && canSend && (
+              <Button variant="primary" loading={sending} onClick={() => void handleSend()}>
+                {t('shipments.send')}
+              </Button>
+            )}
+            {data.status === 'DRAFT' && canEdit && (
+              <Button variant="secondary" loading={deleting} onClick={() => setConfirmDelete(true)}>
+                {t('shipments.delete')}
+              </Button>
+            )}
+            {data.status === 'SENT' && canCount && (
+              <Button variant="primary" loading={starting} onClick={() => void handleStartCounting()}>
+                {t('shipments.counting.start')}
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      {error && <Text className="text-red-600">{error}</Text>}
+      {error && (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
+      )}
 
       {differences.length > 0 && (
-        <div className="rounded-lg border border-red-300 bg-red-50 p-3">
-          <Text className="text-red-700">
+        <div className="rounded-lg border border-danger-200 bg-danger-50 p-3">
+          <p className="text-sm font-medium text-danger-600">
             {t('shipments.counting.hasDifference', { count: differences.length })}
-          </Text>
+          </p>
         </div>
       )}
 
       <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
         {rows.map(([label, value]) => (
-          <div key={label} className="flex items-baseline justify-between border-b border-neutral-200 py-1">
-            <dt className="text-sm text-neutral-500">{label}</dt>
-            <dd className="text-sm font-medium text-neutral-900">{value}</dd>
+          <div key={label} className="flex items-baseline justify-between gap-3 border-b border-line py-1">
+            <dt className="text-sm text-ink-muted">{label}</dt>
+            <dd className="min-w-0 text-end text-sm font-medium text-ink">{value}</dd>
           </div>
         ))}
       </dl>
 
-      {data.remark && <Body1>{data.remark}</Body1>}
+      {data.remark && <p className="text-sm text-ink-soft">{data.remark}</p>}
 
       <div className="flex flex-col gap-2">
-        <Text as="h2" weight="semibold" size={400}>
-          {t('shipments.trackings')}
-        </Text>
+        <h2 className="text-base font-semibold text-ink">{t('shipments.trackings')}</h2>
         {data.trackings.length === 0 ? (
-          <Text className="text-neutral-500">{t('shipments.noTrackings')}</Text>
+          <p className="text-sm text-ink-muted">{t('shipments.noTrackings')}</p>
         ) : (
           <div className="flex flex-wrap gap-3">
             {data.trackings.map((tr) => (
-              <div key={tr.id} className="rounded border border-neutral-200 p-3">
-                <div className="font-medium">
+              <div key={tr.id} className="min-w-0 rounded-lg border border-line bg-surface p-3">
+                <div className="font-medium text-ink">
                   {tr.carrier} · {tr.trackingNo}
                 </div>
-                {tr.note && <div className="text-sm text-neutral-500">{tr.note}</div>}
+                {tr.note && <div className="text-sm text-ink-muted">{tr.note}</div>}
               </div>
             ))}
           </div>
@@ -253,14 +265,13 @@ export function ShipmentDetailPage() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Text as="h2" weight="semibold" size={400}>
-          {t('shipments.items')}
-        </Text>
+        <h2 className="text-base font-semibold text-ink">{t('shipments.items')}</h2>
         <ResponsiveTable
           columns={itemColumns}
           items={data.items}
           rowKey={(item) => item.id}
           emptyText={t('shipments.noItems')}
+          label={t('shipments.items')}
         />
       </div>
 
@@ -280,6 +291,18 @@ export function ShipmentDetailPage() {
         canSubmitReview={canSubmitReview}
         canApproveReview={canApproveReview}
         onRefresh={refresh}
+      />
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={t('shipments.deleteConfirm')}
+        tone="danger"
+        busy={deleting}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void handleDelete();
+        }}
       />
     </div>
   );

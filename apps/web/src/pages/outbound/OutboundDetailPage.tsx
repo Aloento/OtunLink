@@ -1,4 +1,3 @@
-import { Badge, Button, Body1, Spinner, Text, Title1 } from '@fluentui/react-components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +15,12 @@ import { RefreshButton } from '../../components/RefreshButton';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { Badge } from '../../ui/badge';
+import { Button } from '../../ui/button';
+import { Card } from '../../ui/card';
+import { ConfirmDialog } from '../../ui/confirm-dialog';
+import { PageHeader } from '../../ui/page-header';
+import { Spinner } from '../../ui/spinner';
 
 // 出库单详情：批次分配结果 + 草稿过账（扣减库存 / 写台账流水）。
 export function OutboundDetailPage() {
@@ -29,6 +34,7 @@ export function OutboundDetailPage() {
 
   const [posting, setPosting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -52,7 +58,6 @@ export function OutboundDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(t('outbound.deleteConfirm'))) return;
     setDeleting(true);
     setError(null);
     try {
@@ -62,17 +67,20 @@ export function OutboundDetailPage() {
     } catch (cause) {
       setError(isApiError(cause) ? cause.message : t('errors.UNKNOWN'));
       setDeleting(false);
+      setConfirmDelete(false);
     }
   };
 
   if (isLoading) return <Spinner label={t('common.loading')} />;
   if (isError || !data) {
     return (
-      <div className="flex flex-col gap-3">
-        <Text className="text-red-600">{t('errors.NOT_FOUND')}</Text>
-        <Link to="/outbound">
-          <Button appearance="secondary">{t('outbound.back')}</Button>
-        </Link>
+      <div className="flex flex-col items-start gap-3">
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.NOT_FOUND')}
+        </p>
+        <Button asChild variant="secondary">
+          <Link to="/outbound">{t('outbound.back')}</Link>
+        </Button>
       </div>
     );
   }
@@ -102,88 +110,108 @@ export function OutboundDetailPage() {
       render: (item) =>
         item.batchNo ?? (
           <span title={t('outbound.fefoHint')}>
-            <Badge appearance="tint" color="brand">
-              {t('outbound.fefo')}
-            </Badge>
+            <Badge tone="brand">{t('outbound.fefo')}</Badge>
           </span>
         ),
     },
-    { key: 'qty', header: t('outbound.qty'), render: (item) => item.qty },
-    { key: 'unitCost', header: t('outbound.unitCost'), render: (item) => item.unitCost ?? '—' },
+    { key: 'qty', header: t('outbound.qty'), render: (item) => <span className="block text-end tabular-nums">{item.qty}</span> },
+    {
+      key: 'unitCost',
+      header: t('outbound.unitCost'),
+      render: (item) => (
+        <span className="block text-end tabular-nums">{item.unitCost ?? '—'}</span>
+      ),
+    },
   ];
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">
-          {t('outbound.detail')} · {data.outboundNo}
-        </Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton queryKey={['outbound-orders', id]} />
-          <Link to="/outbound">
-            <Button appearance="secondary">{t('outbound.back')}</Button>
-          </Link>
-          {data.status === 'DRAFT' && canPost && (
-            <Link to={`/outbound/${id}/edit`}>
-              <Button appearance="secondary">{t('outbound.edit')}</Button>
-            </Link>
-          )}
-          {data.status === 'DRAFT' && canPost && (
-            <Button appearance="primary" disabled={posting} onClick={() => void handlePost()}>
-              {posting ? <Spinner size="tiny" /> : t('outbound.post')}
+      <PageHeader
+        title={`${t('outbound.detail')} · ${data.outboundNo}`}
+        actions={
+          <>
+            <RefreshButton queryKey={['outbound-orders', id]} />
+            <Button asChild variant="secondary">
+              <Link to="/outbound">{t('outbound.back')}</Link>
             </Button>
-          )}
-          {data.status === 'DRAFT' && canPost && (
-            <Button appearance="secondary" disabled={deleting} onClick={() => void handleDelete()}>
-              {deleting ? <Spinner size="tiny" /> : t('outbound.delete')}
-            </Button>
-          )}
-        </div>
-      </div>
+            {data.status === 'DRAFT' && canPost && (
+              <>
+                <Button asChild variant="secondary">
+                  <Link to={`/outbound/${id}/edit`}>{t('outbound.edit')}</Link>
+                </Button>
+                <Button variant="primary" loading={posting} onClick={() => void handlePost()}>
+                  {t('outbound.post')}
+                </Button>
+                <Button variant="secondary" disabled={deleting} onClick={() => setConfirmDelete(true)}>
+                  {t('outbound.delete')}
+                </Button>
+              </>
+            )}
+          </>
+        }
+      />
 
-      {error && <Text className="text-red-600">{error}</Text>}
-
-      {data.status === 'DRAFT' && canPost && (
-        <Text size={200} className="text-amber-700">
-          {t('outbound.postConfirm')}
-        </Text>
+      {error && (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
       )}
 
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-        {rows.map(([label, value]) => (
-          <div key={label} className="flex items-baseline justify-between border-b border-neutral-200 py-1">
-            <dt className="text-sm text-neutral-500">{label}</dt>
-            <dd className="text-sm font-medium text-neutral-900">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      {data.status === 'DRAFT' && canPost && (
+        <p className="text-sm text-warning-700">{t('outbound.postConfirm')}</p>
+      )}
 
-      {data.remark && <Body1>{data.remark}</Body1>}
+      <Card>
+        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {rows.map(([label, value]) => (
+            <div key={label} className="min-w-0">
+              <dt className="text-xs text-ink-subtle">{label}</dt>
+              <dd className="text-sm wrap-break-word text-ink">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
+
+      {data.remark && <p className="text-sm text-ink-soft">{data.remark}</p>}
 
       {data.type === 'LOSS' && data.photoFileIds.length > 0 && (
         <div className="flex flex-col gap-2">
-          <Text as="h2" weight="semibold" size={400}>
-            {t('outbound.lossPhotos')}
-          </Text>
+          <h2 className="text-base font-semibold text-ink">{t('outbound.lossPhotos')}</h2>
           <div className="flex flex-wrap gap-3">
-            {data.photoFileIds.map((fileId) => (
-              <FileImage key={fileId} fileId={fileId} className="h-24 w-24 rounded object-cover" alt={fileId} />
+            {data.photoFileIds.map((fileId, index) => (
+              <FileImage
+                key={fileId}
+                fileId={fileId}
+                className="h-24 w-24 rounded object-cover"
+                // 后端只回 fileId：用「报损照片 + 序号」当替代文本，别把 UUID 读给屏幕阅读器。
+                alt={`${t('outbound.lossPhotos')} ${index + 1}`}
+              />
             ))}
           </div>
         </div>
       )}
 
       <div className="flex flex-col gap-2">
-        <Text as="h2" weight="semibold" size={400}>
-          {t('outbound.items')}
-        </Text>
+        <h2 className="text-base font-semibold text-ink">{t('outbound.items')}</h2>
         <ResponsiveTable
           columns={columns}
           items={data.items}
           rowKey={(item) => item.id}
           emptyText={t('outbound.noItems')}
+          label={t('outbound.items')}
         />
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={t('outbound.delete')}
+        description={<p className="text-sm text-ink-muted">{t('outbound.deleteConfirm')}</p>}
+        confirmLabel={t('outbound.delete')}
+        tone="danger"
+        busy={deleting}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

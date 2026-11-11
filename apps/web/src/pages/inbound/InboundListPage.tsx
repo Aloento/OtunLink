@@ -1,4 +1,3 @@
-import { Button, Select, Spinner, Text, Title1 } from '@fluentui/react-components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +10,11 @@ import { useLocale } from '../../i18n/LocaleProvider';
 import { formatDateTime } from '../../i18n/format';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { Button } from '../../ui/button';
+import { PageHeader } from '../../ui/page-header';
+import { Pagination } from '../../ui/pagination';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
 
 const PAGE_SIZE = 20;
 
@@ -33,7 +37,7 @@ export function InboundListPage() {
       key: 'inboundNo',
       header: t('inbound.inboundNo'),
       render: (order) => (
-        <Link to={`/inbound/${order.id}`} className="font-medium text-blue-600 hover:underline">
+        <Link to={`/inbound/${order.id}`} className="font-medium text-brand-700 hover:underline">
           {order.inboundNo}
         </Link>
       ),
@@ -70,36 +74,40 @@ export function InboundListPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">{t('inbound.title')}</Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton queryKey={['inbound-orders', 'list']} />
-          <Select
-            value={status}
-            onChange={(_, d) => {
-              setStatus(d.value as InboundStatus | '');
-              setPage(1);
-            }}
-            className="min-w-40"
-            aria-label={t('inbound.status')}
-          >
-            <option value="">{t('inbound.allStatuses')}</option>
-            {INBOUND_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {t(`inbound.statuses.${s}`)}
-              </option>
-            ))}
-          </Select>
-          <Link to="/inbound/new">
-            <Button appearance="primary">{t('inbound.manualCreateTitle')}</Button>
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title={t('inbound.title')}
+        actions={
+          <>
+            <RefreshButton queryKey={['inbound-orders', 'list']} />
+            <Select
+              value={status}
+              onValueChange={(next) => {
+                setStatus(next as InboundStatus | '');
+                setPage(1);
+              }}
+              placeholder={t('inbound.allStatuses')}
+              aria-label={t('inbound.status')}
+              className="w-full min-w-0 sm:w-40"
+            >
+              {INBOUND_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {t(`inbound.statuses.${s}`)}
+                </option>
+              ))}
+            </Select>
+            <Button asChild variant="primary">
+              <Link to="/inbound/new">{t('inbound.manualCreateTitle')}</Link>
+            </Button>
+          </>
+        }
+      />
 
       {isLoading ? (
         <Spinner label={t('common.loading')} />
       ) : isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.UNKNOWN')}
+        </p>
       ) : (
         <>
           <ResponsiveTable
@@ -107,31 +115,14 @@ export function InboundListPage() {
             items={data?.items ?? []}
             rowKey={(order) => order.id}
             emptyText={t('inbound.empty')}
+            label={t('inbound.title')}
           />
-          <div className="flex items-center justify-between text-sm text-neutral-600">
-            <span>{t('inbound.total', { total })}</span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                ←
-              </Button>
-              <span>
-                {page} / {totalPages}
-              </span>
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                →
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onChange={setPage}
+            totalLabel={t('inbound.total', { total })}
+          />
         </>
       )}
     </div>

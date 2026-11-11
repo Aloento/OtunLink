@@ -1,17 +1,3 @@
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Input,
-  Select,
-  Spinner,
-  Text,
-  Title1,
-} from '@fluentui/react-components';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +14,22 @@ import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { ScannerDialog } from '../../components/ScannerDialog';
 import { specUnitOf, unitLabel } from '../../i18n/units';
+import { Button } from '../../ui/button';
+import { ConfirmDialog } from '../../ui/confirm-dialog';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../ui/dialog';
+import { Input } from '../../ui/input';
+import { PageHeader } from '../../ui/page-header';
+import { Pagination } from '../../ui/pagination';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
 
 const PAGE_SIZE = 20;
 
@@ -50,6 +52,9 @@ export function ItemsPage() {
   const [mergeQuery, setMergeQuery] = useState('');
   const [merging, setMerging] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
+  // 合并会永久删除来源物品，二次确认改用 <ConfirmDialog>（浏览器原生 confirm 弹窗
+  // 无法承载破坏性操作的初始焦点与 tone）。
+  const [mergeConfirmOpen, setMergeConfirmOpen] = useState(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -79,7 +84,6 @@ export function ItemsPage() {
 
   const handleMerge = async () => {
     if (!mergeTargetId || !mergeSourceId) return;
-    if (!window.confirm(t('items.mergeConfirm'))) return;
     setMerging(true);
     setMergeError(null);
     try {
@@ -130,7 +134,7 @@ export function ItemsPage() {
       key: 'name',
       header: t('items.name'),
       render: (item) => (
-        <Link to={`/items/${item.id}`} className="font-medium text-blue-600 hover:underline">
+        <Link to={`/items/${item.id}`} className="font-medium text-brand-700 hover:underline">
           {item.name}
         </Link>
       ),
@@ -168,54 +172,68 @@ export function ItemsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <Title1 as="h1">{t('items.title')}</Title1>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
-          <RefreshButton queryKey={['items', 'list']} additionalKeys={[['items', 'categories']]} />
-          <Input
-            value={q}
-            placeholder={t('items.searchPlaceholder')}
-            onChange={(_, d) => setQ(d.value)}
-            className="col-span-2 w-full sm:col-span-1 sm:min-w-52 sm:w-auto"
-          />
-          <Select
-            value={category}
-            onChange={(_, d) => {
-              setCategory(d.value);
-              setPage(1);
-            }}
-            className="w-full sm:min-w-36 sm:w-auto"
-            aria-label={t('items.category')}
-          >
-            <option value="">{t('items.categoryAll')}</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </Select>
-          <Button appearance="secondary" className="w-full sm:w-auto" onClick={() => setScanOpen(true)}>
-            {t('items.scan')}
-          </Button>
-          {canWrite && (
-            <Link to="/items/new">
-              <Button appearance="primary" className="w-full">{t('items.newItem')}</Button>
-            </Link>
-          )}
-          {canWrite && (
-            <Button appearance="secondary" className="col-span-2 w-full sm:col-span-1 sm:w-auto" onClick={() => setMergeOpen(true)}>
-              {t('items.merge')}
+      <PageHeader
+        title={t('items.title')}
+        actions={
+          // 手机上是两列按钮栅格（搜索占满一行），sm 以上收成一行工具条。
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+            <RefreshButton queryKey={['items', 'list']} additionalKeys={[['items', 'categories']]} />
+            <Input
+              value={q}
+              placeholder={t('items.searchPlaceholder')}
+              aria-label={t('items.searchPlaceholder')}
+              onChange={(event) => setQ(event.target.value)}
+              className="col-span-2 w-full sm:w-56"
+            />
+            <Select
+              value={category}
+              onValueChange={(value) => {
+                setCategory(value);
+                setPage(1);
+              }}
+              className="w-full sm:w-40"
+              aria-label={t('items.category')}
+            >
+              <option value="">{t('items.categoryAll')}</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+            <Button variant="secondary" className="w-full" onClick={() => setScanOpen(true)}>
+              {t('items.scan')}
             </Button>
-          )}
-        </div>
-      </div>
+            {canWrite && (
+              <Button asChild variant="primary" className="w-full">
+                <Link to="/items/new">{t('items.newItem')}</Link>
+              </Button>
+            )}
+            {canWrite && (
+              <Button
+                variant="secondary"
+                className="col-span-2 w-full sm:col-span-1 sm:w-auto"
+                onClick={() => setMergeOpen(true)}
+              >
+                {t('items.merge')}
+              </Button>
+            )}
+          </div>
+        }
+      />
 
-      {scanMessage && <Text className="text-blue-700">{scanMessage}</Text>}
+      {scanMessage && (
+        <p role="status" className="text-sm text-brand-700">
+          {scanMessage}
+        </p>
+      )}
 
       {isLoading ? (
         <Spinner label={t('common.loading')} />
       ) : isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.UNKNOWN')}
+        </p>
       ) : (
         <>
           <ResponsiveTable
@@ -223,88 +241,92 @@ export function ItemsPage() {
             items={data?.items ?? []}
             rowKey={(item) => item.id}
             emptyText={t('items.empty')}
+            label={t('items.title')}
           />
-          <div className="flex items-center justify-between text-sm text-neutral-600">
-            <span>
-              {t('items.total', { total })}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                ←
-              </Button>
-              <span>
-                {page} / {totalPages}
-              </span>
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                →
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onChange={setPage}
+            totalLabel={t('items.total', { total })}
+          />
         </>
       )}
 
       <ScannerDialog open={scanOpen} onClose={() => setScanOpen(false)} onScan={handleScan} />
-      <Dialog open={mergeOpen} onOpenChange={(_, state) => !state.open && setMergeOpen(false)}>
-        <DialogSurface>
-          <DialogBody>
+
+      <Dialog open={mergeOpen} onOpenChange={setMergeOpen} closeLabel={t('common.close')}>
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>{t('items.mergeTitle')}</DialogTitle>
-            <DialogContent className="flex flex-col gap-3">
-              <Text>{t('items.mergeCatalogHint')}</Text>
-              <Input
-                value={mergeQuery}
-                onChange={(_, option) => setMergeQuery(option.value)}
-                placeholder={t('items.mergeSearch')}
-                aria-label={t('items.mergeSearch')}
-              />
-              <Select
-                value={mergeTargetId}
-                onChange={(_, option) => setMergeTargetId(option.value)}
-                aria-label={t('items.mergeTarget')}
-              >
-                <option value="">{t('items.mergeTarget')}</option>
-                {(mergeCandidates.data?.items ?? []).map((item) => (
+            <DialogDescription>{t('items.mergeCatalogHint')}</DialogDescription>
+          </DialogHeader>
+          <DialogBody className="flex flex-col gap-3">
+            <Input
+              value={mergeQuery}
+              onChange={(event) => setMergeQuery(event.target.value)}
+              placeholder={t('items.mergeSearch')}
+              aria-label={t('items.mergeSearch')}
+            />
+            <Select
+              value={mergeTargetId}
+              onValueChange={setMergeTargetId}
+              aria-label={t('items.mergeTarget')}
+            >
+              <option value="">{t('items.mergeTarget')}</option>
+              {(mergeCandidates.data?.items ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name} · {item.sku ?? item.id}
+                </option>
+              ))}
+            </Select>
+            <Select
+              value={mergeSourceId}
+              onValueChange={setMergeSourceId}
+              aria-label={t('items.mergeSource')}
+            >
+              <option value="">{t('items.mergeSource')}</option>
+              {(mergeCandidates.data?.items ?? [])
+                .filter((item) => item.id !== mergeTargetId)
+                .map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name} · {item.sku ?? item.id}
                   </option>
                 ))}
-              </Select>
-              <Select
-                value={mergeSourceId}
-                onChange={(_, option) => setMergeSourceId(option.value)}
-                aria-label={t('items.mergeSource')}
-              >
-                <option value="">{t('items.mergeSource')}</option>
-                {(mergeCandidates.data?.items ?? [])
-                  .filter((item) => item.id !== mergeTargetId)
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} · {item.sku ?? item.id}
-                    </option>
-                  ))}
-              </Select>
-              {mergeError && <Text className="text-red-600">{mergeError}</Text>}
-            </DialogContent>
-            <DialogActions>
-              <Button appearance="secondary" onClick={() => setMergeOpen(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button appearance="primary" disabled={!mergeTargetId || !mergeSourceId || merging} onClick={() => void handleMerge()}>
-                {merging ? <Spinner size="tiny" /> : t('items.merge')}
-              </Button>
-            </DialogActions>
+            </Select>
+            {mergeError && (
+              <p role="alert" className="text-sm text-danger-600">
+                {mergeError}
+              </p>
+            )}
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setMergeOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              loading={merging}
+              disabled={!mergeTargetId || !mergeSourceId}
+              onClick={() => setMergeConfirmOpen(true)}
+            >
+              {t('items.merge')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={mergeConfirmOpen}
+        onOpenChange={setMergeConfirmOpen}
+        title={t('items.mergeConfirm')}
+        confirmLabel={t('common.confirm')}
+        tone="danger"
+        busy={merging}
+        onConfirm={() => {
+          setMergeConfirmOpen(false);
+          void handleMerge();
+        }}
+      />
     </div>
   );
 }

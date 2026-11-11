@@ -1,4 +1,3 @@
-import { Button, Select, Spinner, Text, Title1 } from '@fluentui/react-components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,10 +6,15 @@ import { Link } from 'react-router-dom';
 import { SALES_STATUSES, type SalesOrderDto, type SalesStatus } from '@otunlink/shared';
 
 import { listSalesOrders } from '../../api/sales';
-import { useLocale } from '../../i18n/LocaleProvider';
-import { formatDateTime } from '../../i18n/format';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { formatDateTime } from '../../i18n/format';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { Button } from '../../ui/button';
+import { PageHeader } from '../../ui/page-header';
+import { Pagination } from '../../ui/pagination';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
 
 const PAGE_SIZE = 20;
 
@@ -33,7 +37,7 @@ export function SalesListPage() {
       key: 'salesNo',
       header: t('sales.salesNo'),
       render: (order) => (
-        <Link to={`/sales/${order.id}`} className="font-medium text-blue-600 hover:underline">
+        <Link to={`/sales/${order.id}`} className="font-medium text-brand-700 hover:underline">
           {order.salesNo}
         </Link>
       ),
@@ -61,7 +65,12 @@ export function SalesListPage() {
     {
       key: 'totalAmount',
       header: t('sales.totalAmount'),
-      render: (order) => (order.totalAmount === null ? '—' : `${order.totalAmount} ${order.currency}`),
+      // 金额右对齐 + 等宽数字：多行金额的个位/小数点才能对齐比较。
+      render: (order) => (
+        <span className="block text-end tabular-nums">
+          {order.totalAmount === null ? '—' : `${order.totalAmount} ${order.currency}`}
+        </span>
+      ),
     },
     {
       key: 'createdAt',
@@ -75,35 +84,40 @@ export function SalesListPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">{t('sales.title')}</Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton queryKey={['sales-orders', 'list']} />
-          <Select
-            value={status}
-            onChange={(_, d) => {
-              setStatus(d.value as SalesStatus | '');
-              setPage(1);
-            }}
-            aria-label={t('sales.status')}
-          >
-            <option value="">{t('sales.allStatuses')}</option>
-            {SALES_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {t(`sales.statuses.${s}`)}
-              </option>
-            ))}
-          </Select>
-          <Link to="/sales/new">
-            <Button appearance="primary">{t('sales.newOrder')}</Button>
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title={t('sales.title')}
+        actions={
+          <>
+            <RefreshButton queryKey={['sales-orders', 'list']} />
+            <Select
+              value={status}
+              onValueChange={(next) => {
+                setStatus(next as SalesStatus | '');
+                setPage(1);
+              }}
+              aria-label={t('sales.status')}
+              className="w-36"
+            >
+              <option value="">{t('sales.allStatuses')}</option>
+              {SALES_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {t(`sales.statuses.${s}`)}
+                </option>
+              ))}
+            </Select>
+            <Button asChild variant="primary">
+              <Link to="/sales/new">{t('sales.newOrder')}</Link>
+            </Button>
+          </>
+        }
+      />
 
       {isLoading ? (
         <Spinner label={t('common.loading')} />
       ) : isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.UNKNOWN')}
+        </p>
       ) : (
         <>
           <ResponsiveTable
@@ -111,31 +125,14 @@ export function SalesListPage() {
             items={data?.items ?? []}
             rowKey={(order) => order.id}
             emptyText={t('sales.empty')}
+            label={t('sales.title')}
           />
-          <div className="flex items-center justify-between text-sm text-neutral-600">
-            <span>{t('sales.total', { total })}</span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                ←
-              </Button>
-              <span>
-                {page} / {totalPages}
-              </span>
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                →
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onChange={setPage}
+            totalLabel={t('sales.total', { total })}
+          />
         </>
       )}
     </div>

@@ -61,6 +61,12 @@ export const en: TranslationSchema = {
     confirm: 'Confirm',
     remove: 'Remove',
     close: 'Close',
+    accountMenu: 'Account menu',
+    skipToContent: 'Skip to main content',
+    pagination: 'Pagination',
+    previousPage: 'Previous page',
+    nextPage: 'Next page',
+    actions: 'Actions',
   },
   dashboard: {
     title: 'Dashboard',

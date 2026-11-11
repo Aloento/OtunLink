@@ -1,4 +1,3 @@
-import { Body1, Spinner, Text, Title1 } from '@fluentui/react-components';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -9,6 +8,9 @@ import { getDashboardTodos, listNotifications } from '../api/notifications';
 import { RefreshButton } from '../components/RefreshButton';
 import { useLocale } from '../i18n/LocaleProvider';
 import { formatDateTime } from '../i18n/format';
+import { Card, CardHeader } from '../ui/card';
+import { PageHeader } from '../ui/page-header';
+import { Spinner } from '../ui/spinner';
 
 // 工作台：按角色 + scope 聚合待办（GET /dashboard/todos），并展示最近通知。
 export function DashboardPage() {
@@ -32,27 +34,29 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-2">
-          <Title1 as="h1">{t('dashboard.title')}</Title1>
-          <Body1>{t('dashboard.description')}</Body1>
-        </div>
-        <RefreshButton
-          queryKey={['dashboard', 'todos']}
-          additionalKeys={[['notifications', 'dashboard']]}
-        />
-      </div>
+      <PageHeader
+        title={t('dashboard.title')}
+        description={t('dashboard.description')}
+        actions={
+          <RefreshButton
+            queryKey={['dashboard', 'todos']}
+            additionalKeys={[['notifications', 'dashboard']]}
+          />
+        }
+      />
 
       {isLoading ? (
         <Spinner label={t('common.loading')} />
       ) : isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.UNKNOWN')}
+        </p>
       ) : (
         <>
-          <div className="rounded-lg border border-neutral-200 bg-white p-4">
-            <div className="mb-3 text-lg font-semibold text-neutral-900">{t('dashboard.overview')}</div>
+          <Card>
+            <CardHeader title={t('dashboard.overview')} />
             {items.length === 0 ? (
-              <Text className="text-neutral-500">{t('dashboard.empty')}</Text>
+              <p className="text-sm text-ink-subtle">{t('dashboard.empty')}</p>
             ) : (
               <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {items.map((todo) => (
@@ -60,33 +64,40 @@ export function DashboardPage() {
                 ))}
               </ul>
             )}
-          </div>
+          </Card>
 
-          <div className="rounded-lg border border-neutral-200 bg-white p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <Text as="h2" weight="semibold" size={400}>
-                {t('dashboard.recentNotifications')}
-              </Text>
-              <Link to="/notifications" className="text-sm text-blue-600 hover:underline">
-                {t('notifications.title')}
-              </Link>
-            </div>
+          <Card>
+            <CardHeader
+              title={t('dashboard.recentNotifications')}
+              actions={
+                <Link to="/notifications" className="text-sm text-brand-700 hover:underline">
+                  {t('notifications.title')}
+                </Link>
+              }
+            />
             {recentNotifications.length === 0 ? (
-              <Text className="text-neutral-500">{t('dashboard.noRecentNotifications')}</Text>
+              <p className="text-sm text-ink-subtle">{t('dashboard.noRecentNotifications')}</p>
             ) : (
               <ul className="flex flex-col gap-2">
                 {recentNotifications.map((notification) => (
-                  <li key={notification.id} className="flex items-start justify-between gap-3 border-b border-neutral-100 pb-2 last:border-b-0 last:pb-0">
+                  <li
+                    key={notification.id}
+                    className="flex items-start justify-between gap-3 border-b border-line pb-2 last:border-b-0 last:pb-0"
+                  >
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium text-neutral-900">{notification.title}</div>
-                      {notification.content && <div className="text-sm text-neutral-600">{notification.content}</div>}
+                      <div className="font-medium text-ink">{notification.title}</div>
+                      {notification.content && (
+                        <div className="text-sm text-ink-muted">{notification.content}</div>
+                      )}
                     </div>
-                    <span className="shrink-0 text-xs text-neutral-500">{formatDateTime(notification.createdAt, locale)}</span>
+                    <span className="shrink-0 text-xs text-ink-subtle">
+                      {formatDateTime(notification.createdAt, locale)}
+                    </span>
                   </li>
                 ))}
               </ul>
             )}
-          </div>
+          </Card>
         </>
       )}
     </div>
@@ -95,10 +106,10 @@ export function DashboardPage() {
 
 function TodoCard({ todo }: { todo: DashboardTodoItem }) {
   return (
-    <li className="rounded-lg border border-neutral-200 bg-white p-4">
+    <li className="rounded-lg border border-line bg-surface-muted p-4">
       <Link to={todo.link} className="flex flex-col gap-2 hover:underline">
-        <span className="text-sm text-neutral-600">{todo.label}</span>
-        <span className="text-2xl font-semibold text-neutral-900">{todo.count}</span>
+        <span className="text-sm text-ink-muted">{todo.label}</span>
+        <span className="text-2xl font-semibold tabular-nums text-ink">{todo.count}</span>
       </Link>
     </li>
   );

@@ -1,4 +1,3 @@
-import { Button, Select, Spinner, Text, Title1 } from '@fluentui/react-components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,10 +5,15 @@ import { Link } from 'react-router-dom';
 
 import { Permissions, SHIPMENT_STATUSES, hasPermission, type ShipmentDto, type ShipmentStatus } from '@otunlink/shared';
 
-import { useSession } from '../../auth/SessionProvider';
 import { listShipments } from '../../api/shipments';
+import { useSession } from '../../auth/SessionProvider';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { Button } from '../../ui/button';
+import { PageHeader } from '../../ui/page-header';
+import { Pagination } from '../../ui/pagination';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
 
 const PAGE_SIZE = 20;
 
@@ -35,7 +39,7 @@ export function ShipmentsPage() {
       key: 'shipmentNo',
       header: t('shipments.shipmentNo'),
       render: (shipment) => (
-        <Link to={`/shipments/${shipment.id}`} className="font-medium text-blue-600 hover:underline">
+        <Link to={`/shipments/${shipment.id}`} className="font-medium text-brand-700 hover:underline">
           {shipment.shipmentNo}
         </Link>
       ),
@@ -54,7 +58,7 @@ export function ShipmentsPage() {
     {
       key: 'boxes',
       header: t('shipments.boxes'),
-      render: (shipment) => String(shipment.boxesCount),
+      render: (shipment) => <span className="tabular-nums">{shipment.boxesCount}</span>,
     },
     {
       key: 'trackings',
@@ -76,38 +80,42 @@ export function ShipmentsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">{t('shipments.title')}</Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton queryKey={['shipments', 'list']} />
-          <Select
-            value={status}
-            onChange={(_, d) => {
-              setStatus(d.value as ShipmentStatus | '');
-              setPage(1);
-            }}
-            className="min-w-40"
-            aria-label={t('shipments.status')}
-          >
-            <option value="">{t('shipments.allStatuses')}</option>
-            {SHIPMENT_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {t(`shipments.statuses.${s}`)}
-              </option>
-            ))}
-          </Select>
-          {canCreate && (
-            <Link to="/shipments/new">
-              <Button appearance="primary">{t('shipments.newShipment')}</Button>
-            </Link>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={t('shipments.title')}
+        actions={
+          <>
+            <RefreshButton queryKey={['shipments', 'list']} />
+            <Select
+              value={status}
+              onValueChange={(value) => {
+                setStatus(value as ShipmentStatus | '');
+                setPage(1);
+              }}
+              className="w-full sm:w-40"
+              aria-label={t('shipments.status')}
+            >
+              <option value="">{t('shipments.allStatuses')}</option>
+              {SHIPMENT_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {t(`shipments.statuses.${s}`)}
+                </option>
+              ))}
+            </Select>
+            {canCreate && (
+              <Button asChild variant="primary">
+                <Link to="/shipments/new">{t('shipments.newShipment')}</Link>
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {isLoading ? (
         <Spinner label={t('common.loading')} />
       ) : isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.UNKNOWN')}
+        </p>
       ) : (
         <>
           <ResponsiveTable
@@ -115,31 +123,14 @@ export function ShipmentsPage() {
             items={data?.items ?? []}
             rowKey={(shipment) => shipment.id}
             emptyText={t('shipments.empty')}
+            label={t('shipments.title')}
           />
-          <div className="flex items-center justify-between text-sm text-neutral-600">
-            <span>{t('shipments.total', { total })}</span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                ←
-              </Button>
-              <span>
-                {page} / {totalPages}
-              </span>
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                →
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onChange={setPage}
+            totalLabel={t('shipments.total', { total })}
+          />
         </>
       )}
     </div>

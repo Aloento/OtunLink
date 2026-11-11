@@ -1,13 +1,3 @@
-import {
-  Button,
-  Field,
-  Input,
-  Select,
-  Spinner,
-  Text,
-  Textarea,
-  Title1,
-} from '@fluentui/react-components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,6 +27,13 @@ import { useSession } from '../../auth/SessionProvider';
 import { specUnitOf, unitLabel } from '../../i18n/units';
 import { RefreshButton } from '../../components/RefreshButton';
 import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
+import { Button } from '../../ui/button';
+import { Field } from '../../ui/field';
+import { Input } from '../../ui/input';
+import { PageHeader } from '../../ui/page-header';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
+import { Textarea } from '../../ui/textarea';
 
 interface LineState {
   key: string;
@@ -310,25 +307,27 @@ export function SalesFormPage() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-4">
-      <Title1 as="h1">{isEdit ? t('sales.editTitle') : t('sales.createTitle')}</Title1>
+      <PageHeader title={isEdit ? t('sales.editTitle') : t('sales.createTitle')} />
 
-      {error && <Text className="text-red-600">{error}</Text>}
+      {error && (
+        <p role="alert" className="text-sm text-danger-600">
+          {error}
+        </p>
+      )}
       {lineErrors && lineErrors.length > 0 && (
-        <div className="flex flex-col gap-1">
+        <div role="alert" className="flex flex-col gap-1 text-sm text-danger-600">
           {lineErrors.map((e, i) => (
-            <div key={`${e.index}-${i}`} className="text-red-600">
-              {e.message}
-            </div>
+            <p key={`${e.index}-${i}`}>{e.message}</p>
           ))}
         </div>
       )}
 
-      {/* items-start：Field 根节点是 display:grid，被同行带 hint 的字段撑高时会拉伸行高把控件挤下去 */}
+      {/* items-start：字段行被同排带 hint 的字段撑高时不拉伸其他字段；min-w-0 让原生 select 不按最长选项撑列 */}
       <div className={`grid grid-cols-1 items-start gap-4 sm:grid-cols-2 ${FIELD_OVERFLOW_GUARD}`}>
         <Field label={t('sales.seller')} required>
           <Select
             value={sellerUnitId}
-            onChange={(_, d) => setSellerUnitId(d.value)}
+            onValueChange={setSellerUnitId}
             disabled={isEdit || me?.role === 'WAREHOUSE'}
           >
             <option value="">—</option>
@@ -342,7 +341,7 @@ export function SalesFormPage() {
         <Field label={t('sales.buyer')} required>
           <Select
             value={buyerUnitId}
-            onChange={(_, d) => setBuyerUnitId(d.value)}
+            onValueChange={setBuyerUnitId}
             disabled={isEdit || me?.role === 'RETAILER'}
           >
             <option value="">—</option>
@@ -354,7 +353,7 @@ export function SalesFormPage() {
           </Select>
         </Field>
         <Field label={t('sales.source')} hint={t('sales.sourceHint')}>
-          <Select value={source} onChange={(_, d) => setSource(d.value as SalesSource)}>
+          <Select value={source} onValueChange={(next) => setSource(next as SalesSource)}>
             {SALES_SOURCES.map((s) => (
               <option key={s} value={s}>
                 {t(`sales.sources.${s}`)}
@@ -365,7 +364,7 @@ export function SalesFormPage() {
         <Field label={t('sales.deliveryMethod')} hint={t(`sales.deliveryMethodHints.${deliveryMethod}`)}>
           <Select
             value={deliveryMethod}
-            onChange={(_, d) => setDeliveryMethod(d.value as DeliveryMethod)}
+            onValueChange={(next) => setDeliveryMethod(next as DeliveryMethod)}
           >
             {DELIVERY_METHODS.map((m) => (
               <option key={m} value={m}>
@@ -378,7 +377,7 @@ export function SalesFormPage() {
           <Field label={t('sales.deliveryAddress')} className="sm:col-span-2">
             <Input
               value={deliveryAddress}
-              onChange={(_, d) => setDeliveryAddress(d.value)}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
               placeholder={t('sales.deliveryAddress')}
             />
           </Field>
@@ -387,7 +386,7 @@ export function SalesFormPage() {
           <Field label={t('sales.carrier')}>
             <Input
               value={carrier}
-              onChange={(_, d) => setCarrier(d.value)}
+              onChange={(e) => setCarrier(e.target.value)}
               placeholder={t('sales.carrierPlaceholder')}
             />
           </Field>
@@ -396,13 +395,13 @@ export function SalesFormPage() {
           <Field label={t('sales.trackingNo')}>
             <Input
               value={trackingNo}
-              onChange={(_, d) => setTrackingNo(d.value)}
+              onChange={(e) => setTrackingNo(e.target.value)}
               placeholder={t('sales.trackingNoPlaceholder')}
             />
           </Field>
         )}
         <Field label={t('sales.freight')}>
-          <Input type="number" min={0} value={freight} onChange={(_, d) => setFreight(d.value)} />
+          <Input type="number" min={0} value={freight} onChange={(e) => setFreight(e.target.value)} />
         </Field>
         <Field label={t('sales.discountPercent')}>
           <Input
@@ -410,15 +409,15 @@ export function SalesFormPage() {
             min={0}
             max={100}
             value={discountPercent}
-            onChange={(_, d) => setDiscountPercent(d.value)}
+            onChange={(e) => setDiscountPercent(e.target.value)}
           />
         </Field>
         <Field label={t('sales.currency')} hint={t('sales.currencyHint')}>
           <Select
             value={currency}
-            onChange={(_, d) => {
+            onValueChange={(next) => {
               setCurrencyTouched(true);
-              setCurrency(d.value as Currency);
+              setCurrency(next as Currency);
             }}
           >
             {CURRENCIES.map((c) => (
@@ -429,16 +428,14 @@ export function SalesFormPage() {
           </Select>
         </Field>
         <Field label={t('sales.remark')} className="sm:col-span-2">
-          <Textarea value={remark} onChange={(_, d) => setRemark(d.value)} rows={2} />
+          <Textarea value={remark} onChange={(e) => setRemark(e.target.value)} rows={2} />
         </Field>
       </div>
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Text as="h2" weight="semibold" size={400}>
-            {t('sales.items')}
-          </Text>
-          <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-ink">{t('sales.items')}</h2>
+          <div className="flex flex-wrap items-center gap-2">
             <RefreshButton
               queryKey={['items', 'picker']}
               additionalKeys={[['stock', 'batches'], ['units', 'list'], ['partnerships', 'list']]}
@@ -446,24 +443,26 @@ export function SalesFormPage() {
             <Input
               value={itemSearch}
               placeholder={t('items.itemSearchPlaceholder')}
-              onChange={(_, d) => setItemSearch(d.value)}
-              className="min-w-44"
+              // 占位符不能当名字：输入框自己要有可访问名称。
+              aria-label={t('items.itemSearchPlaceholder')}
+              onChange={(e) => setItemSearch(e.target.value)}
+              className="w-40 sm:w-44"
             />
-            <Button size="small" appearance="secondary" onClick={() => setLines((prev) => [...prev, emptyLine()])}>
+            <Button size="sm" variant="secondary" onClick={() => setLines((prev) => [...prev, emptyLine()])}>
               {t('sales.addLine')}
             </Button>
           </div>
         </div>
-        <Text size={200} className="text-neutral-500">
-          {t('sales.unitPriceOverrideHint')}
-        </Text>
-        {lines.map((line) => (
-          <div key={line.key} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-            <div
-              className={`${LINE_GRID_CLASS} [&_.fui-Select__select]:h-8 [&_.fui-Input__input]:h-8 sm:grid-cols-[1fr_1fr_1fr_auto]`}
-            >
+        <p className="text-xs text-ink-subtle">{t('sales.unitPriceOverrideHint')}</p>
+        {lines.map((line, index) => (
+          <div key={line.key} className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-3">
+            <div className={`${LINE_GRID_CLASS} sm:grid-cols-[1fr_1fr_1fr_auto]`}>
               <Field className="min-w-0" label={t('sales.itemName')} required>
-                <Select className="w-full" value={line.itemId} onChange={(_, d) => setLine(line.key, 'itemId', d.value)}>
+                <Select
+                  className="w-full"
+                  value={line.itemId}
+                  onValueChange={(next) => setLine(line.key, 'itemId', next)}
+                >
                   <option value="">—</option>
                   {(itemPage?.items ?? []).map((item) => (
                     <option key={item.id} value={item.id}>
@@ -476,11 +475,10 @@ export function SalesFormPage() {
               <Field
                 className="min-w-0"
                 label={`${t('sales.qty')}${(() => {
-                    const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
-                    const unit = specUnitOf(item);
-                    return unit ? ` (${unitLabel(t, unit, item?.minSaleUnit)})` : '';
-                  })()
-                  }`}
+                  const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
+                  const unit = specUnitOf(item);
+                  return unit ? ` (${unitLabel(t, unit, item?.minSaleUnit)})` : '';
+                })()}`}
                 required
               >
                 <Input
@@ -488,7 +486,7 @@ export function SalesFormPage() {
                   type="number"
                   min={0}
                   value={line.qty}
-                  onChange={(_, d) => setLine(line.key, 'qty', d.value)}
+                  onChange={(e) => setLine(line.key, 'qty', e.target.value)}
                 />
               </Field>
               <Field className="min-w-0" label={`${t('sales.unitPriceOverride')} (${currency})`}>
@@ -497,13 +495,15 @@ export function SalesFormPage() {
                   type="number"
                   min={0}
                   value={line.unitPriceOverride}
-                  onChange={(_, d) => setLine(line.key, 'unitPriceOverride', d.value)}
+                  onChange={(e) => setLine(line.key, 'unitPriceOverride', e.target.value)}
                 />
               </Field>
               <div className="flex items-end">
                 <Button
-                  size="small"
-                  appearance="subtle"
+                  size="sm"
+                  variant="subtle"
+                  // 每行一个「移除行」：可访问名称带上物品名（未选物品时退行号）。
+                  aria-label={`${t('sales.removeLine')} ${line.itemId ? itemNameOf(line.itemId) : index + 1}`}
                   disabled={lines.length <= 1}
                   onClick={() => removeLine(line.key)}
                 >
@@ -512,44 +512,45 @@ export function SalesFormPage() {
               </div>
             </div>
             {line.itemId && (
-              <Text size={200} className="text-neutral-500">
+              <p className="text-xs text-ink-subtle">
                 {t('sales.availableStock')}: {itemStock.get(line.itemId) ?? '—'}
                 {retailPriceByItem.get(line.itemId)
                   ? ` · ${t('sales.listPrice')}: ${retailPriceByItem.get(line.itemId)!.price} ${retailPriceByItem.get(line.itemId)!.currency}`
                   : ''}
-              </Text>
+              </p>
             )}
             {line.itemId &&
               !line.unitPriceOverride.trim() &&
               retailCurrencyOf(line.itemId) !== undefined &&
               retailCurrencyOf(line.itemId) !== currency && (
-                <Text size={200} className="text-red-600">
+                <p role="alert" className="text-xs font-medium text-danger-600">
                   {t('sales.lineCurrencyMismatch', {
                     listCurrency: retailCurrencyOf(line.itemId),
                     currency,
                   })}
-                </Text>
+                </p>
               )}
           </div>
         ))}
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-3">
-          <Button appearance="primary" disabled={saving} onClick={() => void submit()}>
-            {saving ? <Spinner size="tiny" /> : isEdit ? t('sales.create') : t('sales.saveDraft')}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="primary" loading={saving} onClick={() => void submit()}>
+            {isEdit ? t('sales.create') : t('sales.saveDraft')}
           </Button>
-          <Link to={isEdit ? `/sales/${id}` : '/sales'}>
-            <Button appearance="secondary" disabled={saving}>
+          <Button asChild variant="secondary">
+            <Link
+              to={isEdit ? `/sales/${id}` : '/sales'}
+              aria-disabled={saving || undefined}
+              tabIndex={saving ? -1 : undefined}
+              className={saving ? 'pointer-events-none opacity-50' : undefined}
+            >
               {t('sales.cancel')}
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
-        {!isEdit && (
-          <Text size={200} className="text-neutral-500">
-            {t('sales.saveDraftHint')}
-          </Text>
-        )}
+        {!isEdit && <p className="text-xs text-ink-subtle">{t('sales.saveDraftHint')}</p>}
       </div>
     </div>
   );

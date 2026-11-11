@@ -1,4 +1,3 @@
-import { Body1, FluentProvider, Title1, webLightTheme } from '@fluentui/react-components';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -13,6 +12,7 @@ import { SessionProvider } from './auth/SessionProvider';
 import { initI18n } from './i18n';
 import { LocaleProvider } from './i18n/LocaleProvider';
 import './pwa/registerSw';
+import { TooltipProvider } from './ui/tooltip';
 import './index.css';
 
 initI18n();
@@ -22,18 +22,18 @@ const msalInstance = getMsalInstance();
 function ConfigMissing() {
   const { t } = useTranslation();
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <Title1 as="h1">{t('app.name')}</Title1>
-      <Body1>{t('login.unconfigured')}</Body1>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+      <h1 className="text-2xl font-semibold tracking-tight text-ink">{t('app.name')}</h1>
+      <p className="text-sm text-ink-muted">{t('login.unconfigured')}</p>
     </div>
   );
 }
 
 function Root() {
   return (
-    <FluentProvider theme={webLightTheme}>
-      <LocaleProvider>
-        <QueryClientProvider client={queryClient}>
+    <LocaleProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider delayDuration={400} skipDelayDuration={200}>
           <BrowserRouter>
             {msalInstance ? (
               <AuthProvider instance={msalInstance}>
@@ -45,9 +45,9 @@ function Root() {
               <ConfigMissing />
             )}
           </BrowserRouter>
-        </QueryClientProvider>
-      </LocaleProvider>
-    </FluentProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </LocaleProvider>
   );
 }
 

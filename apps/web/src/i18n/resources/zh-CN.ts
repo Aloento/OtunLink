@@ -57,6 +57,12 @@ export const zhCN = {
     confirm: '确认',
     remove: '移除',
     close: '关闭',
+    accountMenu: '账号菜单',
+    skipToContent: '跳到主要内容',
+    pagination: '分页',
+    previousPage: '上一页',
+    nextPage: '下一页',
+    actions: '操作',
   },
   dashboard: {
     title: '工作台',

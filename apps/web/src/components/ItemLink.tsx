@@ -16,7 +16,7 @@ export function ItemLink({
       to={`/items/${itemId}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-blue-600 hover:underline"
+      className="text-brand-700 hover:underline"
     >
       {label}
     </Link>

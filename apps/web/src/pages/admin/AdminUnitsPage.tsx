@@ -1,20 +1,3 @@
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Field,
-  Input,
-  Select,
-  Spinner,
-  Tab,
-  TabList,
-  Text,
-  Title1,
-} from '@fluentui/react-components';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,6 +15,22 @@ import { type UnitDto } from '../../api/units';
 import { refreshAfterWrite } from '../../api/queryClient';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { RefreshButton } from '../../components/RefreshButton';
+import { Button } from '../../ui/button';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../ui/dialog';
+import { Field } from '../../ui/field';
+import { Input } from '../../ui/input';
+import { PageHeader } from '../../ui/page-header';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
 
 const UNIT_TYPE_LABEL_KEY: Record<UnitType, string> = {
   COLLECTOR: 'admin.units.typeCollector',
@@ -59,6 +58,9 @@ const emptyDraft = (): Draft => ({
   contact: '',
   isActive: 'true',
 });
+
+// 破坏性确认的初始焦点落在「取消」上，避免回车误删。
+const autofocusCancel = { 'data-autofocus': '' } as Record<string, string>;
 
 // 业务单元管理（AD02）：管理员维护组织内的集货/仓库/零售单元。
 export function AdminUnitsPage() {
@@ -155,8 +157,6 @@ export function AdminUnitsPage() {
     setDeleting(row);
   };
 
-  const filtered = (units ?? []).filter((u) => view === 'all' || u.type === view);
-
   const submit = () => {
     if (!draft) return;
     if (!draft.code.trim() || !draft.name.trim()) {
@@ -184,76 +184,118 @@ export function AdminUnitsPage() {
     },
   ];
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">{t('admin.units.title')}</Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton queryKey={['admin', 'units']} />
-          <Button appearance="primary" onClick={openCreate}>
-            {t('admin.units.newUnit')}
+  // 每个 Tab 面板共用同一套列定义，只按该 Tab 的类型过滤。
+  const renderList = (tab: 'all' | UnitType) => (
+    <ResponsiveTable
+      columns={columns}
+      items={(units ?? []).filter((u) => tab === 'all' || u.type === tab)}
+      rowKey={(u) => u.id}
+      emptyText={t('admin.units.empty')}
+      label={t('admin.units.title')}
+      actions={(u) => (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label={`${t('admin.units.edit')} ${u.name}`}
+            onClick={() => openEdit(u)}
+          >
+            {t('admin.units.edit')}
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
+            aria-label={`${t('admin.units.delete')} ${u.name}`}
+            onClick={() => openDelete(u)}
+          >
+            {t('admin.units.delete')}
           </Button>
         </div>
-      </div>
-
-      {isLoading ? (
-        <Spinner label={t('common.loading')} />
-      ) : isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
-      ) : (
-        <>
-          <TabList selectedValue={view} onTabSelect={(_, d) => setView(d.value as 'all' | UnitType)}>
-            <Tab value="all">{t('admin.units.tabAll')}</Tab>
-            {UNIT_TYPES.map((typ) => (
-              <Tab key={typ} value={typ}>
-                {t(UNIT_TYPE_LABEL_KEY[typ])}
-              </Tab>
-            ))}
-          </TabList>
-          <ResponsiveTable
-            columns={columns}
-            items={filtered}
-            rowKey={(u) => u.id}
-            emptyText={t('admin.units.empty')}
-            actions={(u) => (
-              <div className="flex items-center gap-2">
-                <Button size="small" appearance="secondary" onClick={() => openEdit(u)}>
-                  {t('admin.units.edit')}
-                </Button>
-                <Button size="small" appearance="outline" onClick={() => openDelete(u)}>
-                  {t('admin.units.delete')}
-                </Button>
-              </div>
-            )}
-          />
-        </>
       )}
+    />
+  );
 
-      <Dialog open={draft !== null} onOpenChange={(_, d) => !d.open && setDraft(null)}>
-        <DialogSurface>
-          <DialogBody>
+  const renderPanel = (tab: 'all' | UnitType) =>
+    isLoading ? (
+      <Spinner label={t('common.loading')} />
+    ) : isError ? (
+      <p role="alert" className="text-sm text-danger-600">
+        {t('errors.UNKNOWN')}
+      </p>
+    ) : (
+      renderList(tab)
+    );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title={t('admin.units.title')}
+        actions={
+          <>
+            <RefreshButton queryKey={['admin', 'units']} />
+            <Button variant="primary" onClick={openCreate}>
+              {t('admin.units.newUnit')}
+            </Button>
+          </>
+        }
+      />
+
+      <Tabs
+        value={view}
+        onValueChange={(next) => setView(next as 'all' | UnitType)}
+        className="flex flex-col gap-4"
+      >
+        <TabsList>
+          <TabsTrigger value="all">{t('admin.units.tabAll')}</TabsTrigger>
+          {UNIT_TYPES.map((typ) => (
+            <TabsTrigger key={typ} value={typ}>
+              {t(UNIT_TYPE_LABEL_KEY[typ])}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        <TabsContent value="all">{renderPanel('all')}</TabsContent>
+        {UNIT_TYPES.map((typ) => (
+          <TabsContent key={typ} value={typ}>
+            {renderPanel(typ)}
+          </TabsContent>
+        ))}
+      </Tabs>
+
+      <Dialog
+        open={draft !== null}
+        onOpenChange={(open) => {
+          if (!open) setDraft(null);
+        }}
+        closeLabel={t('common.close')}
+      >
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>
               {draft?.mode === 'create' ? t('admin.units.createTitle') : t('admin.units.editTitle')}
             </DialogTitle>
-            <DialogContent className="flex flex-col gap-4">
+          </DialogHeader>
+          <DialogBody>
+            <div className="flex flex-col gap-3">
               <Field label={t('admin.units.code')} required>
                 <Input
+                  {...{ 'data-autofocus': '' }}
                   value={draft?.code ?? ''}
-                  onChange={(_, d) => setDraft({ ...draft!, code: d.value })}
+                  onChange={(event) => setDraft({ ...draft!, code: event.target.value })}
                   disabled={saveMutation.isPending}
                 />
               </Field>
               <Field label={t('admin.units.name')} required>
                 <Input
                   value={draft?.name ?? ''}
-                  onChange={(_, d) => setDraft({ ...draft!, name: d.value })}
+                  onChange={(event) => setDraft({ ...draft!, name: event.target.value })}
                   disabled={saveMutation.isPending}
                 />
               </Field>
               <Field label={t('admin.units.type')}>
                 <Select
                   value={draft?.type ?? 'WAREHOUSE'}
-                  onChange={(_, d) => setDraft({ ...draft!, type: d.value as UnitType })}
+                  onValueChange={(value) => setDraft({ ...draft!, type: value as UnitType })}
                   disabled={saveMutation.isPending}
                 >
                   {UNIT_TYPES.map((typ) => (
@@ -266,73 +308,93 @@ export function AdminUnitsPage() {
               <Field label={t('admin.units.address')}>
                 <Input
                   value={draft?.address ?? ''}
-                  onChange={(_, d) => setDraft({ ...draft!, address: d.value })}
+                  onChange={(event) => setDraft({ ...draft!, address: event.target.value })}
                   disabled={saveMutation.isPending}
                 />
               </Field>
               <Field label={t('admin.units.contact')}>
                 <Input
                   value={draft?.contact ?? ''}
-                  onChange={(_, d) => setDraft({ ...draft!, contact: d.value })}
+                  onChange={(event) => setDraft({ ...draft!, contact: event.target.value })}
                   disabled={saveMutation.isPending}
                 />
               </Field>
               <Field label={t('admin.units.isActive')}>
                 <Select
                   value={draft?.isActive ?? 'true'}
-                  onChange={(_, d) => setDraft({ ...draft!, isActive: d.value })}
+                  onValueChange={(value) => setDraft({ ...draft!, isActive: value })}
                   disabled={saveMutation.isPending}
                 >
                   <option value="true">{t('common.yes')}</option>
                   <option value="false">{t('common.no')}</option>
                 </Select>
               </Field>
-              {saving?.error && <Text className="text-red-600">{saving.error}</Text>}
-            </DialogContent>
-            <DialogActions>
-              <Button
-                appearance="secondary"
-                onClick={() => setDraft(null)}
-                disabled={saveMutation.isPending}
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button appearance="primary" onClick={submit} disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? t('common.loading') : t('common.confirm')}
-              </Button>
-            </DialogActions>
+              {saving?.error && (
+                <p role="alert" className="text-sm text-danger-600">
+                  {saving.error}
+                </p>
+              )}
+            </div>
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDraft(null)} disabled={saveMutation.isPending}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              loading={saveMutation.isPending}
+              onClick={submit}
+              disabled={saveMutation.isPending}
+            >
+              {t('common.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
-      <Dialog open={deleting !== null} onOpenChange={(_, d) => !d.open && setDeleting(null)}>
-        <DialogSurface>
-          <DialogBody>
+      <Dialog
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleting(null);
+            setDeleteError(null);
+          }
+        }}
+        closeLabel={t('common.close')}
+      >
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>{t('admin.units.deleteTitle')}</DialogTitle>
-            <DialogContent>
-              <Text>{t('admin.units.deleteConfirm', { name: deleting?.name ?? '' })}</Text>
-              {deleteError && (
-                <Text className="mt-2 block text-red-600">{deleteError}</Text>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button
-                appearance="secondary"
-                onClick={() => setDeleting(null)}
-                disabled={deleteMutation.isPending}
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button
-                appearance="primary"
-                onClick={() => deleting && deleteMutation.mutate(deleting.id)}
-                disabled={deleteMutation.isPending}
-              >
-                {deleteMutation.isPending ? t('common.loading') : t('admin.units.deleteConfirmBtn')}
-              </Button>
-            </DialogActions>
+            <DialogDescription>
+              {t('admin.units.deleteConfirm', { name: deleting?.name ?? '' })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            {deleteError && (
+              <p role="alert" className="text-sm text-danger-600">
+                {deleteError}
+              </p>
+            )}
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter>
+            <Button
+              {...autofocusCancel}
+              variant="secondary"
+              onClick={() => setDeleting(null)}
+              disabled={deleteMutation.isPending}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              loading={deleteMutation.isPending}
+              onClick={() => deleting && deleteMutation.mutate(deleting.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {t('admin.units.deleteConfirmBtn')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );

@@ -1,5 +1,4 @@
 import { useIsAuthenticated, useMsal } from '@azure/msal-react';
-import { Body1, Button, Caption1, Title1 } from '@fluentui/react-components';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -14,6 +13,7 @@ import {
 import { consumeReturnTo } from '../auth/returnTo';
 import { useSession } from '../auth/SessionProvider';
 import { Copyright } from '../components/Copyright';
+import { Button } from '../ui/button';
 
 export function LoginPage() {
   const { instance } = useMsal();
@@ -61,26 +61,26 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
         <img src="/icons/logo.png" alt="" className="h-20 w-20 shrink-0" />
-        <Title1 as="h1">{t('app.name')}</Title1>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">{t('app.name')}</h1>
         {config ? (
           <>
-            <Body1>{t('login.description')}</Body1>
+            <p className="max-w-xl text-sm text-ink-muted">{t('login.description')}</p>
             {detailText ? (
-              <div className="flex max-w-xl flex-col items-center gap-1 text-center">
-                <Caption1>{t('login.redirectError', { detail: detailText })}</Caption1>
-              </div>
+              <p role="alert" className="max-w-xl text-sm text-danger-600">
+                {t('login.redirectError', { detail: detailText })}
+              </p>
             ) : null}
-            <Button appearance="primary" onClick={login}>
+            <Button variant="primary" onClick={login}>
               {t('login.button')}
             </Button>
           </>
         ) : (
-          <Body1>{t('login.unconfigured')}</Body1>
+          <p className="text-sm text-ink-muted">{t('login.unconfigured')}</p>
         )}
       </div>
-      <footer className="px-4 pb-6">
+      <footer className="px-4 pb-6 text-center">
         <Copyright />
       </footer>
     </div>

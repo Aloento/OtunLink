@@ -1,18 +1,3 @@
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Field,
-  Input,
-  Select,
-  Spinner,
-  Text,
-  Title1,
-} from '@fluentui/react-components';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +21,21 @@ import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/Re
 import { RefreshButton } from '../../components/RefreshButton';
 import { formatDateTime } from '../../i18n/format';
 import { useLocale } from '../../i18n/LocaleProvider';
+import { Button } from '../../ui/button';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../ui/dialog';
+import { Field } from '../../ui/field';
+import { Input } from '../../ui/input';
+import { PageHeader } from '../../ui/page-header';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
 
 interface Draft {
   mode: 'create' | 'edit';
@@ -59,6 +59,9 @@ const emptyDraft = (): Draft => ({
   status: 'ACTIVE',
   locale: 'zh-CN',
 });
+
+// 破坏性确认的初始焦点落在「取消」上，避免回车误删。
+const autofocusCancel = { 'data-autofocus': '' } as Record<string, string>;
 
 // 用户管理（AD01）：管理员为用户分配岗位与数据范围。
 export function AdminUsersPage() {
@@ -200,61 +203,94 @@ export function AdminUsersPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">{t('admin.users.title')}</Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton queryKey={['admin', 'users']} additionalKeys={[['admin', 'units']]} />
-          <Button appearance="primary" onClick={openCreate}>
-            {t('admin.users.newUser')}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={t('admin.users.title')}
+        actions={
+          <>
+            <RefreshButton queryKey={['admin', 'users']} additionalKeys={[['admin', 'units']]} />
+            <Button variant="primary" onClick={openCreate}>
+              {t('admin.users.newUser')}
+            </Button>
+          </>
+        }
+      />
 
       {isLoading ? (
         <Spinner label={t('common.loading')} />
       ) : isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.UNKNOWN')}
+        </p>
       ) : (
         <ResponsiveTable
           columns={columns}
           items={users ?? []}
           rowKey={(u) => u.id}
           emptyText={t('admin.users.empty')}
-          actions={(u) => (
-            <div className="flex gap-2">
-              <Button size="small" appearance="secondary" onClick={() => openEdit(u)}>
-                {t('admin.users.edit')}
-              </Button>
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={me?.id === u.id}
-                title={t('admin.users.deleteSelfHint')}
-                onClick={() => {
-                  setSaving(null);
-                  setDeleting(u);
-                }}
-              >
-                {t('admin.users.delete')}
-              </Button>
-            </div>
-          )}
+          label={t('admin.users.title')}
+          actions={(u) => {
+            // 不能删自己：用 aria-disabled + 可聚焦，而不是 disabled ——
+            // disabled 会把按钮移出 Tab 序，读屏用户永远听不到「为什么不能删」。
+            const isSelf = me?.id === u.id;
+            const hintId = `self-delete-hint-${u.id}`;
+            return (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  aria-label={`${t('admin.users.edit')} ${u.name}`}
+                  onClick={() => openEdit(u)}
+                >
+                  {t('admin.users.edit')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  aria-disabled={isSelf || undefined}
+                  aria-describedby={isSelf ? hintId : undefined}
+                  className="aria-disabled:opacity-50"
+                  aria-label={`${t('admin.users.delete')} ${u.name}`}
+                  onClick={() => {
+                    if (isSelf) return;
+                    setSaving(null);
+                    setDeleting(u);
+                  }}
+                >
+                  {t('admin.users.delete')}
+                </Button>
+                {isSelf && (
+                  <span id={hintId} className="sr-only">
+                    {t('admin.users.deleteSelfHint')}
+                  </span>
+                )}
+              </div>
+            );
+          }}
         />
       )}
 
-      <Dialog open={draft !== null} onOpenChange={(_, d) => !d.open && setDraft(null)}>
-        <DialogSurface>
-          <DialogBody>
+      <Dialog
+        open={draft !== null}
+        onOpenChange={(open) => {
+          if (!open) setDraft(null);
+        }}
+        closeLabel={t('common.close')}
+      >
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>
               {draft?.mode === 'create' ? t('admin.users.createTitle') : t('admin.users.editTitle')}
             </DialogTitle>
-            <DialogContent className="flex flex-col gap-4">
+          </DialogHeader>
+          <DialogBody>
+            <div className="flex flex-col gap-3">
               {draft?.mode === 'create' && (
                 <>
                   <Field label={t('admin.users.entraSub')} required>
                     <Input
+                      {...{ 'data-autofocus': '' }}
                       value={draft.entraSub}
-                      onChange={(_, d) => setDraft({ ...draft, entraSub: d.value })}
+                      onChange={(event) => setDraft({ ...draft, entraSub: event.target.value })}
                       disabled={saveMutation.isPending}
                     />
                   </Field>
@@ -262,7 +298,7 @@ export function AdminUsersPage() {
                     <Input
                       type="email"
                       value={draft.email}
-                      onChange={(_, d) => setDraft({ ...draft, email: d.value })}
+                      onChange={(event) => setDraft({ ...draft, email: event.target.value })}
                       disabled={saveMutation.isPending}
                     />
                   </Field>
@@ -270,15 +306,16 @@ export function AdminUsersPage() {
               )}
               <Field label={t('admin.users.name')} required>
                 <Input
+                  {...{ 'data-autofocus': draft?.mode === 'edit' ? '' : undefined }}
                   value={draft?.name ?? ''}
-                  onChange={(_, d) => setDraft({ ...draft!, name: d.value })}
+                  onChange={(event) => setDraft({ ...draft!, name: event.target.value })}
                   disabled={saveMutation.isPending}
                 />
               </Field>
               <Field label={t('admin.users.role')}>
                 <Select
                   value={draft?.role ?? 'COLLECTOR'}
-                  onChange={(_, d) => setDraft({ ...draft!, role: d.value })}
+                  onValueChange={(value) => setDraft({ ...draft!, role: value })}
                   disabled={saveMutation.isPending}
                 >
                   {USER_ROLES.map((r) => (
@@ -291,7 +328,7 @@ export function AdminUsersPage() {
               <Field label={t('admin.users.scopeUnit')}>
                 <Select
                   value={draft?.scopeUnitId ?? ''}
-                  onChange={(_, d) => setDraft({ ...draft!, scopeUnitId: d.value })}
+                  onValueChange={(value) => setDraft({ ...draft!, scopeUnitId: value })}
                   disabled={saveMutation.isPending}
                 >
                   <option value="">{t('admin.users.scopeNone')}</option>
@@ -305,7 +342,7 @@ export function AdminUsersPage() {
               <Field label={t('admin.users.status')}>
                 <Select
                   value={draft?.status ?? 'ACTIVE'}
-                  onChange={(_, d) => setDraft({ ...draft!, status: d.value })}
+                  onValueChange={(value) => setDraft({ ...draft!, status: value })}
                   disabled={saveMutation.isPending}
                 >
                   {USER_STATUSES.map((s) => (
@@ -318,65 +355,79 @@ export function AdminUsersPage() {
               <Field label={t('admin.users.locale')}>
                 <Input
                   value={draft?.locale ?? ''}
-                  onChange={(_, d) => setDraft({ ...draft!, locale: d.value })}
+                  onChange={(event) => setDraft({ ...draft!, locale: event.target.value })}
                   disabled={saveMutation.isPending}
                 />
               </Field>
-              {saving?.error && <Text className="text-red-600">{saving.error}</Text>}
-            </DialogContent>
-            <DialogActions>
-              <Button
-                appearance="secondary"
-                onClick={() => setDraft(null)}
-                disabled={saveMutation.isPending}
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button appearance="primary" onClick={submit} disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? t('common.loading') : t('common.confirm')}
-              </Button>
-            </DialogActions>
+              {saving?.error && (
+                <p role="alert" className="text-sm text-danger-600">
+                  {saving.error}
+                </p>
+              )}
+            </div>
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDraft(null)} disabled={saveMutation.isPending}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              loading={saveMutation.isPending}
+              onClick={submit}
+              disabled={saveMutation.isPending}
+            >
+              {t('common.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
       <Dialog
         open={deleting !== null}
-        onOpenChange={(_, d) => {
-          if (!d.open) {
+        onOpenChange={(open) => {
+          if (!open) {
             setDeleting(null);
             setSaving(null);
           }
         }}
+        closeLabel={t('common.close')}
       >
-        <DialogSurface>
-          <DialogBody>
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>{t('admin.users.deleteTitle')}</DialogTitle>
-            <DialogContent>
-              <Text>{t('admin.users.deleteConfirm', { name: deleting?.name ?? '' })}</Text>
-              {saving?.error && <Text className="text-red-600">{saving.error}</Text>}
-            </DialogContent>
-            <DialogActions>
-              <Button
-                appearance="secondary"
-                onClick={() => {
-                  setDeleting(null);
-                  setSaving(null);
-                }}
-                disabled={deleteMutation.isPending}
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button
-                appearance="primary"
-                onClick={() => deleting && deleteMutation.mutate(deleting.id)}
-                disabled={deleteMutation.isPending}
-              >
-                {deleteMutation.isPending ? t('common.loading') : t('admin.users.deleteConfirmBtn')}
-              </Button>
-            </DialogActions>
+            <DialogDescription>
+              {t('admin.users.deleteConfirm', { name: deleting?.name ?? '' })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            {saving?.error && (
+              <p role="alert" className="text-sm text-danger-600">
+                {saving.error}
+              </p>
+            )}
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter>
+            <Button
+              {...autofocusCancel}
+              variant="secondary"
+              onClick={() => {
+                setDeleting(null);
+                setSaving(null);
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              loading={deleteMutation.isPending}
+              onClick={() => deleting && deleteMutation.mutate(deleting.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {t('admin.users.deleteConfirmBtn')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );

@@ -1,16 +1,3 @@
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Input,
-  Spinner,
-  Text,
-  Textarea,
-} from '@fluentui/react-components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,6 +5,18 @@ import type { ShipmentDetailDto } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { createReturn } from '../../api/shipments';
+import { Button } from '../../ui/button';
+import { Card, CardHeader } from '../../ui/card';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../ui/dialog';
+import { Input } from '../../ui/input';
+import { Textarea } from '../../ui/textarea';
 
 // 发货退货（拒收）面板：READY 发货单 → 仓库发起部分/全部拒收，
 // 生成 PENDING 退货单并置发货单为 RETURN_PENDING。
@@ -80,75 +79,78 @@ export function ReturnCreatePanel({
   if (shipment.status !== 'READY' || !canCreate) return null;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Text as="h2" weight="semibold" size={400}>
-          {t('shipments.returnCreate.title')}
-        </Text>
-        <Button appearance="secondary" onClick={() => setOpen(true)}>
-          {t('shipments.returnCreate.action')}
-        </Button>
-      </div>
+    <Card>
+      <CardHeader
+        title={t('shipments.returnCreate.title')}
+        actions={
+          <Button variant="secondary" onClick={() => setOpen(true)}>
+            {t('shipments.returnCreate.action')}
+          </Button>
+        }
+      />
 
-      <Dialog open={open} onOpenChange={(_e, data) => setOpen(data.open)}>
-        <DialogSurface>
-          <DialogBody>
+      <Dialog open={open} onOpenChange={setOpen} closeLabel={t('common.close')}>
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>{t('shipments.returnCreate.title')}</DialogTitle>
-            <DialogContent>
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  {shipment.items.map((item) => (
-                    <div key={item.id} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <div className="font-medium">{item.name}</div>
-                        <Text size={200} className="text-neutral-500">
-                          {t('shipments.expectedQty')}: {item.expectedQty}
-                        </Text>
-                      </div>
-                      <Input
-                        appearance="underline"
-                        type="number"
-                        min={0}
-                        step={1}
-                        placeholder={t('shipments.returnCreate.qty')}
-                        value={qtys[item.id] ?? ''}
-                        onChange={(_e, data) =>
-                          setQtys((prev) => ({ ...prev, [item.id]: data.value }))
-                        }
-                        className="max-w-40"
-                        aria-label={`${t('shipments.returnCreate.qty')} ${item.name}`}
-                      />
-                      <Textarea
-                        placeholder={t('shipments.returnCreate.lineReasonPlaceholder')}
-                        value={lineReasons[item.id] ?? ''}
-                        onChange={(_e, data) =>
-                          setLineReasons((prev) => ({ ...prev, [item.id]: data.value }))
-                        }
-                        resize="vertical"
-                      />
+          </DialogHeader>
+          <DialogBody>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                {shipment.items.map((item, index) => (
+                  <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-line p-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <div className="min-w-0 font-medium text-ink">{item.name}</div>
+                      <p className="shrink-0 text-xs text-ink-muted">
+                        {t('shipments.expectedQty')}: {item.expectedQty}
+                      </p>
                     </div>
-                  ))}
-                </div>
-                <Textarea
-                  placeholder={t('shipments.returnCreate.reasonPlaceholder')}
-                  value={reason}
-                  onChange={(_e, data) => setReason(data.value)}
-                  resize="vertical"
-                />
+                    <Input
+                      type="number"
+                      min={0}
+                      step={1}
+                      placeholder={t('shipments.returnCreate.qty')}
+                      value={qtys[item.id] ?? ''}
+                      data-autofocus={index === 0 ? true : undefined}
+                      onChange={(e) => setQtys((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                      className="max-w-40"
+                      aria-label={`${t('shipments.returnCreate.qty')} ${item.name}`}
+                    />
+                    <Textarea
+                      placeholder={t('shipments.returnCreate.lineReasonPlaceholder')}
+                      aria-label={`${t('shipments.returnCreate.lineReasonPlaceholder')} ${item.name}`}
+                      value={lineReasons[item.id] ?? ''}
+                      onChange={(e) =>
+                        setLineReasons((prev) => ({ ...prev, [item.id]: e.target.value }))
+                      }
+                    />
+                  </div>
+                ))}
               </div>
-            </DialogContent>
-            {error && <Text className="px-1 text-red-600">{error}</Text>}
-            <DialogActions>
-              <Button appearance="secondary" disabled={submitting} onClick={() => setOpen(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button appearance="primary" disabled={submitting} onClick={() => void handleSubmit()}>
-                {submitting ? <Spinner size="tiny" /> : t('shipments.returnCreate.action')}
-              </Button>
-            </DialogActions>
+              <Textarea
+                placeholder={t('shipments.returnCreate.reasonPlaceholder')}
+                aria-label={t('shipments.returnCreate.reasonPlaceholder')}
+                value={reason}
+                data-autofocus={shipment.items.length === 0 ? true : undefined}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </div>
+            {error && (
+              <p role="alert" className="mt-3 text-sm text-danger-600">
+                {error}
+              </p>
+            )}
           </DialogBody>
-        </DialogSurface>
+          <DialogFooter>
+            <Button variant="secondary" disabled={submitting} onClick={() => setOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="primary" loading={submitting} onClick={() => void handleSubmit()}>
+              {t('shipments.returnCreate.action')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
-    </div>
+    </Card>
   );
 }

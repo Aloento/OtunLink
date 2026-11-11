@@ -1,4 +1,3 @@
-import { Button, Select, Spinner, Tab, TabList, Text, Title1 } from '@fluentui/react-components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +24,12 @@ import { unitLabel } from '../../i18n/units';
 import { ItemLink } from '../../components/ItemLink';
 import { RefreshButton } from '../../components/RefreshButton';
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { Button } from '../../ui/button';
+import { PageHeader } from '../../ui/page-header';
+import { Pagination } from '../../ui/pagination';
+import { Select } from '../../ui/select';
+import { Spinner } from '../../ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
 
 const PAGE_SIZE = 20;
 
@@ -34,8 +39,8 @@ type View = 'stock' | 'movements' | 'expired';
 function expiryCell(expiryDate: string | null): ReactNode {
   if (!expiryDate) return '—';
   const days = expiryRemainingDays(expiryDate);
-  if (days !== null && days < 0) return <span className="font-medium text-red-600">{expiryDate}</span>;
-  if (days !== null && days <= 30) return <span className="font-medium text-amber-600">{expiryDate}</span>;
+  if (days !== null && days < 0) return <span className="font-medium text-danger-600">{expiryDate}</span>;
+  if (days !== null && days <= 30) return <span className="font-medium text-warning-700">{expiryDate}</span>;
   return expiryDate;
 }
 
@@ -141,11 +146,20 @@ export function InventoryPage() {
     { key: 'spec', header: t('inventory.spec'), render: (row) => unitLabel(t, row.spec, row.minSaleUnit) },
     { key: 'batchNo', header: t('inventory.batchNo'), render: (row) => row.batchNo ?? '—' },
     { key: 'expiry', header: t('inventory.expiry'), render: (row) => expiryCell(row.expiryDate) },
-    { key: 'qty', header: t('inventory.qty'), render: (row) => row.qty },
+    {
+      key: 'qty',
+      header: t('inventory.qty'),
+      // 数量右对齐 + 等宽数字：逐行比对个位时不用左右找基准。
+      render: (row) => <span className="block text-end tabular-nums">{row.qty}</span>,
+    },
     ...(isRetailer
-      ? ([{ key: 'retailPrice', header: t('inventory.retailPrice'), render: (row: StockRowDto) => retailPriceOf(row.unitId, row.itemId) }] as ResponsiveTableColumn<StockRowDto>[])
-      : ([{ key: 'avgCost', header: t('inventory.avgCost'), render: (row: StockRowDto) => row.avgCost }] as ResponsiveTableColumn<StockRowDto>[])),
-    { key: 'available', header: t('inventory.available'), render: (row) => row.availableQty },
+      ? ([{ key: 'retailPrice', header: t('inventory.retailPrice'), render: (row: StockRowDto) => <span className="block text-end tabular-nums">{retailPriceOf(row.unitId, row.itemId)}</span> }] as ResponsiveTableColumn<StockRowDto>[])
+      : ([{ key: 'avgCost', header: t('inventory.avgCost'), render: (row: StockRowDto) => <span className="block text-end tabular-nums">{row.avgCost}</span> }] as ResponsiveTableColumn<StockRowDto>[])),
+    {
+      key: 'available',
+      header: t('inventory.available'),
+      render: (row) => <span className="block text-end tabular-nums">{row.availableQty}</span>,
+    },
   ];
 
   const expiredColumns: ResponsiveTableColumn<StockBatchDto>[] = [
@@ -163,7 +177,11 @@ export function InventoryPage() {
       render: (row) =>
         row.remainingDays === null ? '—' : t('inventory.remainingDaysValue', { days: row.remainingDays }),
     },
-    { key: 'qty', header: t('inventory.qty'), render: (row) => row.qty },
+    {
+      key: 'qty',
+      header: t('inventory.qty'),
+      render: (row) => <span className="block text-end tabular-nums">{row.qty}</span>,
+    },
   ];
 
   const movementColumns: ResponsiveTableColumn<StockMovementDto>[] = [
@@ -179,8 +197,16 @@ export function InventoryPage() {
       render: (row) => <ItemLink itemId={row.itemId} itemName={row.itemName} />,
     },
     { key: 'batchNo', header: t('inventory.batchNo'), render: (row) => row.batchNo ?? '—' },
-    { key: 'delta', header: t('inventory.delta'), render: (row) => row.qtyDelta },
-    { key: 'after', header: t('inventory.after'), render: (row) => row.qtyAfter },
+    {
+      key: 'delta',
+      header: t('inventory.delta'),
+      render: (row) => <span className="block text-end tabular-nums">{row.qtyDelta}</span>,
+    },
+    {
+      key: 'after',
+      header: t('inventory.after'),
+      render: (row) => <span className="block text-end tabular-nums">{row.qtyAfter}</span>,
+    },
     { key: 'refNo', header: t('inventory.refNo'), render: (row) => row.refNo ?? '—' },
   ];
 
@@ -205,34 +231,113 @@ export function InventoryPage() {
     navigate(`/outbound/new?${params.toString()}`);
   };
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title1 as="h1">{t('inventory.title')}</Title1>
-        <div className="flex items-center gap-2">
-          <RefreshButton
-            queryKey={view === 'stock' ? ['stock', 'list'] : view === 'movements' ? ['stock', 'movements'] : ['stock', 'expired']}
-          />
-          {canReadRetailPrices && (
-            <Link to="/retail-prices">
-              <Button appearance="secondary">{t('retailPrices.title')}</Button>
-            </Link>
-          )}
-          <TabList selectedValue={view} onTabSelect={(_, d) => setView(d.value as View)}>
-            <Tab value="stock">{t('inventory.tabStock')}</Tab>
-            <Tab value="movements">{t('inventory.tabMovements')}</Tab>
-            <Tab value="expired">{t('inventory.tabExpired')}</Tab>
-          </TabList>
-        </div>
-      </div>
+  // 三个面板共用同一段渲染：Tabs 只挂载当前面板，activeQuery 已按 view 取好。
+  const renderPanel = () => {
+    if (activeQuery.isLoading) return <Spinner label={t('common.loading')} />;
+    if (activeQuery.isError) {
+      return (
+        <p role="alert" className="text-sm text-danger-600">
+          {t('errors.UNKNOWN')}
+        </p>
+      );
+    }
 
-      <div className="flex flex-wrap items-center gap-2">
+    if (view === 'expired') {
+      return (
+        <>
+          {!effectiveUnitId && (
+            <p role="status" className="text-sm text-warning-700">
+              {t('inventory.expiredNeedUnit')}
+            </p>
+          )}
+          {canWriteStock && (expiredQuery.data?.items.length ?? 0) > 0 && (
+            <div>
+              <Button
+                variant="primary"
+                onClick={() => handleCreateLossOrder(expiredQuery.data?.items ?? [])}
+              >
+                {t('inventory.createLossFromExpired')}
+              </Button>
+            </div>
+          )}
+          <ResponsiveTable
+            columns={expiredColumns}
+            items={expiredQuery.data?.items ?? []}
+            rowKey={(row) => row.batchId}
+            emptyText={t('inventory.noExpired')}
+            label={t('inventory.tabExpired')}
+          />
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink-muted">
+            <span>{t('inventory.total', { total })}</span>
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        {view === 'stock' ? (
+          <ResponsiveTable
+            columns={stockColumns}
+            items={stockQuery.data?.items ?? []}
+            rowKey={(row) => row.batchId}
+            emptyText={t('inventory.empty')}
+            label={t('inventory.tabStock')}
+          />
+        ) : (
+          <ResponsiveTable
+            columns={movementColumns}
+            items={movementsQuery.data?.items ?? []}
+            rowKey={(row) => row.id}
+            emptyText={t('inventory.noMovements')}
+            label={t('inventory.tabMovements')}
+          />
+        )}
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onChange={setPage}
+          totalLabel={t('inventory.total', { total })}
+        />
+      </>
+    );
+  };
+
+  return (
+    <Tabs
+      value={view}
+      onValueChange={(next) => setView(next as View)}
+      className="flex flex-col gap-4"
+    >
+      <PageHeader
+        title={t('inventory.title')}
+        actions={
+          <>
+            <RefreshButton
+              queryKey={view === 'stock' ? ['stock', 'list'] : view === 'movements' ? ['stock', 'movements'] : ['stock', 'expired']}
+            />
+            {canReadRetailPrices && (
+              <Button asChild variant="secondary">
+                <Link to="/retail-prices">{t('retailPrices.title')}</Link>
+              </Button>
+            )}
+            <TabsList aria-label={t('inventory.title')}>
+              <TabsTrigger value="stock">{t('inventory.tabStock')}</TabsTrigger>
+              <TabsTrigger value="movements">{t('inventory.tabMovements')}</TabsTrigger>
+              <TabsTrigger value="expired">{t('inventory.tabExpired')}</TabsTrigger>
+            </TabsList>
+          </>
+        }
+      />
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Select
           value={unitId}
-          onChange={(_, d) => {
-            setUnitId(d.value);
+          onValueChange={(value) => {
+            setUnitId(value);
             setPage(1);
           }}
+          className="w-full sm:w-56"
           aria-label={t('inventory.unit')}
         >
           <option value="">{t('inventory.allUnits')}</option>
@@ -244,10 +349,11 @@ export function InventoryPage() {
         </Select>
         <Select
           value={itemId}
-          onChange={(_, d) => {
-            setItemId(d.value);
+          onValueChange={(value) => {
+            setItemId(value);
             setPage(1);
           }}
+          className="w-full sm:w-56"
           aria-label={t('inventory.item')}
         >
           <option value="">{t('inventory.allItems')}</option>
@@ -260,84 +366,17 @@ export function InventoryPage() {
       </div>
 
       {isRetailer && (
-        <Text size={200} className="text-neutral-500">
+        <p className="text-xs text-ink-subtle">
           {t('inventory.signedWarehouses')}:{' '}
           {signedWarehouses.length > 0
             ? signedWarehouses.map((w) => w.name).join('、')
             : t('inventory.noSignedWarehouses')}
-        </Text>
+        </p>
       )}
 
-      {activeQuery.isLoading ? (
-        <Spinner label={t('common.loading')} />
-      ) : activeQuery.isError ? (
-        <Text className="text-red-600">{t('errors.UNKNOWN')}</Text>
-      ) : view === 'expired' ? (
-        <>
-          {!effectiveUnitId && <Text className="text-amber-600">{t('inventory.expiredNeedUnit')}</Text>}
-          {canWriteStock && (expiredQuery.data?.items.length ?? 0) > 0 && (
-            <div>
-              <Button
-                appearance="primary"
-                onClick={() => handleCreateLossOrder(expiredQuery.data?.items ?? [])}
-              >
-                {t('inventory.createLossFromExpired')}
-              </Button>
-            </div>
-          )}
-          <ResponsiveTable
-            columns={expiredColumns}
-            items={expiredQuery.data?.items ?? []}
-            rowKey={(row) => row.batchId}
-            emptyText={t('inventory.noExpired')}
-          />
-          <div className="flex items-center justify-between text-sm text-neutral-600">
-            <span>{t('inventory.total', { total })}</span>
-          </div>
-        </>
-      ) : (
-        <>
-          {view === 'stock' ? (
-            <ResponsiveTable
-              columns={stockColumns}
-              items={stockQuery.data?.items ?? []}
-              rowKey={(row) => row.batchId}
-              emptyText={t('inventory.empty')}
-            />
-          ) : (
-            <ResponsiveTable
-              columns={movementColumns}
-              items={movementsQuery.data?.items ?? []}
-              rowKey={(row) => row.id}
-              emptyText={t('inventory.noMovements')}
-            />
-          )}
-          <div className="flex items-center justify-between text-sm text-neutral-600">
-            <span>{t('inventory.total', { total })}</span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                ←
-              </Button>
-              <span>
-                {page} / {totalPages}
-              </span>
-              <Button
-                size="small"
-                appearance="secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                →
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+      <TabsContent value="stock">{renderPanel()}</TabsContent>
+      <TabsContent value="movements">{renderPanel()}</TabsContent>
+      <TabsContent value="expired">{renderPanel()}</TabsContent>
+    </Tabs>
   );
 }

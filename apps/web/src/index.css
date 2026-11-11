@@ -1,21 +1,297 @@
 @import "tailwindcss";
 
-html,
-body,
-#root {
-  height: 100%;
+/* ---------------------------------------------------------------------------
+ * 设计令牌（仅日间模式）
+ *
+ * 本应用明确只提供日间模式：`:root` 固定 `color-scheme: light`，不暴露
+ * `prefers-color-scheme` 分支，也不加载暗色主题。这样浏览器自带的表单控件、
+ * 滚动条、焦点环等 UA 生成 UI 不会被操作系统强制翻黑。
+ * ------------------------------------------------------------------------- */
+@theme {
+  /* 品牌色：index.html 的 theme-color #0352D1 = brand-600 */
+  --color-brand-50: #eff5ff;
+  --color-brand-100: #dbe8fe;
+  --color-brand-200: #bfd7fe;
+  --color-brand-300: #93bafd;
+  --color-brand-400: #6094fa;
+  --color-brand-500: #3b74f6;
+  --color-brand-600: #0352d1;
+  --color-brand-700: #0445ad;
+  --color-brand-800: #073a8c;
+  --color-brand-900: #0b3373;
+
+  /* 语义色板 */
+  --color-canvas: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f5f5;
+  --color-surface-hover: #e8e8e8;
+  /* 装饰性分隔线（卡片 / 表格外框 / 表头）：不承担「识别控件」的职责，不需要 3:1。 */
+  --color-line: #e5e5e5;
+  /* 控件边界（输入框 / 下拉 / 复选框 / 次级按钮）：WCAG 1.4.11 要求 >= 3:1。
+     原值 #d4d4d4 对白底只有 1.48:1 —— 低视力用户看不出输入框的边界。
+     #8c8c8c：白底 3.36:1、canvas 3.22:1、surface-muted 3.08:1。 */
+  --color-line-strong: #8c8c8c;
+  /* 悬停态边界：比静止态再深一档，避免「悬停后反而更难看清」。
+     #737373：白底 4.74:1（原 #a3a3a3 只有 2.52:1）。 */
+  --color-line-hover: #737373;
+  --color-ink: #171717;
+  --color-ink-soft: #404040;
+  --color-ink-muted: #525252;
+  --color-ink-subtle: #666666;
+
+  --color-success-600: #15803d;
+  --color-success-50: #f0fdf4;
+  --color-success-200: #bbf7d0;
+  --color-warning-700: #b45309;
+  --color-warning-50: #fffbeb;
+  --color-warning-200: #fde68a;
+  /* 正文 / 图标 / 按钮底色。原 #dc2626 在 danger-50 上只有 4.41:1（正文需 4.5:1），
+     #cf1f1f：danger-50 上 4.96:1、白底 5.43:1、白字在此底色上 5.43:1。 */
+  --color-danger-600: #cf1f1f;
+  --color-danger-700: #b91c1c;
+  --color-danger-800: #991b1b;
+  --color-danger-50: #fef2f2;
+  --color-danger-200: #fecaca;
+
+  --radius-card: 0.75rem;
 }
 
-body {
-  margin: 0;
-  background-color: #fafafa;
-  color: #1f1f1f;
-  font-family:
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
-    Arial,
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
+/* ------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    /* 只做日间模式：显式锁定浅色，避免 UA 控件在系统暗色下被反转 */
+    color-scheme: light;
+    /* 复选框 / 进度条 / 滑块等 UA 生成的强调色跟随品牌色 */
+    accent-color: var(--color-brand-600);
+    /* Firefox 滚动条：与轨道保持 >=3:1 对比度，不用 scrollbar-width: thin */
+    scrollbar-color: var(--color-ink-subtle) transparent;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family:
+      -apple-system,
+      "Segoe UI",
+      Roboto,
+      "Helvetica Neue",
+      Arial,
+      "Noto Sans SC",
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Tailwind v4 的默认边框色是 currentColor，这里统一收敛到设计令牌 */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-line);
+  }
+
+  /* 键盘焦点环：统一颜色与偏移，鼠标点击不显示 */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-brand-100);
+    color: var(--color-brand-900);
+  }
+
+  /* 尊重减少动效偏好 */
+  /* 尊重「减少动效」偏好：**按用例**处理，而不是把全局 animation-duration /
+   * transition-duration 归零 —— 全局归零会让颜色、背景、透明度过渡瞬间跳变，
+   * 反而更刺眼，也会让加载指示器定格在一帧看不出在动的静帧上。
+   * 见 modern-web-guidance: motion「DO NOT globally apply animation-duration: 0.01ms」。
+   *
+   * 具体降级位置：`.app-select::picker-icon` 的旋转过渡（组件层）、checkbox 勾选缩放
+   * （motion-reduce:transition-none）、Spinner 减速（见文件末尾的无层规则）。
+   */
+}
+
+/* ------------------------------------------------------------------------- */
+@layer components {
+  /**
+   * 原生 <dialog> 的模态样式。
+   * - 滚动链不穿透到背后的页面（overscroll-behavior: contain）
+   * - ::backdrop 不是滚动容器，必须单独关闭 overscroll chaining
+   * - display 只在 [open] 时设置，否则会覆盖 dialog 的关闭态
+   */
+  dialog.app-dialog {
+    border: 0;
+    padding: 0;
+    margin: auto;
+    max-width: min(38rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    width: 100%;
+    color: var(--color-ink);
+    background-color: var(--color-surface);
+    border-radius: var(--radius-card);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.06),
+      0 24px 48px -12px rgb(0 0 0 / 0.25);
+  }
+
+  dialog.app-dialog[open] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  dialog.app-dialog::backdrop {
+    background-color: rgb(23 23 23 / 0.45);
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
+
+  dialog.app-dialog:modal {
+    overscroll-behavior: contain;
+  }
+
+  /* 打开 / 关闭的轻量过渡（原生 dialog 需要 allow-discrete 才能过渡 display） */
+  dialog.app-dialog,
+  dialog.app-dialog::backdrop {
+    transition:
+      opacity 150ms ease-out,
+      overlay 150ms allow-discrete,
+      display 150ms allow-discrete;
+  }
+
+  dialog.app-dialog:not([open]),
+  dialog.app-dialog:not([open])::backdrop {
+    opacity: 0;
+  }
+
+  @starting-style {
+    dialog.app-dialog[open],
+    dialog.app-dialog[open]::backdrop {
+      opacity: 0;
+    }
+  }
+
+  /**
+   * 原生 <select> 的品牌化。
+   * `appearance: base-select` 是渐进增强：不支持的浏览器退回系统下拉，
+   * 仍然是原生可访问控件（键盘、IME、屏幕阅读器全部由浏览器提供）。
+   * 见 modern-web-guidance: branded-select-styling / browser-ui-theming。
+   */
+  .app-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23525252' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    padding-inline-end: 2rem;
+    cursor: pointer;
+  }
+
+  @supports (appearance: base-select) {
+    .app-select,
+    .app-select::picker(select) {
+      appearance: base-select;
+    }
+
+    .app-select {
+      background-image: none;
+      padding-inline-end: 0.75rem;
+    }
+
+    .app-select::picker-icon {
+      color: var(--color-ink-subtle);
+    }
+
+    /* 箭头旋转是空间动效：只在未要求「减少动效」时过渡，否则直接切到终态 */
+    @media (prefers-reduced-motion: no-preference) {
+      .app-select::picker-icon {
+        transition: rotate 150ms ease-out;
+      }
+    }
+
+    .app-select:open::picker-icon {
+      rotate: 180deg;
+    }
+
+    /* 顶层渲染的下拉面板：不再有 z-index 冲突 */
+    .app-select::picker(select) {
+      margin-block: 0.375rem;
+      padding: 0.25rem;
+      border: 1px solid var(--color-line);
+      border-radius: 0.5rem;
+      background-color: var(--color-surface);
+      box-shadow:
+        0 1px 2px rgb(0 0 0 / 0.06),
+        0 12px 24px -8px rgb(0 0 0 / 0.18);
+      max-height: 18rem;
+    }
+
+    .app-select option {
+      padding: 0.5rem 0.625rem;
+      border-radius: 0.375rem;
+      /* 面板文字必须显式取令牌：base-select 下 option 不再继承系统配色 */
+      color: var(--color-ink);
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+    }
+
+    /* 鼠标悬停 / 键盘焦点所在的选项：底色本身与面板只有 1.09:1，
+       因此额外用品牌色描边（6.7:1）标出当前位置，键盘用户才看得出焦点在哪。 */
+    .app-select option:hover,
+    .app-select option:focus,
+    .app-select option:focus-visible {
+      background-color: var(--color-surface-muted);
+    }
+
+    .app-select option:focus,
+    .app-select option:focus-visible {
+      outline: 2px solid var(--color-brand-600);
+      outline-offset: -2px;
+    }
+
+    .app-select option:checked {
+      font-weight: 600;
+      color: var(--color-brand-700);
+      background-color: var(--color-brand-50);
+    }
+
+    .app-select option::checkmark {
+      color: var(--color-brand-600);
+      order: 1;
+    }
+  }
+
+  /**
+   * 强制配色（Windows 高对比度 / forced-colors）：浏览器会移除 background-image，
+   * 自绘的箭头随之消失，控件看起来「没有下拉」；作者颜色也被系统色覆盖，
+   * 品牌化面板不再有意义。此时退回系统原生下拉，保证箭头与系统配色都还在。
+   * 见 modern-web-guidance: color（不要用 background-image 承载状态/边界信息）。
+   */
+  @media (forced-colors: active) {
+    .app-select {
+      appearance: auto;
+      background-image: none;
+      padding-inline-end: 0.5rem;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------------- */
+/**
+ * 减少动效：持续旋转放慢而不是停转，用户仍能看出「正在进行」
+ * （modern-web-guidance: spinner「Slow down the animation significantly rather than
+ * stopping it entirely, so the user still knows that the process is active」）。
+ *
+ * 必须放在所有 @layer 之外：Tailwind 的 `.animate-spin` 在 utilities 层，
+ * 层内规则优先于 base 层，写在 base 里会被 `animation` 简写覆盖掉。
+ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin {
+    animation-duration: 6s;
+  }
 }
