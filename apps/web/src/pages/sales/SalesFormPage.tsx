@@ -462,8 +462,10 @@ export function SalesFormPage() {
           <h2 className="text-[13px] font-semibold text-ink">{t('sales.items')}</h2>
           <div className="flex flex-wrap items-center gap-2">
             <RefreshButton
-              queryKey={['items', 'picker']}
-              additionalKeys={[['stock', 'batches'], ['units', 'list'], ['partnerships', 'list']]}
+              // 物品选择器每次搜索都自带一次请求，没有可失效的缓存列表；
+              // 这里刷新的是行上的库存/零售价提示，它们才是会过期的数据。
+              queryKey={['stock', 'batches']}
+              additionalKeys={[['retail-prices', 'unit'], ['units', 'list'], ['partnerships', 'list']]}
             />
             <Button size="sm" variant="secondary" onClick={() => setLines((prev) => [...prev, emptyLine()])}>
               {t('sales.addLine')}

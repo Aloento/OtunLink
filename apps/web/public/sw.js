@@ -1,7 +1,12 @@
 // PWA Service Worker：预缓存应用外壳，静态资源 stale-while-revalidate，导航 network-first。
 // 跨源请求（API、MSAL 等）不拦截、不缓存，避免将响应混入缓存。
-// v2：查询缓存改为「写后即失效」，同步换版清掉旧版预缓存外壳。
-const CACHE_VERSION = 'otunlink-v2';
+// v3：给哈希资源缓存设上限 —— 每次发版都会新增一批 hash 资源，不修剪的话
+//     手机上的缓存会随发版次数无限增长（几十次发版就是几百 MB）。
+const CACHE_VERSION = 'otunlink-v3';
+
+// 哈希资源是内容寻址的：旧文件永远不会再被引用，留着只占地方。
+// 上限按「当前构建 + 上一版」留够余量，超出的按插入顺序（最旧）删掉。
+const MAX_CACHED_ASSETS = 60;
 
 const PRECACHE = [
   '/',
@@ -14,6 +19,17 @@ const PRECACHE = [
   '/icons/maskable-512.png',
   '/icons/apple-touch-icon.png',
 ];
+
+/** 修剪哈希资源缓存：保留 PRECACHE 里的外壳文件，其余超过上限的按最旧删除。 */
+async function trimAssets(cache) {
+  const shell = new Set(PRECACHE.map((path) => new URL(path, self.location.origin).href));
+  const keys = await cache.keys();
+  const assets = keys.filter((request) => !shell.has(request.url));
+  const excess = assets.length - MAX_CACHED_ASSETS;
+  for (let i = 0; i < excess; i += 1) {
+    await cache.delete(assets[i]);
+  }
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -46,7 +62,9 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put('/index.html', copy));
+          if (response.ok) {
+            caches.open(CACHE_VERSION).then((cache) => cache.put('/index.html', copy));
+          }
           return response;
         })
         .catch(() => caches.match('/index.html')),
@@ -61,7 +79,10 @@ self.addEventListener('fetch', (event) => {
         .then((response) => {
           if (response && response.ok) {
             const copy = response.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+            caches
+              .open(CACHE_VERSION)
+              .then((cache) => cache.put(request, copy).then(() => trimAssets(cache)))
+              .catch(() => undefined);
           }
           return response;
         })
