@@ -38,7 +38,8 @@ export function createShipmentsRepo(exec: SqlExecutor): ShipmentRepository {
       const { rows } = await exec.query(
         `SELECT s.*,
                 (SELECT count(*)::int FROM shipment_items si WHERE si.shipment_id = s.id) AS items_count,
-                (SELECT COALESCE(sum(si.qty), 0) FROM shipment_items si WHERE si.shipment_id = s.id) AS total_qty
+                (SELECT COALESCE(sum(COALESCE(si.actual_qty, si.expected_qty)), 0)
+                       FROM shipment_items si WHERE si.shipment_id = s.id) AS total_qty
          FROM shipments s${clause} ORDER BY s.created_at DESC, s.id ASC LIMIT ${size} OFFSET ${offset}`,
       );
       return { items: rows.map(mapShipment), total, page, size };

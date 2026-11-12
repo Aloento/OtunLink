@@ -35,7 +35,7 @@ export function createOutboundsRepo(exec: SqlExecutor): OutboundRepository {
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(
         `SELECT oo.*, bu.name AS warehouse_name, cp.name AS counterparty_name,
-                (SELECT count(*)::int FROM outbound_order_items lo WHERE lo.outbound_order_id = oo.id) AS item_count,
+                (SELECT count(*)::int FROM outbound_order_items lo WHERE lo.outbound_order_id = oo.id) AS items_count,
                 (SELECT COALESCE(sum(lo.qty), 0) FROM outbound_order_items lo WHERE lo.outbound_order_id = oo.id) AS total_qty
          FROM outbound_orders oo
          LEFT JOIN business_units bu ON bu.id = oo.warehouse_unit_id

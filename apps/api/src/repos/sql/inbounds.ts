@@ -38,7 +38,7 @@ export function createInboundsRepo(
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(
         `SELECT io.*, bu.name AS warehouse_name, cp.name AS counterparty_name, s.shipment_no,
-                (SELECT count(*)::int FROM inbound_order_items li WHERE li.inbound_order_id = io.id) AS item_count,
+                (SELECT count(*)::int FROM inbound_order_items li WHERE li.inbound_order_id = io.id) AS items_count,
                 (SELECT COALESCE(sum(li.qty), 0) FROM inbound_order_items li WHERE li.inbound_order_id = io.id) AS total_qty
          FROM inbound_orders io
          LEFT JOIN business_units bu ON bu.id = io.warehouse_unit_id
