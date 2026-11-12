@@ -230,7 +230,7 @@ export function InboundFormPage() {
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-ink">{t('inbound.items')}</h2>
+          <h2 className="text-[13px] font-semibold text-ink">{t('inbound.items')}</h2>
           <div className="flex flex-wrap items-center gap-2">
             <RefreshButton queryKey={['items']} additionalKeys={[['units', 'list']]} />
             <Button

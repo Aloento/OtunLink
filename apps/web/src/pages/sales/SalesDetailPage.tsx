@@ -31,6 +31,7 @@ import { Button } from '../../ui/button';
 import { Card, CardHeader } from '../../ui/card';
 import { Checkbox } from '../../ui/checkbox';
 import { ConfirmDialog } from '../../ui/confirm-dialog';
+import { Facts } from '../../ui/facts';
 import { Field } from '../../ui/field';
 import { Input } from '../../ui/input';
 import { PageHeader } from '../../ui/page-header';
@@ -263,91 +264,45 @@ export function SalesDetailPage() {
         </p>
       )}
 
-      <dl className="grid grid-cols-1 gap-3 rounded-card border border-line bg-surface p-4 text-sm sm:grid-cols-2">
-        <div className="min-w-0 break-words">
-          <dt className="inline text-ink-muted">{t('sales.source')}：</dt>
-          <dd className="inline">{t(`sales.sources.${order.source}`)}</dd>
-        </div>
-        <div className="min-w-0 break-words">
-          <dt className="inline text-ink-muted">{t('sales.status')}：</dt>
-          <dd className="inline">{t(`sales.statuses.${order.status}`)}</dd>
-        </div>
-        <div className="min-w-0 break-words">
-          <dt className="inline text-ink-muted">{t('sales.seller')}：</dt>
-          <dd className="inline">{order.sellerUnitName ?? order.sellerUnitId}</dd>
-        </div>
-        <div className="min-w-0 break-words">
-          <dt className="inline text-ink-muted">{t('sales.buyer')}：</dt>
-          <dd className="inline">{order.buyerUnitName ?? order.buyerUnitId}</dd>
-        </div>
-        <div className="min-w-0 break-words">
-          <dt className="inline text-ink-muted">{t('sales.deliveryMethod')}：</dt>
-          <dd className="inline">{t(`sales.deliveryMethods.${order.deliveryMethod}`)}</dd>
-        </div>
-        {order.deliveryAddress && (
-          <div className="min-w-0 break-words">
-            <dt className="inline text-ink-muted">{t('sales.deliveryAddress')}：</dt>
-            <dd className="inline">{order.deliveryAddress}</dd>
-          </div>
-        )}
-        {order.carrier && (
-          <div className="min-w-0 break-words">
-            <dt className="inline text-ink-muted">{t('sales.carrier')}：</dt>
-            <dd className="inline">{order.carrier}</dd>
-          </div>
-        )}
-        {order.trackingNo && (
-          <div className="min-w-0 break-words">
-            <dt className="inline text-ink-muted">{t('sales.trackingNo')}：</dt>
-            <dd className="inline">{order.trackingNo}</dd>
-          </div>
-        )}
-        <div className="min-w-0 break-words">
-          <dt className="inline text-ink-muted">{t('sales.freight')}：</dt>
-          <dd className="inline tabular-nums">{order.freight ?? '0'}</dd>
-        </div>
-        <div className="min-w-0 break-words">
-          <dt className="inline text-ink-muted">{t('sales.discountPercent')}：</dt>
-          <dd className="inline tabular-nums">{order.discountPercent}</dd>
-        </div>
-        <div className="min-w-0 break-words">
-          <dt className="inline text-ink-muted">{t('sales.currency')}：</dt>
-          <dd className="inline">{order.currency}</dd>
-        </div>
-        <div className="min-w-0 break-words">
-          <dt className="inline text-ink-muted">{t('sales.totalAmount')}：</dt>
-          <dd className="inline tabular-nums">
-            {order.totalAmount === null ? '—' : `${order.totalAmount} ${order.currency}`}
-          </dd>
-        </div>
-        <div className="min-w-0 break-words">
-          <dt className="inline text-ink-muted">{t('sales.createdAt')}：</dt>
-          <dd className="inline">{order.createdAt ? formatDateTime(order.createdAt, locale) : '—'}</dd>
-        </div>
-        {order.sentAt && (
-          <div className="min-w-0 break-words">
-            <dt className="inline text-ink-muted">{t('sales.sentAt')}：</dt>
-            <dd className="inline">{formatDateTime(order.sentAt, locale)}</dd>
-          </div>
-        )}
-        {order.confirmedAt && (
-          <div className="min-w-0 break-words">
-            <dt className="inline text-ink-muted">{t('sales.confirmedAt')}：</dt>
-            <dd className="inline">{formatDateTime(order.confirmedAt, locale)}</dd>
-          </div>
-        )}
-        {order.remark && (
-          <div className="min-w-0 break-words sm:col-span-2">
-            <dt className="inline text-ink-muted">{t('sales.remark')}：</dt>
-            <dd className="inline">{order.remark}</dd>
-          </div>
-        )}
-      </dl>
+      <Facts
+        boxed
+        items={[
+          [t('sales.source'), t(`sales.sources.${order.source}`)],
+          [t('sales.status'), t(`sales.statuses.${order.status}`)],
+          [t('sales.seller'), order.sellerUnitName ?? order.sellerUnitId],
+          [t('sales.buyer'), order.buyerUnitName ?? order.buyerUnitId],
+          [t('sales.deliveryMethod'), t(`sales.deliveryMethods.${order.deliveryMethod}`)],
+          ...(order.deliveryAddress
+            ? ([[t('sales.deliveryAddress'), order.deliveryAddress]] as Array<[string, string]>)
+            : []),
+          ...(order.carrier ? ([[t('sales.carrier'), order.carrier]] as Array<[string, string]>) : []),
+          ...(order.trackingNo
+            ? ([[t('sales.trackingNo'), order.trackingNo]] as Array<[string, string]>)
+            : []),
+          [t('sales.freight'), order.freight ?? '0'],
+          [t('sales.discountPercent'), order.discountPercent],
+          [t('sales.currency'), order.currency],
+          [
+            t('sales.totalAmount'),
+            order.totalAmount === null ? '—' : `${order.totalAmount} ${order.currency}`,
+          ],
+          [t('sales.createdAt'), order.createdAt ? formatDateTime(order.createdAt, locale) : '—'],
+          ...(order.sentAt
+            ? ([[t('sales.sentAt'), formatDateTime(order.sentAt, locale)]] as Array<[string, string]>)
+            : []),
+          ...(order.confirmedAt
+            ? ([[t('sales.confirmedAt'), formatDateTime(order.confirmedAt, locale)]] as Array<
+                [string, string]
+              >)
+            : []),
+          ...(order.remark ? ([[t('sales.remark'), order.remark]] as Array<[string, string]>) : []),
+        ]}
+      />
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-baseline gap-2">
-            <h2 className="text-base font-semibold text-ink">{t('sales.items')}</h2>
+            <h2 className="text-[13px] font-semibold text-ink">{t('sales.items')}</h2>
             {order.items.length > 0 && (
               <span className="text-xs text-ink-subtle tabular-nums">
                 {t('sales.pickedCount', { done: pickedCount, total: order.items.length })}
@@ -389,7 +344,7 @@ export function SalesDetailPage() {
 
       {order.allocations.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h2 className="text-base font-semibold text-ink">{t('sales.allocations')}</h2>
+          <h2 className="text-[13px] font-semibold text-ink">{t('sales.allocations')}</h2>
           <ResponsiveTable
             columns={allocColumns}
             items={order.allocations}
@@ -415,44 +370,36 @@ export function SalesDetailPage() {
       {order.payment && (
         <Card className="flex flex-col gap-2">
           <CardHeader title={t('sales.payment')} className="mb-0" />
-          <dl className="flex flex-col gap-1 text-sm">
-            <div className="min-w-0 break-words">
-              <dt className="inline text-ink-muted">{t('sales.paymentAmount')}：</dt>
-              <dd className="inline tabular-nums">
-                {order.payment.amount} {order.payment.currency}
-              </dd>
+          <Facts
+            items={[
+              [
+                t('sales.paymentAmount'),
+                `${order.payment.amount} ${order.payment.currency}`,
+              ],
+              ...(order.payment.methodNote
+                ? ([[t('sales.paymentMethod'), order.payment.methodNote]] as Array<[string, string]>)
+                : []),
+              [
+                t('sales.uploadedAt'),
+                order.payment.uploadedAt ? formatDateTime(order.payment.uploadedAt, locale) : '—',
+              ],
+              ...(order.payment.refundNote
+                ? ([[t('sales.refundNote'), order.payment.refundNote]] as Array<[string, string]>)
+                : []),
+            ]}
+          />
+          {order.payment.proofFileId && (
+            <div className="mt-2 flex items-center gap-3">
+              <span className="shrink-0 text-[13px] text-ink-muted">
+                {t('sales.paymentProofImage')}
+              </span>
+              <FileImage
+                fileId={order.payment.proofFileId}
+                className="h-24 w-24 rounded-lg object-cover"
+                alt={t('sales.paymentProofImage')}
+              />
             </div>
-            {order.payment.methodNote && (
-              <div className="min-w-0 break-words">
-                <dt className="inline text-ink-muted">{t('sales.paymentMethod')}：</dt>
-                <dd className="inline">{order.payment.methodNote}</dd>
-              </div>
-            )}
-            <div className="min-w-0 break-words">
-              <dt className="inline text-ink-muted">{t('sales.uploadedAt')}：</dt>
-              <dd className="inline">
-                {order.payment.uploadedAt ? formatDateTime(order.payment.uploadedAt, locale) : '—'}
-              </dd>
-            </div>
-            {order.payment.refundNote && (
-              <div className="min-w-0 break-words text-danger-600">
-                <dt className="inline text-ink-muted">{t('sales.refundNote')}：</dt>
-                <dd className="inline">{order.payment.refundNote}</dd>
-              </div>
-            )}
-            {order.payment.proofFileId && (
-              <div className="mt-2 flex items-center gap-3">
-                <dt className="shrink-0 text-ink-muted">{t('sales.paymentProofImage')}：</dt>
-                <dd>
-                  <FileImage
-                    fileId={order.payment.proofFileId}
-                    className="h-24 w-24 rounded-lg object-cover"
-                    alt={t('sales.paymentProofImage')}
-                  />
-                </dd>
-              </div>
-            )}
-          </dl>
+          )}
         </Card>
       )}
 

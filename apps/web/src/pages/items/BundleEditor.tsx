@@ -78,7 +78,7 @@ export function BundleEditor({
   return (
     <Card className="flex flex-col gap-3">
       <div>
-        <h2 className="text-base font-semibold text-ink">{t('items.bundleTitle')}</h2>
+        <h2 className="text-[13px] font-semibold text-ink">{t('items.bundleTitle')}</h2>
         <p className="text-xs text-ink-muted">{t('items.bundleHint')}</p>
       </div>
 

@@ -12,6 +12,7 @@ import { useSession } from '../../auth/SessionProvider';
 import { ImagePreview } from '../../components/ImagePreview';
 import { RefreshButton } from '../../components/RefreshButton';
 import { Button } from '../../ui/button';
+import { Facts } from '../../ui/facts';
 import { ConfirmDialog } from '../../ui/confirm-dialog';
 import { PageHeader } from '../../ui/page-header';
 import { Spinner } from '../../ui/spinner';
@@ -112,22 +113,12 @@ export function ItemDetailPage() {
         </p>
       )}
 
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-        {rows.map(([label, value]) => (
-          <div
-            key={label}
-            className="flex min-w-0 items-baseline justify-between gap-3 border-b border-line py-1"
-          >
-            <dt className="shrink-0 text-sm text-ink-muted">{label}</dt>
-            <dd className="min-w-0 text-end text-sm font-medium wrap-break-word text-ink">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <Facts items={rows} boxed />
 
       {data.description && <p className="text-sm text-ink-soft">{data.description}</p>}
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold text-ink">{t('items.images')}</h2>
+        <h2 className="text-[13px] font-semibold text-ink">{t('items.images')}</h2>
         {data.images.length === 0 ? (
           <p className="text-sm text-ink-subtle">{t('items.noImages')}</p>
         ) : (

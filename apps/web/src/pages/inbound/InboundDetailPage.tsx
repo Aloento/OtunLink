@@ -16,6 +16,7 @@ import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/Re
 import { RefreshButton } from '../../components/RefreshButton';
 import { Button } from '../../ui/button';
 import { Card } from '../../ui/card';
+import { Facts } from '../../ui/facts';
 import { ConfirmDialog } from '../../ui/confirm-dialog';
 import { PageHeader } from '../../ui/page-header';
 import { Spinner } from '../../ui/spinner';
@@ -155,20 +156,13 @@ export function InboundDetailPage() {
       )}
 
       <Card>
-        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {rows.map(([label, value]) => (
-            <div key={label} className="min-w-0">
-              <dt className="text-xs text-ink-subtle">{label}</dt>
-              <dd className="text-sm wrap-break-word text-ink">{value}</dd>
-            </div>
-          ))}
-        </dl>
+        <Facts items={rows} />
       </Card>
 
       {data.remark && <p className="text-sm text-ink-soft">{data.remark}</p>}
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold text-ink">{t('inbound.items')}</h2>
+        <h2 className="text-[13px] font-semibold text-ink">{t('inbound.items')}</h2>
         <ResponsiveTable
           columns={columns}
           items={data.items}

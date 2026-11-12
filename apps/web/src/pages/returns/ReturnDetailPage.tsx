@@ -23,6 +23,7 @@ import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/Re
 import { formatDateTime } from '../../i18n/format';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { Button } from '../../ui/button';
+import { Facts } from '../../ui/facts';
 import { Card } from '../../ui/card';
 import {
   Dialog,
@@ -203,19 +204,17 @@ export function ReturnDetailPage() {
     {
       key: 'qty',
       header: t('returns.qty'),
-      render: (item) => <span className="tabular-nums">{item.qty}</span>,
+      align: 'end',
+      render: (item) => item.qty,
     },
     ...(isSales
       ? [
           {
             key: 'receivedQty',
             header: t('returns.receivedQty'),
+            align: 'end' as const,
             render: (item: ReturnOrderItemDto) =>
-              item.receivedQty === null ? (
-                '—'
-              ) : (
-                <span className="tabular-nums">{item.receivedQty}</span>
-              ),
+              item.receivedQty === null ? '—' : item.receivedQty,
           } as ResponsiveTableColumn<ReturnOrderItemDto>,
           {
             key: 'pendingQc',
@@ -261,23 +260,13 @@ export function ReturnDetailPage() {
         </p>
       )}
 
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-        {rows.map(([label, value]) => (
-          <div
-            key={label}
-            className="flex min-w-0 items-baseline justify-between gap-3 border-b border-line py-1"
-          >
-            <dt className="shrink-0 text-sm text-ink-muted">{label}</dt>
-            <dd className="min-w-0 text-end text-sm font-medium wrap-break-word text-ink">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <Facts items={rows} boxed />
 
       {data.reason && <p className="text-sm text-ink-soft">{data.reason}</p>}
 
       {data.photoFileIds.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h2 className="text-base font-semibold text-ink">{t('returns.photos')}</h2>
+          <h2 className="text-[13px] font-semibold text-ink">{t('returns.photos')}</h2>
           <div className="flex flex-wrap gap-3">
             {data.photoFileIds.map((fileId) => (
               <FileImage
@@ -292,7 +281,7 @@ export function ReturnDetailPage() {
       )}
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold text-ink">{t('returns.items')}</h2>
+        <h2 className="text-[13px] font-semibold text-ink">{t('returns.items')}</h2>
         <ResponsiveTable
           columns={columns}
           items={data.items}
@@ -419,7 +408,7 @@ function ReceivePanel({
 
   return (
     <Card className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold text-ink">{t('returns.receive')}</h2>
+      <h2 className="text-[13px] font-semibold text-ink">{t('returns.receive')}</h2>
       <div className="flex flex-col gap-2">
         {items.map((item) => (
           <div key={item.id} className="flex flex-wrap items-center gap-2 text-sm">

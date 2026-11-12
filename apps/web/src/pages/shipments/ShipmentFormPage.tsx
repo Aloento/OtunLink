@@ -384,7 +384,7 @@ export function ShipmentFormPage() {
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-ink">{t('shipments.trackings')}</h2>
+          <h2 className="text-[13px] font-semibold text-ink">{t('shipments.trackings')}</h2>
           <Button
             size="sm"
             variant="secondary"
@@ -436,7 +436,7 @@ export function ShipmentFormPage() {
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-ink">{t('shipments.items')}</h2>
+          <h2 className="text-[13px] font-semibold text-ink">{t('shipments.items')}</h2>
           <div className="flex flex-wrap items-center gap-2">
             {/* 物品由行内选择器按需搜索，这里只刷新仍在查询缓存里的单位列表。 */}
             <RefreshButton queryKey={['units', 'list']} />

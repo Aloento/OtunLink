@@ -18,6 +18,7 @@ import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/Re
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Card } from '../../ui/card';
+import { Facts } from '../../ui/facts';
 import { ConfirmDialog } from '../../ui/confirm-dialog';
 import { PageHeader } from '../../ui/page-header';
 import { Spinner } from '../../ui/spinner';
@@ -161,21 +162,14 @@ export function OutboundDetailPage() {
       )}
 
       <Card>
-        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {rows.map(([label, value]) => (
-            <div key={label} className="min-w-0">
-              <dt className="text-xs text-ink-subtle">{label}</dt>
-              <dd className="text-sm wrap-break-word text-ink">{value}</dd>
-            </div>
-          ))}
-        </dl>
+        <Facts items={rows} />
       </Card>
 
       {data.remark && <p className="text-sm text-ink-soft">{data.remark}</p>}
 
       {data.type === 'LOSS' && data.photoFileIds.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h2 className="text-base font-semibold text-ink">{t('outbound.lossPhotos')}</h2>
+          <h2 className="text-[13px] font-semibold text-ink">{t('outbound.lossPhotos')}</h2>
           <div className="flex flex-wrap gap-3">
             {data.photoFileIds.map((fileId, index) => (
               <FileImage
@@ -191,7 +185,7 @@ export function OutboundDetailPage() {
       )}
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold text-ink">{t('outbound.items')}</h2>
+        <h2 className="text-[13px] font-semibold text-ink">{t('outbound.items')}</h2>
         <ResponsiveTable
           columns={columns}
           items={data.items}

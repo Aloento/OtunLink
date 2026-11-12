@@ -21,6 +21,7 @@ import { useLocale } from '../../i18n/LocaleProvider';
 import { unitLabel } from '../../i18n/units';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
+import { Facts } from '../../ui/facts';
 import { ConfirmDialog } from '../../ui/confirm-dialog';
 import { PageHeader } from '../../ui/page-header';
 import { Spinner } from '../../ui/spinner';
@@ -150,11 +151,13 @@ export function ShipmentDetailPage() {
     {
       key: 'qty',
       header: t('shipments.expectedQty'),
-      render: (item) => <span className="tabular-nums">{item.expectedQty}</span>,
+      align: 'end',
+      render: (item) => item.expectedQty,
     },
     {
       key: 'actual',
       header: t('shipments.counting.actualQty'),
+      align: 'end',
       render: (item) =>
         item.actualQty === null ? (
           <span className="text-ink-subtle">—</span>
@@ -173,8 +176,8 @@ export function ShipmentDetailPage() {
     {
       key: 'price',
       header: t('shipments.unitPrice'),
-      render: (item) =>
-        item.unitPrice === null ? '—' : <span className="tabular-nums">{item.unitPrice}</span>,
+      align: 'end',
+      render: (item) => (item.unitPrice === null ? '—' : item.unitPrice),
     },
     {
       key: 'productionDate',
@@ -235,19 +238,12 @@ export function ShipmentDetailPage() {
         </div>
       )}
 
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-        {rows.map(([label, value]) => (
-          <div key={label} className="flex items-baseline justify-between gap-3 border-b border-line py-1">
-            <dt className="text-sm text-ink-muted">{label}</dt>
-            <dd className="min-w-0 text-end text-sm font-medium text-ink">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <Facts items={rows} boxed />
 
       {data.remark && <p className="text-sm text-ink-soft">{data.remark}</p>}
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold text-ink">{t('shipments.trackings')}</h2>
+        <h2 className="text-[13px] font-semibold text-ink">{t('shipments.trackings')}</h2>
         {data.trackings.length === 0 ? (
           <p className="text-sm text-ink-muted">{t('shipments.noTrackings')}</p>
         ) : (
@@ -265,7 +261,7 @@ export function ShipmentDetailPage() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold text-ink">{t('shipments.items')}</h2>
+        <h2 className="text-[13px] font-semibold text-ink">{t('shipments.items')}</h2>
         <ResponsiveTable
           columns={itemColumns}
           items={data.items}
