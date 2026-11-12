@@ -96,11 +96,19 @@ export function SalesFormPage() {
 
   // 选过的物品信息（名称/规格单位）：模态选择器只在「选择」这一刻拿到完整 DTO，
   // 行上要显示名称与单位，所以按 itemId 存一份。编辑态用单据明细回填。
-  const [pickedItems, setPickedItems] = useState<Record<string, ItemDto>>({});
+  const [pickedItems, setPickedItems] = useState<
+    Record<string, { name: string; unit: string | null }>
+  >({});
   const rememberItems = (items: ItemDto[]) =>
     setPickedItems((prev) => {
       const next = { ...prev };
-      for (const item of items) next[item.id] = item;
+      for (const item of items) {
+        next[item.id] = {
+          name: item.name,
+          // 单位就地本地化：行上只需要显示文本，没必要把整个 DTO 塞进 state
+          unit: unitLabel(t, specUnitOf(item), item.minSaleUnit),
+        };
+      }
       return next;
     });
 
@@ -177,17 +185,14 @@ export function SalesFormPage() {
       setRemark(order.remark ?? '');
       setCarrier(order.carrier ?? '');
       setTrackingNo(order.trackingNo ?? '');
-      // 明细行自带 itemName/spec/minSaleUnit：编辑态直接回填索引，不必再拉物品
+      // 明细行自带 itemName/spec/minSaleUnit：编辑态直接回填，不必再拉物品
       setPickedItems((prev) => {
         const next = { ...prev };
         for (const line of order.items) {
           next[line.itemId] = {
-            ...(next[line.itemId] ?? ({} as ItemDto)),
-            id: line.itemId,
             name: line.itemName ?? line.itemId,
-            specUnit: (line.spec ?? 'PIECE') as ItemDto['specUnit'],
-            minSaleUnit: (line.minSaleUnit ?? 'PIECE') as ItemDto['minSaleUnit'],
-          } as ItemDto;
+            unit: unitLabel(t, line.spec, line.minSaleUnit),
+          };
         }
         return next;
       });
@@ -494,9 +499,8 @@ export function SalesFormPage() {
               <Field
                 className="min-w-0"
                 label={`${t('sales.qty')}${(() => {
-                  const item = pickedItems[line.itemId];
-                  const unit = specUnitOf(item);
-                  return unit ? ` (${unitLabel(t, unit, item?.minSaleUnit)})` : '';
+                  const unit = pickedItems[line.itemId]?.unit;
+                  return unit && unit !== '—' ? ` (${unit})` : '';
                 })()}`}
                 required
               >

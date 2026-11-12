@@ -25,7 +25,7 @@ import { useLocale } from '../i18n/LocaleProvider';
 import { cn } from '../lib/cn';
 import { useHotkeys } from '../lib/useHotkeys';
 import { MobileNav } from './MobileNav';
-import { MOBILE_QUERY, DESKTOP_QUERY, useMediaQuery } from '../lib/useMediaQuery';
+import { MOBILE_QUERY, useMediaQuery } from '../lib/useMediaQuery';
 import { usePersistentState } from '../lib/usePersistentState';
 import { canAccessPermissions } from '../routes/access';
 import { NAV_ICONS } from '../routes/nav-icons';
@@ -186,8 +186,12 @@ export function AppLayout() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [density, setDensity] = useDensity();
 
-  const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const isMobile = useMediaQuery(MOBILE_QUERY);
+  // 768–1024 的平板既不适合底部导航（太挤）也不适合 224px 侧栏（吃掉三分之一宽度），
+  // 固定成 56px 图标栏；桌面才允许用户自己收/展。
+  const showSidebar = useMediaQuery('(min-width: 768px)');
+  const isTablet = useMediaQuery('(min-width: 768px) and (max-width: 1023px)');
+  const rail = isTablet || collapsed;
 
   const nav = permittedRoutes(me?.role ?? null);
   const roleLabel = me?.role ? t(`roles.${me.role}`) : t('common.notAssigned');
@@ -257,54 +261,55 @@ export function AppLayout() {
         {t('common.skipToContent')}
       </a>
 
-      {isDesktop ? (
+      {showSidebar ? (
         <aside
           className={cn(
             'sticky top-0 flex h-dvh shrink-0 flex-col border-e border-line bg-surface transition-[width] duration-150',
-            collapsed ? 'w-14' : 'w-56',
+            rail ? 'w-14' : 'w-56',
           )}
         >
-          <div className={cn('flex h-12 items-center gap-2 border-b border-line px-3', collapsed && 'justify-center px-0')}>
+          <div className={cn('flex h-12 items-center gap-2 border-b border-line px-3', rail && 'justify-center px-0')}>
             <img src="/icons/logo.png" alt="" className="size-6 shrink-0" />
-            {collapsed ? null : <span className="truncate text-[13px] font-semibold text-ink">{t('app.name')}</span>}
+            {rail ? null : <span className="truncate text-[13px] font-semibold text-ink">{t('app.name')}</span>}
           </div>
 
-          <nav aria-label={t('common.search')} className="app-scroll flex-1 overflow-y-auto p-1.5">
+          <nav aria-label={t('common.mainNav')} className="app-scroll flex-1 overflow-y-auto p-1.5">
             {nav.main.length > 0 ? (
-              <p className={cn('px-2 pb-1 pt-2 text-[11px] font-semibold text-ink-subtle', collapsed && 'sr-only')}>
+              <p className={cn('px-2 pb-1 pt-2 text-[11px] font-semibold text-ink-subtle', rail && 'sr-only')}>
                 {t('nav.sectionMain')}
               </p>
             ) : null}
             <div className="flex flex-col gap-0.5">
               {nav.main.map((key) => (
-                <NavItem key={key} routeKey={key} collapsed={collapsed} />
+                <NavItem key={key} routeKey={key} collapsed={rail} />
               ))}
             </div>
 
             {nav.admin.length > 0 ? (
               <>
-                <p className={cn('px-2 pb-1 pt-3 text-[11px] font-semibold text-ink-subtle', collapsed && 'sr-only')}>
+                <p className={cn('px-2 pb-1 pt-3 text-[11px] font-semibold text-ink-subtle', rail && 'sr-only')}>
                   {t('nav.sectionAdmin')}
                 </p>
                 <div className="flex flex-col gap-0.5">
                   {nav.admin.map((key) => (
-                    <NavItem key={key} routeKey={key} collapsed={collapsed} />
+                    <NavItem key={key} routeKey={key} collapsed={rail} />
                   ))}
                 </div>
               </>
             ) : null}
           </nav>
 
-          <div className={cn('flex flex-col gap-1 border-t border-line p-1.5', collapsed && 'items-center')}>
+          <div className={cn('flex flex-col gap-1 border-t border-line p-1.5', rail && 'items-center')}>
             <button
               type="button"
+              hidden={isTablet}
               onClick={() => setCollapsed((prev) => !prev)}
               className="inline-flex h-8 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] text-ink-subtle hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-600"
-              aria-label={collapsed ? t('common.sidebarExpand') : t('common.sidebarCollapse')}
-              aria-expanded={!collapsed}
+              aria-label={rail ? t('common.sidebarExpand') : t('common.sidebarCollapse')}
+              aria-expanded={!rail}
             >
-              {collapsed ? <ChevronsRight aria-hidden className="size-4" /> : <ChevronsLeft aria-hidden className="size-4" />}
-              {collapsed ? null : <span className="text-xs">{t('common.collapse')}</span>}
+              {rail ? <ChevronsRight aria-hidden className="size-4" /> : <ChevronsLeft aria-hidden className="size-4" />}
+              {rail ? null : <span className="text-xs">{t('common.collapse')}</span>}
             </button>
           </div>
         </aside>
@@ -312,7 +317,7 @@ export function AppLayout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-line bg-surface px-3">
-          {isMobile ? (
+          {isMobile || isTablet ? (
             <>
               <img src="/icons/logo.png" alt="" className="size-6 shrink-0" />
               <span className="truncate text-[13px] font-semibold text-ink">{t('app.name')}</span>
