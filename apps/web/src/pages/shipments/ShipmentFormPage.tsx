@@ -15,6 +15,7 @@ import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid
 import { RefreshButton } from '../../components/RefreshButton';
 import { specUnitOf, unitLabel } from '../../i18n/units';
 import { Button } from '../../ui/button';
+import { EntityPicker, type PickerOption } from '../../ui/entity-picker';
 import { Field } from '../../ui/field';
 import { Input } from '../../ui/input';
 import { PageHeader } from '../../ui/page-header';
@@ -109,18 +110,12 @@ export function ShipmentFormPage() {
   });
   const [trackings, setTrackings] = useState<TrackingLine[]>([emptyTracking()]);
   const [lines, setLines] = useState<ItemLine[]>([emptyItem()]);
-  const [itemSearch, setItemSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: units, isLoading: unitsLoading } = useQuery({
     queryKey: ['units', 'list'],
     queryFn: () => listUnits(),
-  });
-
-  const { data: itemPage } = useQuery({
-    queryKey: ['items', 'picker', itemSearch],
-    queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
   });
 
   const { data: detail, isLoading: detailLoading } = useQuery({
@@ -195,15 +190,37 @@ export function ShipmentFormPage() {
   const setLine = (key: string, field: keyof ItemLine, value: string | boolean) =>
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, [field]: value } : l)));
 
-  const pickItem = (key: string, itemId: string) => {
-    const item = (itemPage?.items ?? []).find((i) => i.id === itemId);
+  // 选择器只回传 id / label，而换物品要带回规格、最小销售单位、是否易腐这些字段。
+  // 搜索结果本身就是完整 DTO，就地缓存一份供 pickItem 取用，选中时不必再发详情请求。
+  const pickedItems = useMemo(() => new Map<string, ItemDto>(), []);
+
+  const searchItems = async (query: string, page: number) => {
+    const data = await listItems({ q: query || undefined, page, size: 50 });
+    for (const item of data.items) pickedItems.set(item.id, item);
+    return {
+      items: data.items.map((item) => {
+        const spec = specUnitOf(item);
+        return {
+          id: item.id,
+          label: item.name,
+          meta: [item.sku, spec ? unitLabel(t, spec, item.minSaleUnit) : null]
+            .filter(Boolean)
+            .join(' · '),
+        };
+      }),
+      total: data.total,
+    };
+  };
+
+  const pickItem = (key: string, option: PickerOption) => {
+    const item = pickedItems.get(option.id);
     setLines((prev) =>
       prev.map((l) =>
         l.key === key
           ? {
             ...l,
-            itemId,
-            name: item?.name ?? l.name,
+            itemId: option.id,
+            name: item?.name ?? option.label,
             spec: specUnitOf(item) ?? l.spec,
             minSaleUnit: item?.minSaleUnit ?? l.minSaleUnit,
             isPerishable: item?.isPerishable ?? l.isPerishable,
@@ -215,8 +232,8 @@ export function ShipmentFormPage() {
 
   // 「应收数量」后缀单位随物品的「最小销售单位」变化（与销售清单一致）。
   const quantityUnitSuffix = (line: ItemLine): string => {
-    const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
-    // 物品不在当前候选项（编辑回显的非本页物品）时退回详情带回的规格与 minSaleUnit。
+    // 本次会话选过物品时用缓存里的最新 DTO；编辑回显的行没有缓存，退回详情带回的规格与 minSaleUnit。
+    const item = pickedItems.get(line.itemId);
     const unit = item ? specUnitOf(item) : line.spec;
     const minSaleUnit = item?.minSaleUnit ?? line.minSaleUnit;
     return unit ? ` (${unitLabel(t, unit, minSaleUnit)})` : '';
@@ -421,14 +438,8 @@ export function ShipmentFormPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-ink">{t('shipments.items')}</h2>
           <div className="flex flex-wrap items-center gap-2">
-            <RefreshButton queryKey={['items', 'picker']} additionalKeys={[['units', 'list']]} />
-            <Input
-              value={itemSearch}
-              placeholder={t('shipments.itemSearchPlaceholder')}
-              aria-label={t('shipments.itemSearchPlaceholder')}
-              onChange={(e) => setItemSearch(e.target.value)}
-              className="w-full sm:w-64"
-            />
+            {/* 物品由行内选择器按需搜索，这里只刷新仍在查询缓存里的单位列表。 */}
+            <RefreshButton queryKey={['units', 'list']} />
             <Button asChild size="sm" variant="secondary">
               <Link to="/items/new" target="_blank" rel="noopener noreferrer">
                 {t('shipments.newItem')}
@@ -447,15 +458,14 @@ export function ShipmentFormPage() {
           <div key={line.key} className="flex flex-col gap-2 rounded-lg border border-line p-3">
             <div className={`${LINE_GRID_CLASS} sm:grid-cols-3`}>
               <Field label={t('shipments.itemName')} required className="sm:col-span-1">
-                <Select value={line.itemId} onValueChange={(value) => pickItem(line.key, value)}>
-                  <option value="">{t('shipments.selectItem')}</option>
-                  {(itemPage?.items ?? []).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                      {item.sku ? ` · ${item.sku}` : ''}
-                    </option>
-                  ))}
-                </Select>
+                <EntityPicker
+                  value={line.itemId}
+                  displayValue={line.name}
+                  title={t('shipments.itemName')}
+                  placeholder={t('shipments.selectItem')}
+                  onSearch={searchItems}
+                  onChange={(option) => pickItem(line.key, option)}
+                />
               </Field>
               <Field label={`${t('shipments.expectedQty')}${quantityUnitSuffix(line)}`} required>
                 <Input

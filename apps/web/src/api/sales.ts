@@ -15,6 +15,7 @@ import { apiDelete, apiGet, apiPatch, apiPost } from './http';
 // 发送时 FEFO（或手工指定批次）分配并扣减库存，零售方上传支付凭证并确认收货。
 
 export interface SalesOrderListQuery {
+  q?: string;
   status?: SalesStatus;
   page?: number;
   size?: number;
@@ -22,6 +23,7 @@ export interface SalesOrderListQuery {
 
 function toQuery(params: SalesOrderListQuery): string {
   const search = new URLSearchParams();
+  if (params.q) search.set('q', params.q);
   if (params.status) search.set('status', params.status);
   if (params.page !== undefined) search.set('page', String(params.page));
   if (params.size !== undefined) search.set('size', String(params.size));

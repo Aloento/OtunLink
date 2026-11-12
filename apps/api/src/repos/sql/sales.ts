@@ -21,9 +21,11 @@ import { nextSalesNo } from './sequences';
 export function createSalesRepo(exec: SqlExecutor): SalesRepository {
   const sales: SalesRepository = {
     async list(query: SalesListQuery): Promise<SalesListResult> {
+      const q = query.q?.trim();
       const where = (alias: string): string => {
         const parts: string[] = [];
         if (query.status) parts.push(`${alias}status = ${quote(query.status)}`);
+        if (q) parts.push(`${alias}sales_no ILIKE ${quote(`%${q}%`)}`);
         if (query.unitId) {
           parts.push(`(${alias}seller_unit_id = ${quote(query.unitId)} OR ${alias}buyer_unit_id = ${quote(query.unitId)})`);
         }

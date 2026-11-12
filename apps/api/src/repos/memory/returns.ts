@@ -1,5 +1,5 @@
 // 退货单内存仓库（return_orders + items）。
-import type { CreateReturnRepoInput, CreateSalesReturnRepoInput, ReturnListQuery, ReturnListResult, ReturnOrderItemRecord, ReturnOrderRecord, ReturnRepository, SalesReturnReceiveLineInput } from '../../types';
+import type { CreateReturnRepoInput, CreateSalesReturnRepoInput, ReturnListQuery, ReturnListResult, ReturnOrderItemRecord, ReturnOrderRecord, ReturnRepository, SalesReturnReceiveLineInput, UnitRepository } from '../../types';
 import { ensureBatchNo } from '../../lib/batch';
 import { SALES_STATE_CONFLICT_MESSAGE, normalizeEmpty, round2, uuid } from './helpers';
 import type { MemoryInboundRepository } from './inbounds';
@@ -40,6 +40,8 @@ export class MemoryReturnRepository implements ReturnRepository {
     private readonly salesRepo: MemorySalesRepository,
     private readonly ledger: MemoryStockLedger,
     seed: { returns?: ReturnOrderRecord[]; returnItems?: ReturnOrderItemRecord[] } = {},
+    /** 关键字搜索用的发起/接收单位名解析（与 SQL 的 business_units 联表对应）。 */
+    private readonly unitRepo?: Pick<UnitRepository, 'findById'>,
   ) {
     for (const row of seed.returns ?? []) this.rows.set(row.id, cloneReturn(row));
     for (const row of seed.returnItems ?? []) {
@@ -57,7 +59,8 @@ export class MemoryReturnRepository implements ReturnRepository {
   }
 
   async list(query: ReturnListQuery): Promise<ReturnListResult> {
-    const all = [...this.rows.values()]
+    const q = query.q?.trim().toLowerCase();
+    let rows = [...this.rows.values()]
       .filter((row) => (query.status ? row.status === query.status : true))
       .filter((row) => (query.sourceType ? row.sourceType === query.sourceType : true))
       .filter((row) => (query.salesOrderId ? row.salesOrderId === query.salesOrderId : true))
@@ -65,12 +68,35 @@ export class MemoryReturnRepository implements ReturnRepository {
         query.scopeUnitId
           ? row.fromUnitId === query.scopeUnitId || row.toUnitId === query.scopeUnitId
           : true,
-      )
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      );
+    if (q) rows = await this.filterByKeyword(rows, q);
+    const all = rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     const size = Math.min(Math.max(query.size ?? 20, 1), 50);
     const page = Math.max(query.page ?? 1, 1);
     const start = (page - 1) * size;
     return { items: all.slice(start, start + size).map(cloneReturn), total: all.length, page, size };
+  }
+
+  /** 关键字：单号或发起/接收单位名（同 SQL：大小写不敏感的子串匹配）。 */
+  private async filterByKeyword(
+    rows: ReturnOrderRecord[],
+    q: string,
+  ): Promise<ReturnOrderRecord[]> {
+    const matched: ReturnOrderRecord[] = [];
+    for (const row of rows) {
+      if (row.returnNo.toLowerCase().includes(q)) {
+        matched.push(row);
+        continue;
+      }
+      const [from, to] = await Promise.all([
+        this.unitRepo?.findById(row.fromUnitId),
+        this.unitRepo?.findById(row.toUnitId),
+      ]);
+      if (from?.name.toLowerCase().includes(q) || to?.name.toLowerCase().includes(q)) {
+        matched.push(row);
+      }
+    }
+    return matched;
   }
 
   async findById(id: string): Promise<ReturnOrderRecord | null> {

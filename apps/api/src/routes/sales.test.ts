@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../index';
 import { createMemoryRepos } from '../repos/memory';
-import type { ItemRecord, PartnershipRecord, TokenClaims, UnitRecord, UserRecord } from '../types';
+import type {
+  ItemRecord,
+  PartnershipRecord,
+  SalesOrderRecord,
+  TokenClaims,
+  UnitRecord,
+  UserRecord,
+} from '../types';
 
 const now = new Date('2025-01-01T00:00:00.000Z');
 
@@ -875,5 +882,80 @@ describe(' 销售单（请货/发货/FEFO 分配）', () => {
       headers: auth('wh'),
     });
     expect(del.status).toBe(404);
+  });
+});
+
+// ── 列表关键字搜索（q）───────────────────────────────────────────────
+// 语义：q 按单号模糊匹配（大小写不敏感），空串视为未传；不得影响既有 status/scope 过滤。
+describe('销售单列表关键字搜索 q', () => {
+  const searchAdmin = user({ entraSub: 'q-admin', role: 'ADMIN' });
+
+  function salesOrder(partial: Partial<SalesOrderRecord> & { id: string }): SalesOrderRecord {
+    return {
+      salesNo: `SO-${partial.id}`,
+      sellerUnitId: WAREHOUSE_UNIT,
+      buyerUnitId: RETAIL_UNIT,
+      source: 'RETAILER_REQUEST',
+      deliveryMethod: 'PICKUP',
+      deliveryAddress: null,
+      carrier: null,
+      trackingNo: null,
+      freight: '0',
+      discountPercent: '0',
+      currency: 'CNY',
+      totalAmount: '100.00',
+      status: 'DRAFT',
+      remark: null,
+      sentAt: null,
+      confirmedAt: null,
+      createdBy: null,
+      createdAt: now,
+      updatedAt: now,
+      hasPayment: false,
+      ...partial,
+    };
+  }
+
+  const salesOrders = [
+    salesOrder({ id: '00000000-0000-4000-8000-0000000000c1', salesNo: 'SO-20250101-0001' }),
+    salesOrder({ id: '00000000-0000-4000-8000-0000000000c2', salesNo: 'SO-20250102-0002' }),
+    salesOrder({
+      id: '00000000-0000-4000-8000-0000000000c3',
+      salesNo: 'SO-20250103-0003',
+      status: 'CANCELLED',
+    }),
+  ];
+
+  async function list(query: string) {
+    const repos = createMemoryRepos({ users: [searchAdmin], units, items, salesOrders });
+    const app = createApp({
+      verifyToken: async (_env, token): Promise<TokenClaims> => ({ sub: token }),
+      getRepos: async () => repos,
+    });
+    const res = await app.request(`/api/v1/sales-orders${query}`, { headers: auth('q-admin') });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { items: Array<{ salesNo: string }>; total: number };
+    };
+    return { total: body.data.total, nos: body.data.items.map((row) => row.salesNo) };
+  }
+
+  it('q 命中单号（大小写不敏感）且与 status 过滤并存', async () => {
+    expect(await list('?q=so-20250102')).toEqual({ total: 1, nos: ['SO-20250102-0002'] });
+    expect(await list('?q=so-&status=CANCELLED')).toEqual({
+      total: 1,
+      nos: ['SO-20250103-0003'],
+    });
+  });
+
+  it('q 不命中返回空列表', async () => {
+    expect(await list('?q=NOT-EXIST')).toEqual({ total: 0, nos: [] });
+  });
+
+  it('q 为空或纯空白时与不传一致', async () => {
+    const base = await list('');
+    expect(base.total).toBe(3);
+    expect(await list('?q=')).toEqual(base);
+    expect(await list('?q=%20%20')).toEqual(base);
   });
 });

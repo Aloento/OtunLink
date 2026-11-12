@@ -21,23 +21,23 @@
   --color-brand-900: #0b3373;
 
   /* 语义色板 */
-  --color-canvas: #fafafa;
+  --color-canvas: #f4f6f8;
   --color-surface: #ffffff;
-  --color-surface-muted: #f5f5f5;
-  --color-surface-hover: #e8e8e8;
+  --color-surface-muted: #f1f4f7;
+  --color-surface-hover: #e9eef4;
   /* 装饰性分隔线（卡片 / 表格外框 / 表头）：不承担「识别控件」的职责，不需要 3:1。 */
-  --color-line: #e5e5e5;
+  --color-line: #e2e6eb;
   /* 控件边界（输入框 / 下拉 / 复选框 / 次级按钮）：WCAG 1.4.11 要求 >= 3:1。
      原值 #d4d4d4 对白底只有 1.48:1 —— 低视力用户看不出输入框的边界。
      #8c8c8c：白底 3.36:1、canvas 3.22:1、surface-muted 3.08:1。 */
-  --color-line-strong: #8c8c8c;
+  --color-line-strong: #868e99;
   /* 悬停态边界：比静止态再深一档，避免「悬停后反而更难看清」。
      #737373：白底 4.74:1（原 #a3a3a3 只有 2.52:1）。 */
-  --color-line-hover: #737373;
-  --color-ink: #171717;
-  --color-ink-soft: #404040;
-  --color-ink-muted: #525252;
-  --color-ink-subtle: #666666;
+  --color-line-hover: #6b7480;
+  --color-ink: #0f172a;
+  --color-ink-soft: #334155;
+  --color-ink-muted: #4b5563;
+  --color-ink-subtle: #5f6b7a;
 
   --color-success-600: #15803d;
   --color-success-50: #f0fdf4;
@@ -53,7 +53,23 @@
   --color-danger-50: #fef2f2;
   --color-danger-200: #fecaca;
 
-  --radius-card: 0.75rem;
+  /* 数据密集界面：半径收一档，控件 6px、容器 8px */
+  --radius-control: 0.375rem;
+  --radius-card: 0.5rem;
+
+  /* 表格密度（3 档，由 <html data-density> 切换）*/
+  --row-h-compact: 1.75rem; /* 28px */
+  --row-h-cozy: 2rem; /* 32px，默认 */
+  --row-h-comfortable: 2.375rem; /* 38px */
+  --row-h: var(--row-h-cozy);
+  --cell-x: 0.625rem;
+
+  /* 斑马纹与选中行 */
+  --color-surface-stripe: #f9fbfc;
+  --color-row-selected: #eaf2ff;
+
+  /* 只有浮层才用阴影：卡片与表格一律用 1px 边框 */
+  --shadow-overlay: 0 12px 32px -12px rgb(15 23 42 / 0.24), 0 2px 8px -4px rgb(15 23 42 / 0.12);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -71,6 +87,17 @@
   body,
   #root {
     height: 100%;
+  }
+
+  /* 密度：全局切换，表格与工具栏一起变紧凑（ERP 一屏多行是硬需求） */
+  html[data-density="compact"] {
+    --row-h: var(--row-h-compact);
+    --cell-x: 0.5rem;
+  }
+
+  html[data-density="comfortable"] {
+    --row-h: var(--row-h-comfortable);
+    --cell-x: 0.75rem;
   }
 
   body {
@@ -293,5 +320,101 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-spin {
     animation-duration: 6s;
+  }
+}
+
+/* ------------------------------------------------------------------------- *
+ * ERP 数据表格
+ *
+ * 表头吸顶、首列可固定、数字列对齐数字；行高由密度变量控制。
+ * 用原生 <table>，不改成 div + role="grid"：表格语义（行列关系、表头朗读）
+ * 由浏览器和读屏软件直接提供，这也是 accessibility 指南优先原生元素的要求。
+ * ------------------------------------------------------------------------- */
+@layer components {
+  .app-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    font-size: 0.8125rem; /* 13px：数据密集界面的正文尺寸 */
+    line-height: 1.35;
+  }
+
+  .app-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 2.25rem;
+    padding: 0 var(--cell-x);
+    background-color: var(--color-surface-muted);
+    border-bottom: 1px solid var(--color-line);
+    color: var(--color-ink-muted);
+    font-weight: 600;
+    font-size: 0.75rem; /* 12px */
+    text-align: start;
+    white-space: nowrap;
+  }
+
+  .app-table tbody td {
+    height: var(--row-h);
+    padding: 0 var(--cell-x);
+    border-bottom: 1px solid var(--color-line);
+    vertical-align: middle;
+    /* 数字列上下对齐，金额不会因为字形宽度跳动 */
+    font-variant-numeric: tabular-nums;
+  }
+
+  .app-table tbody tr:hover td {
+    background-color: var(--color-surface-hover);
+  }
+
+  .app-table tbody tr[data-selected="true"] td {
+    background-color: var(--color-row-selected);
+  }
+
+  .app-table tbody tr[data-zebra="true"] td {
+    background-color: var(--color-surface-stripe);
+  }
+
+  /* 固定列：必须有实底，否则横向滚动时会看到下面的内容 */
+  .app-table .app-table-sticky {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: 1;
+    background-color: var(--color-surface);
+  }
+
+  .app-table thead .app-table-sticky {
+    z-index: 3;
+    background-color: var(--color-surface-muted);
+  }
+
+  .app-table tbody tr:hover .app-table-sticky {
+    background-color: var(--color-surface-hover);
+  }
+
+  .app-table tbody tr[data-selected="true"] .app-table-sticky {
+    background-color: var(--color-row-selected);
+  }
+
+  /* 列宽拖拽的热区：8px 宽、全高，光标提示可拖 */
+  .app-col-resizer {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: -4px;
+    width: 8px;
+    cursor: col-resize;
+    user-select: none;
+    touch-action: none;
+  }
+
+  .app-col-resizer:hover,
+  .app-col-resizer[data-resizing="true"] {
+    background-color: var(--color-brand-300);
+  }
+
+  /* 面板内部滚动条：细一点，不抢视觉重量 */
+  .app-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
   }
 }

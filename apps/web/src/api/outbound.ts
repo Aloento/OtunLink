@@ -11,6 +11,7 @@ import { apiDelete, apiGet, apiPatch, apiPost } from './http';
 // 出库单 API 客户端：手工出库（NORMAL），POST 后按 FEFO 或指定批次扣减。
 
 export interface OutboundOrderListQuery {
+  q?: string;
   status?: OutboundOrderDto['status'];
   type?: OutboundType;
   page?: number;
@@ -19,6 +20,7 @@ export interface OutboundOrderListQuery {
 
 function toQuery(params: OutboundOrderListQuery): string {
   const search = new URLSearchParams();
+  if (params.q) search.set('q', params.q);
   if (params.status) search.set('status', params.status);
   if (params.type) search.set('type', params.type);
   if (params.page !== undefined) search.set('page', String(params.page));

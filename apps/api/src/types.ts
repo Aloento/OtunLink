@@ -305,6 +305,10 @@ export interface ShipmentRecord {
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
+  /** 列表联表聚合（仅 list 查询返回）：明细行数。 */
+  itemsCount?: number;
+  /** 列表联表聚合（仅 list 查询返回）：数量合计。 */
+  totalQty?: string;
 }
 
 export interface ShipmentTrackingRecord {
@@ -377,6 +381,8 @@ export interface ShipmentListQuery {
   page?: number;
   size?: number;
   status?: ShipmentStatus;
+  /** 关键字：按单号（shipment_no）模糊匹配，大小写不敏感；空串视为未传。 */
+  q?: string;
   /** 数据范围：仅返回发货方或收货方等于该单元的单据。 */
   scopeUnitId?: string;
 }
@@ -505,6 +511,10 @@ export interface InboundOrderRecord {
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
+  /** 列表联表聚合（仅 list 查询返回）：明细行数。 */
+  itemCount?: number;
+  /** 列表联表聚合（仅 list 查询返回）：数量合计。 */
+  totalQty?: string;
 }
 
 export interface InboundOrderItemRecord {
@@ -625,6 +635,8 @@ export interface InboundListQuery {
   page?: number;
   size?: number;
   status?: InboundStatus;
+  /** 关键字：按单号（inbound_no）或往来单位名模糊匹配，大小写不敏感；空串视为未传。 */
+  q?: string;
   /** 数据范围：仅返回该仓库的入库单。 */
   warehouseUnitId?: string;
 }
@@ -641,6 +653,8 @@ export interface ReturnListQuery {
   size?: number;
   status?: ReturnStatus;
   sourceType?: ReturnSourceType;
+  /** 关键字：按单号（return_no）或发起/接收单位名模糊匹配，大小写不敏感；空串视为未传。 */
+  q?: string;
   /** 仅返回关联到指定销售单的 SALES 退货。 */
   salesOrderId?: string;
   /** 数据范围：from 或 to 命中即返回。 */
@@ -750,6 +764,10 @@ export interface OutboundOrderRecord {
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
+  /** 列表联表聚合（仅 list 查询返回）：明细行数。 */
+  itemCount?: number;
+  /** 列表联表聚合（仅 list 查询返回）：数量合计。 */
+  totalQty?: string;
 }
 
 export interface OutboundOrderItemRecord {
@@ -795,6 +813,8 @@ export interface OutboundListQuery {
   size?: number;
   status?: OutboundStatus;
   type?: OutboundType;
+  /** 关键字：按单号（outbound_no）或往来单位名模糊匹配，大小写不敏感；空串视为未传。 */
+  q?: string;
   /** 数据范围：仅返回该仓库的出库单。 */
   warehouseUnitId?: string;
 }
@@ -1052,6 +1072,8 @@ export interface SalesListQuery {
   page?: number;
   size?: number;
   status?: SalesStatus;
+  /** 关键字：按单号（sales_no）模糊匹配，大小写不敏感；空串视为未传。 */
+  q?: string;
   /** 数据范围：买方或卖方单元（任一方匹配）。 */
   unitId?: string;
   /** 零售查询：仅买方 = 自身且卖方 ∈ 已签约仓库集合。 */

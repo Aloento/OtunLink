@@ -55,6 +55,7 @@ export function createMemoryRepos(seed?: {
       inboundItems: seed?.inboundItems,
     },
     stockLedger,
+    unitRepo,
   );
   const userRepo = new MemoryUserRepository(seed?.users);
   const retailPriceRepo = new MemoryRetailPriceRepository(stockLedger, unitRepo, itemRepo, userRepo);
@@ -67,11 +68,11 @@ export function createMemoryRepos(seed?: {
   const returnRepo = new MemoryReturnRepository(shipmentRepo, inboundRepo, salesRepo, stockLedger, {
     returns: seed?.returns,
     returnItems: seed?.returnItems,
-  });
+  }, unitRepo);
   const outboundRepo = new MemoryOutboundRepository(stockLedger, {
     outbounds: seed?.outbounds,
     outboundItems: seed?.outboundItems,
-  });
+  }, unitRepo);
   const partnershipRepo = new MemoryPartnershipRepository(unitRepo, seed?.partnerships);
   const notificationRepo = new MemoryNotificationRepository();
 

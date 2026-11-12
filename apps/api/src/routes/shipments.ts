@@ -75,9 +75,10 @@ export function shipmentsRouter(): Hono<AppEnv> {
       | undefined;
     const page = parsePositiveInt(c.req.query('page'), 1);
     const size = parsePositiveInt(c.req.query('size'), 20, 50);
+    const q = c.req.query('q')?.trim() || undefined;
     const scope = unitScopeFilter(c.get('auth'));
 
-    const result = await repos.shipments.list({ page, size, status, scopeUnitId: scope?.unitId });
+    const result = await repos.shipments.list({ page, size, status, q, scopeUnitId: scope?.unitId });
     const items = await hydrateList(repos, result.items);
     return ok(c, { ...result, items });
   });

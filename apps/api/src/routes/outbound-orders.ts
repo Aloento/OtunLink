@@ -47,6 +47,7 @@ export function outboundOrdersRouter(): Hono<AppEnv> {
       | undefined;
     const page = parsePositiveInt(c.req.query('page'), 1);
     const size = parsePositiveInt(c.req.query('size'), 20, 50);
+    const q = c.req.query('q')?.trim() || undefined;
     const scope = unitScopeFilter(c.get('auth'));
 
     const result = await repos.outbounds.list({
@@ -54,6 +55,7 @@ export function outboundOrdersRouter(): Hono<AppEnv> {
       size,
       status,
       type,
+      q,
       warehouseUnitId: scope?.unitId,
     });
     const items = await hydrateList(repos, result.items);

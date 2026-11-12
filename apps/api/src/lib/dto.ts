@@ -185,6 +185,8 @@ export function shipmentDto(
     createdBy: shipment.createdBy,
     createdAt: shipment.createdAt.toISOString(),
     updatedAt: shipment.updatedAt.toISOString(),
+    itemsCount: shipment.itemsCount,
+    totalQty: shipment.totalQty,
     trackings: options.trackings.map(shipmentTrackingDto),
   };
 }
@@ -264,6 +266,8 @@ export function inboundDto(
     createdBy: inbound.createdBy,
     createdAt: inbound.createdAt.toISOString(),
     updatedAt: inbound.updatedAt.toISOString(),
+    itemCount: inbound.itemCount,
+    totalQty: inbound.totalQty,
   };
 }
 
@@ -361,6 +365,8 @@ export function outboundDto(
     createdBy: order.createdBy,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+    itemCount: order.itemCount,
+    totalQty: order.totalQty,
   };
 }
 

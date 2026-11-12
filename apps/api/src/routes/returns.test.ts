@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../index';
 import { createMemoryRepos } from '../repos/memory';
-import type { ItemRecord, TokenClaims, UnitRecord, UserRecord } from '../types';
+import type {
+  ItemRecord,
+  ReturnOrderRecord,
+  TokenClaims,
+  UnitRecord,
+  UserRecord,
+} from '../types';
 
 const now = new Date('2025-01-01T00:00:00.000Z');
 
@@ -415,5 +421,101 @@ describe(' 发货退货（拒收）闭环', () => {
       headers: auth('warehouse'),
     });
     expect(del.status).toBe(404);
+  });
+});
+
+// ── 列表关键字搜索（q）───────────────────────────────────────────────
+// 语义：q 按单号命中，列表联表带出的发起/接收单位名也命中；大小写不敏感，空串视为未传。
+describe('退货单列表关键字搜索 q', () => {
+  const searchAdmin = user({ entraSub: 'q-admin', role: 'ADMIN' });
+  const RETAIL_UNIT = '00000000-0000-4000-8000-000000000004';
+  const searchUnits = [
+    unit({ id: COLLECTOR_UNIT, type: 'COLLECTOR', name: '上海集货部' }),
+    unit({ id: WAREHOUSE_UNIT, type: 'WAREHOUSE', name: '匈牙利仓库' }),
+    unit({ id: RETAIL_UNIT, type: 'RETAILER', name: '零售门店一' }),
+  ];
+
+  function returnOrder(partial: Partial<ReturnOrderRecord> & { id: string }): ReturnOrderRecord {
+    return {
+      returnNo: `RT-${partial.id}`,
+      sourceType: 'SHIPMENT',
+      shipmentId: null,
+      salesOrderId: null,
+      fromUnitId: WAREHOUSE_UNIT,
+      toUnitId: COLLECTOR_UNIT,
+      status: 'PENDING',
+      reason: null,
+      note: null,
+      photoFileIds: [],
+      returnCarrier: null,
+      returnTrackingNo: null,
+      createdBy: null,
+      processedBy: null,
+      processedAt: null,
+      processedNote: null,
+      createdAt: now,
+      updatedAt: now,
+      ...partial,
+    };
+  }
+
+  const returns = [
+    returnOrder({ id: '00000000-0000-4000-8000-000000000101', returnNo: 'RT-20250101-0001' }),
+    returnOrder({
+      id: '00000000-0000-4000-8000-000000000102',
+      returnNo: 'RT-20250102-0002',
+      sourceType: 'SALES',
+      fromUnitId: WAREHOUSE_UNIT,
+      toUnitId: RETAIL_UNIT,
+      status: 'REQUESTED',
+    }),
+    returnOrder({
+      id: '00000000-0000-4000-8000-000000000103',
+      returnNo: 'RT-20250103-0003',
+      status: 'CLOSED',
+    }),
+  ];
+
+  async function list(query: string) {
+    const repos = createMemoryRepos({
+      users: [searchAdmin],
+      units: searchUnits,
+      items,
+      returns,
+    });
+    const app = createApp({
+      verifyToken: async (_env, token): Promise<TokenClaims> => ({ sub: token }),
+      getRepos: async () => repos,
+    });
+    const res = await app.request(`/api/v1/return-orders${query}`, { headers: auth('q-admin') });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { items: Array<{ returnNo: string }>; total: number };
+    };
+    return { total: body.data.total, nos: body.data.items.map((row) => row.returnNo) };
+  }
+
+  it('q 命中单号（大小写不敏感）且与 status 过滤并存', async () => {
+    expect(await list('?q=rt-20250103')).toEqual({ total: 1, nos: ['RT-20250103-0003'] });
+    expect(await list('?q=RT-&status=PENDING')).toEqual({ total: 1, nos: ['RT-20250101-0001'] });
+  });
+
+  it('q 命中发起/接收单位名', async () => {
+    expect(await list('?q=零售门店')).toEqual({ total: 1, nos: ['RT-20250102-0002'] });
+    expect(await list('?q=集货部')).toEqual({
+      total: 2,
+      nos: ['RT-20250101-0001', 'RT-20250103-0003'],
+    });
+  });
+
+  it('q 不命中返回空列表', async () => {
+    expect(await list('?q=NOT-EXIST')).toEqual({ total: 0, nos: [] });
+  });
+
+  it('q 为空或纯空白时与不传一致', async () => {
+    const base = await list('');
+    expect(base.total).toBe(3);
+    expect(await list('?q=')).toEqual(base);
+    expect(await list('?q=%20%20')).toEqual(base);
   });
 });

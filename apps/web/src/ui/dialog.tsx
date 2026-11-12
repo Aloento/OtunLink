@@ -186,7 +186,7 @@ export function DialogHeader({ className, children }: { className?: string; chil
 export function DialogTitle({ className, children }: { className?: string; children: ReactNode }) {
   const { titleId } = useDialogContext('DialogTitle');
   return (
-    <h2 id={titleId} className={cn('text-base font-semibold text-ink', className)}>
+    <h2 id={titleId} className={cn('text-[15px] font-semibold text-ink', className)}>
       {children}
     </h2>
   );
@@ -198,7 +198,7 @@ export function DialogDescription({ className, children }: { className?: string;
 
 export function DialogBody({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4', className)}>
+    <div className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3', className)}>
       {children}
     </div>
   );

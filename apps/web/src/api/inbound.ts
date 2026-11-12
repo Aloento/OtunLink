@@ -11,6 +11,7 @@ import { apiDelete, apiGet, apiPost } from './http';
 // 入库单 API 客户端：确认收货自动建档的 DRAFT/POSTED + 手工入库单（sourceType=MANUAL）。
 
 export interface InboundListQuery {
+  q?: string;
   status?: InboundStatus;
   page?: number;
   size?: number;
@@ -18,6 +19,7 @@ export interface InboundListQuery {
 
 function toQuery(params: InboundListQuery): string {
   const search = new URLSearchParams();
+  if (params.q) search.set('q', params.q);
   if (params.status) search.set('status', params.status);
   if (params.page !== undefined) search.set('page', String(params.page));
   if (params.size !== undefined) search.set('size', String(params.size));

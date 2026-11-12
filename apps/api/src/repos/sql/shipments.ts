@@ -22,6 +22,8 @@ export function createShipmentsRepo(exec: SqlExecutor): ShipmentRepository {
     async list(query: ShipmentListQuery): Promise<ShipmentListResult> {
       const where: string[] = [];
       if (query.status) where.push(`status = ${quote(query.status)}`);
+      const q = query.q?.trim();
+      if (q) where.push(`shipment_no ILIKE ${quote(`%${q}%`)}`);
       if (query.scopeUnitId) {
         where.push(
           `(shipper_unit_id = ${quote(query.scopeUnitId)} OR receiver_unit_id = ${quote(query.scopeUnitId)})`,
@@ -34,7 +36,10 @@ export function createShipmentsRepo(exec: SqlExecutor): ShipmentRepository {
       const totalResult = await exec.query(`SELECT count(*)::int AS n FROM shipments${clause}`);
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(
-        `SELECT * FROM shipments${clause} ORDER BY created_at DESC, id ASC LIMIT ${size} OFFSET ${offset}`,
+        `SELECT s.*,
+                (SELECT count(*)::int FROM shipment_items si WHERE si.shipment_id = s.id) AS items_count,
+                (SELECT COALESCE(sum(si.qty), 0) FROM shipment_items si WHERE si.shipment_id = s.id) AS total_qty
+         FROM shipments s${clause} ORDER BY s.created_at DESC, s.id ASC LIMIT ${size} OFFSET ${offset}`,
       );
       return { items: rows.map(mapShipment), total, page, size };
     },

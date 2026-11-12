@@ -1,5 +1,5 @@
 // 入库单内存仓库（inbound_orders + items）。
-import type { ConfirmReceiptRepoInput, CreateInboundManualRepoInput, InboundListQuery, InboundListResult, InboundOrderItemRecord, InboundOrderRecord, InboundRepository, ItemRepository, ShipmentItemRecord, ShipmentRecord } from '../../types';
+import type { ConfirmReceiptRepoInput, CreateInboundManualRepoInput, InboundListQuery, InboundListResult, InboundOrderItemRecord, InboundOrderRecord, InboundRepository, ItemRepository, ShipmentItemRecord, ShipmentRecord, UnitRepository } from '../../types';
 import { ensureBatchNo } from '../../lib/batch';
 import { mergeInboundLines, qtyEqual } from '../inbound-lines';
 import { normalizeEmpty, uuid } from './helpers';
@@ -46,6 +46,8 @@ export class MemoryInboundRepository implements InboundRepository {
     private readonly itemRepo: ItemRepository,
     seed: { inbounds?: InboundOrderRecord[]; inboundItems?: InboundOrderItemRecord[] } = {},
     private readonly ledger: MemoryStockLedger = new MemoryStockLedger(),
+    /** 关键字搜索用的往来单位名解析（与 SQL 的 business_units 联表对应）。 */
+    private readonly unitRepo?: Pick<UnitRepository, 'findById'>,
   ) {
     for (const row of seed.inbounds ?? []) this.rows.set(row.id, cloneInbound(row));
     for (const row of seed.inboundItems ?? []) {
@@ -189,14 +191,35 @@ export class MemoryInboundRepository implements InboundRepository {
   }
 
   async list(query: InboundListQuery): Promise<InboundListResult> {
-    const all = [...this.rows.values()]
+    const q = query.q?.trim().toLowerCase();
+    let rows = [...this.rows.values()]
       .filter((row) => (query.status ? row.status === query.status : true))
-      .filter((row) => (query.warehouseUnitId ? row.warehouseUnitId === query.warehouseUnitId : true))
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      .filter((row) => (query.warehouseUnitId ? row.warehouseUnitId === query.warehouseUnitId : true));
+    if (q) rows = await this.filterByKeyword(rows, q);
+    const all = rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     const size = Math.min(Math.max(query.size ?? 20, 1), 50);
     const page = Math.max(query.page ?? 1, 1);
     const start = (page - 1) * size;
     return { items: all.slice(start, start + size).map(cloneInbound), total: all.length, page, size };
+  }
+
+  /** 关键字：单号或往来单位名（同 SQL：大小写不敏感的子串匹配）。 */
+  private async filterByKeyword(
+    rows: InboundOrderRecord[],
+    q: string,
+  ): Promise<InboundOrderRecord[]> {
+    const matched: InboundOrderRecord[] = [];
+    for (const row of rows) {
+      if (row.inboundNo.toLowerCase().includes(q)) {
+        matched.push(row);
+        continue;
+      }
+      const unit = row.counterpartyUnitId
+        ? await this.unitRepo?.findById(row.counterpartyUnitId)
+        : null;
+      if (unit?.name.toLowerCase().includes(q)) matched.push(row);
+    }
+    return matched;
   }
 
   async findById(id: string): Promise<InboundOrderRecord | null> {

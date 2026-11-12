@@ -15,7 +15,8 @@ export function TabsList({ className, ...props }: ComponentProps<typeof TabsPrim
   return (
     <TabsPrimitive.List
       className={cn(
-        'inline-flex w-full items-center gap-1 rounded-lg bg-surface-muted p-1 sm:w-auto',
+        // 下划线式页签（ERP 惯例）：内容区紧贴页签，视觉噪音比药丸式分段控件低
+        'inline-flex w-full items-center gap-4 border-b border-line sm:w-auto',
         className,
       )}
       {...props}
@@ -28,11 +29,10 @@ export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsP
     <TabsPrimitive.Trigger
       className={cn(
         // min-h + 内边距而不是固定高度：系统字号放大时标签页要能跟着长高（WCAG 1.4.12）。
-        'inline-flex min-h-8 flex-1 items-center justify-center whitespace-nowrap rounded-md border border-transparent px-3 py-1 text-sm font-medium text-ink-muted transition-colors sm:flex-none',
-        'hover:text-ink',
-        // 选中态：白底与列表的 surface-muted 只差 1.09:1，单靠底色无法识别选中项（WCAG 1.4.11）。
-        // 用 line-strong 的实边框（白底 3.36:1）补一条非颜色之外也成立的边界线索。
-        'data-[state=active]:border-line-strong data-[state=active]:bg-surface data-[state=active]:text-ink data-[state=active]:shadow-sm',
+        'relative -mb-px inline-flex min-h-9 flex-1 items-center justify-center whitespace-nowrap border-b-2 border-transparent px-1 text-[13px] font-medium text-ink-muted transition-colors sm:flex-none',
+        'hover:border-line-strong hover:text-ink',
+        // 选中态用 2px 实线（brand-600 对白底 6.7:1），不靠底色区分：颜色之外还有形状线索
+        'data-[state=active]:border-brand-600 data-[state=active]:text-brand-700',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600',
         'disabled:pointer-events-none disabled:opacity-50',
         className,

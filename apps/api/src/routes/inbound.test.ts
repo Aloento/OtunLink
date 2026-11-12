@@ -4,6 +4,7 @@ import { createApp } from '../index';
 import { createMemoryRepos } from '../repos/memory';
 import type {
   InboundOrderItemRecord,
+  InboundOrderRecord,
   ItemRecord,
   TokenClaims,
   UnitRecord,
@@ -596,5 +597,91 @@ describe(' 手动入库单', () => {
       headers: auth('warehouse'),
     });
     expect(del.status).toBe(404);
+  });
+});
+
+// ── 列表关键字搜索（q）───────────────────────────────────────────────
+// 语义：q 按单号命中，列表联表带出的往来单位名也命中；大小写不敏感，空串视为未传。
+describe('入库单列表关键字搜索 q', () => {
+  const searchAdmin = user({ entraSub: 'q-admin', role: 'ADMIN' });
+  const RETAIL_UNIT = '00000000-0000-4000-8000-000000000004';
+  const searchUnits = [
+    unit({ id: COLLECTOR_UNIT, type: 'COLLECTOR', name: '上海集货部' }),
+    unit({ id: WAREHOUSE_UNIT, type: 'WAREHOUSE', name: '匈牙利仓库' }),
+    unit({ id: RETAIL_UNIT, type: 'RETAILER', name: '零售门店一' }),
+  ];
+
+  function inbound(partial: Partial<InboundOrderRecord> & { id: string }): InboundOrderRecord {
+    return {
+      inboundNo: `IB-${partial.id}`,
+      sourceType: 'MANUAL',
+      shipmentId: null,
+      warehouseUnitId: WAREHOUSE_UNIT,
+      counterpartyUnitId: COLLECTOR_UNIT,
+      status: 'DRAFT',
+      remark: null,
+      photoFileIds: [],
+      postedBy: null,
+      postedAt: null,
+      createdBy: null,
+      createdAt: now,
+      updatedAt: now,
+      ...partial,
+    };
+  }
+
+  const inbounds = [
+    inbound({ id: '00000000-0000-4000-8000-0000000000e1', inboundNo: 'IB-20250101-0001' }),
+    inbound({
+      id: '00000000-0000-4000-8000-0000000000e2',
+      inboundNo: 'IB-20250102-0002',
+      counterpartyUnitId: RETAIL_UNIT,
+    }),
+    inbound({
+      id: '00000000-0000-4000-8000-0000000000e3',
+      inboundNo: 'IB-20250103-0003',
+      counterpartyUnitId: null,
+      status: 'POSTED',
+    }),
+  ];
+
+  async function list(query: string) {
+    const repos = createMemoryRepos({
+      users: [searchAdmin],
+      units: searchUnits,
+      items,
+      inbounds,
+    });
+    const app = createApp({
+      verifyToken: async (_env, token): Promise<TokenClaims> => ({ sub: token }),
+      getRepos: async () => repos,
+    });
+    const res = await app.request(`/api/v1/inbound-orders${query}`, { headers: auth('q-admin') });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { items: Array<{ inboundNo: string }>; total: number };
+    };
+    return { total: body.data.total, nos: body.data.items.map((row) => row.inboundNo) };
+  }
+
+  it('q 命中单号（大小写不敏感）且与 status 过滤并存', async () => {
+    expect(await list('?q=ib-20250102')).toEqual({ total: 1, nos: ['IB-20250102-0002'] });
+    expect(await list('?q=IB-&status=POSTED')).toEqual({ total: 1, nos: ['IB-20250103-0003'] });
+  });
+
+  it('q 命中往来单位名', async () => {
+    expect(await list('?q=零售门店')).toEqual({ total: 1, nos: ['IB-20250102-0002'] });
+    expect(await list('?q=集货部')).toEqual({ total: 1, nos: ['IB-20250101-0001'] });
+  });
+
+  it('q 不命中返回空列表', async () => {
+    expect(await list('?q=NOT-EXIST')).toEqual({ total: 0, nos: [] });
+  });
+
+  it('q 为空或纯空白时与不传一致', async () => {
+    const base = await list('');
+    expect(base.total).toBe(3);
+    expect(await list('?q=')).toEqual(base);
+    expect(await list('?q=%20%20')).toEqual(base);
   });
 });

@@ -32,7 +32,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       value={value}
       onChange={(event) => onValueChange(event.target.value)}
       className={cn(
-        'app-select min-h-10 w-full min-w-0 rounded-lg border border-line-strong bg-surface py-2 ps-3 text-sm text-ink',
+        'app-select min-h-8 w-full min-w-0 rounded-[var(--radius-control)] border border-line-strong bg-surface py-1 ps-2 text-[13px] text-ink',
         'hover:border-line-hover',
         'focus-visible:border-brand-600 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-600',
         'disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-subtle',

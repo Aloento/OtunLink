@@ -65,6 +65,7 @@ export function returnOrdersRouter(): Hono<AppEnv> {
     const salesOrderId = c.req.query('salesOrderId')?.trim() || undefined;
     const page = parsePositiveInt(c.req.query('page'), 1);
     const size = parsePositiveInt(c.req.query('size'), 20, 50);
+    const q = c.req.query('q')?.trim() || undefined;
     const scope = unitScopeFilter(c.get('auth'));
 
     const result = await repos.returns.list({
@@ -73,6 +74,7 @@ export function returnOrdersRouter(): Hono<AppEnv> {
       status,
       sourceType,
       salesOrderId,
+      q,
       scopeUnitId: scope?.unitId,
     });
     const items = await hydrateList(repos, result.items);

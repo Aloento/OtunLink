@@ -1,0 +1,119 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+
+import { initI18n } from '../i18n';
+import { DataTable, TablePager, type DataTableColumn } from './data-table';
+
+// 数据表是这次重构的核心：列、排序、行键盘、空态一旦坏，所有列表页一起坏。
+// 这里只锁「语义与交互」，不锁像素。
+
+beforeAll(() => initI18n());
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
+
+interface Row {
+  id: string;
+  name: string;
+  qty: number;
+}
+
+const rows: Row[] = [
+  { id: 'a', name: '苹果', qty: 3 },
+  { id: 'b', name: '香蕉', qty: 11 },
+];
+
+const columns: DataTableColumn<Row>[] = [
+  { id: 'name', header: '名称', cell: (row) => row.name, width: 160 },
+  { id: 'qty', header: '数量', cell: (row) => row.qty, align: 'end', width: 80, sortable: true, sortValue: (row) => row.qty },
+];
+
+describe('DataTable', () => {
+  it('渲染 caption、表头与行，数量列右对齐', () => {
+    render(<DataTable tableId="t1" caption="物品清单" columns={columns} rows={rows} rowKey={(r) => r.id} />);
+
+    const table = screen.getByRole('table', { name: '物品清单' });
+    expect(within(table).getByRole('columnheader', { name: '名称' })).toBeTruthy();
+    expect(within(table).getAllByRole('row')).toHaveLength(3); // 表头 + 2 行
+    expect(within(table).getByText('苹果')).toBeTruthy();
+
+    const qtyCell = within(table).getAllByRole('cell')[1]!;
+    expect(qtyCell.className).toContain('text-end');
+  });
+
+  it('客户端排序：点表头在升序/降序之间切换，并写 aria-sort', () => {
+    render(
+      <DataTable
+        tableId="t2"
+        caption="物品清单"
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        sortMode="client"
+      />,
+    );
+
+    const header = screen.getByRole('columnheader', { name: /数量/ });
+    // 未排序时是 aria-sort="none"（可排序但还没排）
+    expect(header.getAttribute('aria-sort')).toBe('none');
+
+    fireEvent.click(within(header).getByRole('button'));
+    expect(header.getAttribute('aria-sort')).toBe('ascending');
+
+    fireEvent.click(within(header).getByRole('button'));
+    expect(header.getAttribute('aria-sort')).toBe('descending');
+  });
+
+  it('sortMode 为 none 时不提供排序按钮（避免「只排当前页」的假功能）', () => {
+    render(<DataTable tableId="t3" caption="物品清单" columns={columns} rows={rows} rowKey={(r) => r.id} />);
+    const header = screen.getByRole('columnheader', { name: '数量' });
+    expect(within(header).queryByRole('button')).toBeNull();
+  });
+
+  it('行可键盘激活：Tab 进来后按 Enter 触发 onRowClick', () => {
+    const onRowClick = vi.fn();
+    render(
+      <DataTable
+        tableId="t4"
+        caption="物品清单"
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        onRowClick={onRowClick}
+      />,
+    );
+
+    const row = screen.getByText('苹果').closest('tr')!;
+    expect(row.getAttribute('tabindex')).toBe('0');
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(onRowClick).toHaveBeenCalledWith(rows[0]);
+  });
+
+  it('空态与加载态互斥：加载时不出空态文案', () => {
+    const { rerender } = render(
+      <DataTable tableId="t5" caption="清单" columns={columns} rows={[]} rowKey={(r) => r.id} empty={<p>空</p>} />,
+    );
+    expect(screen.getByText('空')).toBeTruthy();
+
+    rerender(
+      <DataTable tableId="t5" caption="清单" columns={columns} rows={[]} rowKey={(r) => r.id} loading empty={<p>空</p>} />,
+    );
+    expect(screen.queryByText('空')).toBeNull();
+  });
+});
+
+describe('TablePager', () => {
+  it('显示区间与总条数，并按边界禁用箭头', () => {
+    const onChange = vi.fn();
+    render(<TablePager page={2} totalPages={5} total={100} pageSize={20} onPageChange={onChange} />);
+
+    expect(screen.getByText(/21/)).toBeTruthy();
+    expect(screen.getByText(/40/)).toBeTruthy();
+    expect(screen.getByText(/100/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /上一页/ }));
+    expect(onChange).toHaveBeenCalledWith(1);
+  });
+});

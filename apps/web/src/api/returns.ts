@@ -11,6 +11,7 @@ import { apiDelete, apiGet, apiPost } from './http';
 // 退货单 API 客户端：发货退货（拒收）+ 零售售后退货（SALES）。
 
 export interface ReturnListQuery {
+  q?: string;
   status?: ReturnStatus;
   /** ：按来源过滤（SHIPMENT 发货退货 / SALES 零售售后）。 */
   sourceType?: ReturnSourceType;
@@ -22,6 +23,7 @@ export interface ReturnListQuery {
 
 function toQuery(params: ReturnListQuery): string {
   const search = new URLSearchParams();
+  if (params.q) search.set('q', params.q);
   if (params.status) search.set('status', params.status);
   if (params.sourceType) search.set('sourceType', params.sourceType);
   if (params.salesOrderId) search.set('salesOrderId', params.salesOrderId);

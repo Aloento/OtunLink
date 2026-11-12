@@ -73,6 +73,10 @@ export interface ShipmentDto {
   createdAt: string;
   updatedAt: string;
   trackings: ShipmentTrackingDto[];
+  /** 列表接口聚合返回：明细行数（详情接口不带）。 */
+  itemsCount?: number;
+  /** 列表接口聚合返回：数量合计（详情接口不带）。 */
+  totalQty?: string;
 }
 
 /** 发货单详情 DTO（在列表 DTO 基础上附带清单）。 */

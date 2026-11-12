@@ -25,10 +25,10 @@ export function PageHeader({
       <div className="flex min-w-0 flex-col gap-1">
         {/* text-balance：标题折行时按行宽均衡分配，避免最后一行只剩一两个字
             （modern-web-guidance: typography）。只用于标题，不要挂在通配符上。 */}
-        <h1 className="text-balance text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+        <h1 className="text-balance text-[17px] font-semibold tracking-tight text-ink sm:text-lg">
           {title}
         </h1>
-        {description ? <p className="text-sm text-ink-muted">{description}</p> : null}
+        {description ? <p className="text-xs text-ink-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>

@@ -81,6 +81,8 @@ export function mapShipment(row: Record<string, unknown>): ShipmentRecord {
     countVersion: Number(row.count_version ?? 0),
     createdAt: new Date(String(row.created_at)),
     updatedAt: new Date(String(row.updated_at)),
+    ...(row.items_count != null ? { itemsCount: Number(row.items_count) } : {}),
+    ...(row.total_qty != null ? { totalQty: String(row.total_qty) } : {}),
   };
 }
 
@@ -178,6 +180,8 @@ export function mapInbound(row: Record<string, unknown>): InboundOrderRecord {
     createdBy: row.created_by ? String(row.created_by) : null,
     createdAt: new Date(String(row.created_at)),
     updatedAt: new Date(String(row.updated_at)),
+    ...(row.item_count != null ? { itemCount: Number(row.item_count) } : {}),
+    ...(row.total_qty != null ? { totalQty: String(row.total_qty) } : {}),
   };
 }
 
@@ -256,6 +260,8 @@ export function mapOutbound(row: Record<string, unknown>): OutboundOrderRecord {
     createdBy: row.created_by ? String(row.created_by) : null,
     createdAt: new Date(String(row.created_at)),
     updatedAt: new Date(String(row.updated_at)),
+    ...(row.item_count != null ? { itemCount: Number(row.item_count) } : {}),
+    ...(row.total_qty != null ? { totalQty: String(row.total_qty) } : {}),
   };
 }
 

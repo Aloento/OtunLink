@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
-import type { InboundManualCreateInput } from '@otunlink/shared';
+import type { InboundManualCreateInput, ItemDto } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { createManualInbound, postInbound } from '../../api/inbound';
@@ -16,7 +16,7 @@ import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid
 import { useSession } from '../../auth/SessionProvider';
 import { specUnitOf, unitLabel } from '../../i18n/units';
 import { Button } from '../../ui/button';
-import { Combobox } from '../../ui/combobox';
+import { EntityPicker, type PickerOption } from '../../ui/entity-picker';
 import { Field } from '../../ui/field';
 import { Input } from '../../ui/input';
 import { PageHeader } from '../../ui/page-header';
@@ -67,10 +67,11 @@ export function InboundFormPage() {
   const [counterpartyUnitId, setCounterpartyUnitId] = useState('');
   const [remark, setRemark] = useState('');
   const [lines, setLines] = useState<ItemLine[]>([emptyLine()]);
-  const [itemSearch, setItemSearch] = useState('');
-  // 每行选择器里显示的文本（物品名），与共享的服务端搜索词 itemSearch 分开：
-  // 查询键仍然是 ['items','picker',itemSearch]，输入即触发服务端过滤。
+  // 每行选择器触发器上显示的文本（物品名）：选中后写入，EntityPicker 的 value 仍然只存 itemId。
   const [lineQueries, setLineQueries] = useState<Record<string, string>>({});
+  // 选择器搜到的物品按 id 留档：选中后要用 isPerishable / 单位回填，
+  // 不能回头去「当前这一页结果」里找——那一页随时会被下一次搜索替换掉。
+  const [itemIndex, setItemIndex] = useState<Record<string, ItemDto>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,10 +80,24 @@ export function InboundFormPage() {
     queryFn: () => listUnits(),
   });
 
-  const { data: itemPage, isFetching: itemsFetching } = useQuery({
-    queryKey: ['items', 'picker', itemSearch],
-    queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
-  });
+  // 搜索走服务端（EntityPicker 每次改词/翻页都调这里）：物品再多也能搜到，
+  // 不再是「只筛第一页 50 条」。
+  const searchItems = async (query: string, page: number) => {
+    const data = await listItems({ q: query || undefined, page, size: 50 });
+    setItemIndex((prev) => {
+      const next = { ...prev };
+      for (const item of data.items) next[item.id] = item;
+      return next;
+    });
+    return {
+      items: data.items.map((item) => ({
+        id: item.id,
+        label: item.name,
+        meta: [item.sku, unitLabel(t, specUnitOf(item), item.minSaleUnit)].filter(Boolean).join(' · '),
+      })),
+      total: data.total,
+    };
+  };
 
   const warehouses = useMemo(
     () => (units ?? []).filter((u) => u.type === 'WAREHOUSE' && u.isActive),
@@ -107,15 +122,14 @@ export function InboundFormPage() {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, [field]: value } : l)));
 
   // 切换物品：同步易腐标记；切到非易腐物品时清空其生产/到期日期。
-  const pickItem = (key: string, itemId: string) => {
-    const item = (itemPage?.items ?? []).find((i) => i.id === itemId);
-    const isPerishable = item?.isPerishable ?? false;
+  const pickItem = (key: string, option: PickerOption) => {
+    const isPerishable = itemIndex[option.id]?.isPerishable ?? false;
     setLines((prev) =>
       prev.map((l) =>
         l.key === key
           ? {
               ...l,
-              itemId,
+              itemId: option.id,
               isPerishable,
               productionDate: isPerishable ? l.productionDate : '',
               expiryDate: isPerishable ? l.expiryDate : '',
@@ -174,12 +188,6 @@ export function InboundFormPage() {
 
   if (unitsLoading) return <Spinner label={t('common.loading')} />;
 
-  const itemOptions = (itemPage?.items ?? []).map((item) => ({
-    value: item.id,
-    label: item.name,
-    description: item.sku ?? undefined,
-  }));
-
   return (
     <div className="flex max-w-3xl flex-col gap-4">
       <PageHeader title={t('inbound.manualCreateTitle')} />
@@ -224,7 +232,7 @@ export function InboundFormPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-ink">{t('inbound.items')}</h2>
           <div className="flex flex-wrap items-center gap-2">
-            <RefreshButton queryKey={['items', 'picker']} additionalKeys={[['units', 'list']]} />
+            <RefreshButton queryKey={['items']} additionalKeys={[['units', 'list']]} />
             <Button
               size="sm"
               variant="secondary"
@@ -236,7 +244,7 @@ export function InboundFormPage() {
         </div>
 
         {lines.map((line, index) => {
-          const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
+          const item = itemIndex[line.itemId];
           const unit = specUnitOf(item);
           const unitSuffix = unit ? ` (${unitLabel(t, unit, item?.minSaleUnit)})` : '';
 
@@ -247,23 +255,17 @@ export function InboundFormPage() {
             >
               <div className={`${LINE_GRID_CLASS} sm:grid-cols-3`}>
                 <Field label={t('inbound.itemName')} required>
-                  <Combobox
-                    value={lineQueries[line.key] ?? ''}
-                    onValueChange={(next) => {
-                      setLineQueries((prev) => ({ ...prev, [line.key]: next }));
-                      setItemSearch(next);
-                    }}
-                    options={itemOptions}
-                    onSelect={(option) => {
-                      pickItem(line.key, option.value);
+                  <EntityPicker
+                    value={line.itemId}
+                    displayValue={lineQueries[line.key]}
+                    title={t('items.title')}
+                    searchPlaceholder={t('items.itemSearchPlaceholder')}
+                    onSearch={searchItems}
+                    onChange={(option) => {
+                      pickItem(line.key, option);
                       setLineQueries((prev) => ({ ...prev, [line.key]: option.label }));
                     }}
-                    placeholder={t('items.itemSearchPlaceholder')}
-                    loading={itemsFetching}
-                    loadingText={t('common.loading')}
-                    emptyText={t('items.empty')}
-                    aria-label={t('inbound.itemName')}
-                    className="min-w-0"
+                    className="w-full min-w-0"
                   />
                 </Field>
                 <Field label={`${t('inbound.qty')}${unitSuffix}`} required>
@@ -326,7 +328,7 @@ export function InboundFormPage() {
                   size="icon"
                   variant="ghost"
                   // 每行一个图标按钮：把行标识拼进可访问名称（物品名，未选时退行号）。
-                  aria-label={`${t('common.remove')} ${item?.name ?? index + 1}`}
+                  aria-label={`${t('common.remove')} ${lineQueries[line.key] || index + 1}`}
                   icon={<Trash2 aria-hidden className="size-4" />}
                   disabled={lines.length === 1}
                   onClick={() => removeLine(line.key)}

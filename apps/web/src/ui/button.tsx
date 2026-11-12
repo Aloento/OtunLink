@@ -35,9 +35,9 @@ const variants: Record<ButtonVariant, string> = {
 // 「DON'T set a fixed height ... on elements that contain text, such as buttons」）。
 // 纯图标按钮没有文字，仍需固定方块以保住 36×36 的点击目标（>= 24×24）。
 const sizes: Record<ButtonSize, string> = {
-  sm: 'min-h-8 px-3 py-1 text-sm',
-  md: 'min-h-10 px-4 py-2 text-sm',
-  icon: 'size-9 p-0',
+  sm: 'min-h-7 px-2.5 py-1 text-xs',
+  md: 'min-h-8 px-3 py-1.5 text-[13px]',
+  icon: 'size-8 p-0',
 };
 
 export interface ButtonProps extends ComponentProps<'button'> {

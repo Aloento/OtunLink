@@ -40,6 +40,10 @@ export interface OutboundOrderDto {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** 列表接口聚合返回：明细行数（详情接口不带）。 */
+  itemCount?: number;
+  /** 列表接口聚合返回：数量合计（详情接口不带）。 */
+  totalQty?: string;
   /** 联表带出（展示用）。 */
   warehouseName?: string | null;
   counterpartyName?: string | null;

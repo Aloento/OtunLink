@@ -1,7 +1,8 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { ArrowUpFromLine, Ellipsis, Eye } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import {
   OUTBOUND_STATUSES,
@@ -12,157 +13,286 @@ import {
 } from '@otunlink/shared';
 
 import { listOutboundOrders } from '../../api/outbound';
-import { useLocale } from '../../i18n/LocaleProvider';
-import { formatDateTime } from '../../i18n/format';
 import { RefreshButton } from '../../components/RefreshButton';
-import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
+import { useLocale } from '../../i18n/LocaleProvider';
+import { formatDateTime, formatNumber } from '../../i18n/format';
+import { useDebouncedValue } from '../../lib/useDebouncedValue';
+import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
+import { DataTable, TablePager, type DataTableColumn } from '../../ui/data-table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../../ui/dropdown-menu';
+import { Empty } from '../../ui/empty';
+import { FilterBar } from '../../ui/filter-bar';
 import { PageHeader } from '../../ui/page-header';
-import { Pagination } from '../../ui/pagination';
 import { Select } from '../../ui/select';
-import { Spinner } from '../../ui/spinner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 20;
+// 服务端把 size 夹在 1–50，选项里不要出现 100：否则「每页 100 条」实际只回来 50 行，
+// 分页条的「第 x–y 条 / 共 n 条」会自我矛盾。
+const PAGE_SIZE_OPTIONS = [20, 50];
 
-// 出库单列表：手工出库（NORMAL），草稿可过账。
+interface OrderSummary {
+  /** 明细行数。 */
+  count: number;
+  /** 明细数量合计（qty 是 decimal 字符串，求和后按 locale 格式化）。 */
+  qty: number;
+}
+
+// 列表接口只返回单据主表字段，明细行数与数量合计只存在于详情里。
+// 为了这两列显示真数据，这里按当前页的行批量取详情并汇总：每张单据用自己的 id 做 key，
+// 与详情页共享缓存（staleTime 5 分钟），翻页回来不重复请求，单行失败也只是这一行显示「—」。
+// 后端在 list 响应里补 itemCount / totalQty 之后，这段 fan-out 应整体删掉（见 docs/ui-redesign.md §3）。
+// 出库单列表：手工出库（NORMAL）与报损（LOSS），草稿可过账。
+// 结构与入库单列表一致：页头 → 筛选条 → 数据表 → 分页条；类型筛选从 Tab 换成下拉，
+// 与状态筛选并排放在筛选条里，切换任一筛选都回第 1 页。
 export function OutboundListPage() {
   const { t } = useTranslation();
   const { locale } = useLocale();
+  const navigate = useNavigate();
 
-  const [status, setStatus] = useState<OutboundStatus | ''>('');
+  const [q, setQ] = useState('');
+  const debouncedQ = useDebouncedValue(q, 250);
   const [type, setType] = useState<OutboundType | ''>('');
+  const [status, setStatus] = useState<OutboundStatus | ''>('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+
+  // 搜索、筛选、页大小变化都回第 1 页：否则会停在「第 7 页 / 共 1 页」的空列表上
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQ, type, status, pageSize]);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['outbound-orders', 'list', status || undefined, type || undefined, page],
+    queryKey: ['outbound-orders', 'list', debouncedQ, type || undefined, status || undefined, page, pageSize],
     queryFn: () =>
-      listOutboundOrders({ status: status || undefined, type: type || undefined, page, size: PAGE_SIZE }),
+      listOutboundOrders({
+        q: debouncedQ || undefined,
+        type: type || undefined,
+        status: status || undefined,
+        page,
+        size: pageSize,
+      }),
     placeholderData: keepPreviousData,
   });
 
-  const columns: ResponsiveTableColumn<OutboundOrderDto>[] = [
+  const rows = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const filtered = debouncedQ.length > 0 || type !== '' || status !== '';
+
+  const columns: DataTableColumn<OutboundOrderDto>[] = [
     {
-      key: 'outboundNo',
+      id: 'outboundNo',
       header: t('outbound.outboundNo'),
-      render: (order) => (
-        <Link to={`/outbound/${order.id}`} className="font-medium text-brand-700 hover:underline">
+      width: 170,
+      minWidth: 130,
+      sticky: true,
+      // 单号是这张表的身份列，藏起来就认不出任何一个单据
+      hideable: false,
+      cell: (order) => (
+        <Link
+          to={`/outbound/${order.id}`}
+          // 行本身可点，链接自己拦截冒泡，避免同一个跳转触发两次
+          onClick={(event) => event.stopPropagation()}
+          className="font-medium text-brand-700 hover:underline"
+        >
           {order.outboundNo}
         </Link>
       ),
     },
     {
-      key: 'type',
+      id: 'type',
       header: t('outbound.type'),
-      render: (order) => t(`outbound.types.${order.type}`),
+      width: 112,
+      cell: (order) => (
+        // 徽标始终带文字：报损与普通出库的差别不能只靠颜色
+        <Badge tone={order.type === 'LOSS' ? 'danger' : 'neutral'}>
+          {t(`outbound.types.${order.type}`)}
+        </Badge>
+      ),
     },
     {
-      key: 'warehouse',
-      header: t('outbound.warehouse'),
-      render: (order) => order.warehouseName ?? order.warehouseUnitId,
-    },
-    {
-      key: 'counterparty',
-      header: t('outbound.counterparty'),
-      render: (order) => order.counterpartyName ?? order.counterpartyUnitId ?? '—',
-    },
-    {
-      key: 'status',
+      id: 'status',
       header: t('outbound.status'),
-      render: (order) => t(`outbound.statuses.${order.status}`),
+      width: 96,
+      cell: (order) => (
+        <Badge tone={order.status === 'POSTED' ? 'success' : 'warning'}>
+          {t(`outbound.statuses.${order.status}`)}
+        </Badge>
+      ),
     },
     {
-      key: 'createdAt',
+      id: 'warehouse',
+      header: t('outbound.warehouse'),
+      width: 140,
+      cell: (order) => order.warehouseName ?? order.warehouseUnitId,
+    },
+    {
+      id: 'counterparty',
+      header: t('outbound.counterparty'),
+      width: 150,
+      cell: (order) => order.counterpartyName ?? order.counterpartyUnitId ?? '—',
+    },
+    {
+      id: 'itemCount',
+      header: t('outbound.itemCount'),
+      width: 96,
+      minWidth: 80,
+      align: 'end',
+      cell: (order) => (
+        <span className="tabular-nums">{order.itemCount != null ? String(order.itemCount) : '—'}</span>
+      ),
+    },
+    {
+      id: 'totalQty',
+      header: t('outbound.totalQty'),
+      width: 112,
+      minWidth: 88,
+      align: 'end',
+      cell: (order) => (
+        <span className="tabular-nums">
+          {order.totalQty != null ? formatNumber(Number(order.totalQty), locale) : '—'}
+        </span>
+      ),
+    },
+    {
+      id: 'createdAt',
       header: t('outbound.createdAt'),
-      render: (order) => (order.createdAt ? formatDateTime(order.createdAt, locale) : '—'),
+      width: 168,
+      cell: (order) => <span className="tabular-nums">{formatDateTime(order.createdAt, locale)}</span>,
     },
   ];
 
-  const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  // 各 Tab 面板共用同一段渲染逻辑（数据由 type 查询参数决定）。
-  const renderBody = () => {
-    if (isLoading) return <Spinner label={t('common.loading')} />;
-    if (isError) {
-      return (
-        <p role="alert" className="text-sm text-danger-600">
-          {t('errors.UNKNOWN')}
-        </p>
-      );
-    }
-    return (
-      <>
-        <ResponsiveTable
-          columns={columns}
-          items={data?.items ?? []}
-          rowKey={(order) => order.id}
-          emptyText={t('outbound.empty')}
-          label={t('outbound.title')}
-        />
-        <Pagination
-          page={page}
-          totalPages={totalPages}
-          onChange={setPage}
-          totalLabel={t('outbound.total', { total })}
-        />
-      </>
-    );
+  const clearFilters = () => {
+    setQ('');
+    setType('');
+    setStatus('');
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-3">
       <PageHeader
         title={t('outbound.title')}
+        description={t('outbound.total', { total })}
         actions={
-          <>
-            <RefreshButton queryKey={['outbound-orders', 'list']} />
-            <Select
-              value={status}
-              onValueChange={(next) => {
-                setStatus(next as OutboundStatus | '');
-                setPage(1);
-              }}
-              placeholder={t('outbound.allStatuses')}
-              aria-label={t('outbound.status')}
-              className="w-full min-w-0 sm:w-40"
-            >
-              {OUTBOUND_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {t(`outbound.statuses.${s}`)}
-                </option>
-              ))}
-            </Select>
-            <Button asChild variant="primary">
-              <Link to="/outbound/new">{t('outbound.newOutbound')}</Link>
-            </Button>
-          </>
+          <Button asChild variant="primary">
+            <Link to="/outbound/new">{t('outbound.newOutbound')}</Link>
+          </Button>
         }
       />
 
-      <Tabs
-        value={type || 'all'}
-        onValueChange={(next) => {
-          setType(next === 'all' ? '' : (next as OutboundType));
-          setPage(1);
-        }}
-        className="flex flex-col gap-4"
-      >
-        <TabsList>
-          <TabsTrigger value="all">{t('outbound.allTypes')}</TabsTrigger>
-          {OUTBOUND_TYPES.map((v) => (
-            <TabsTrigger key={v} value={v}>
-              {t(`outbound.types.${v}`)}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        <TabsContent value="all">{renderBody()}</TabsContent>
-        {OUTBOUND_TYPES.map((v) => (
-          <TabsContent key={v} value={v}>
-            {renderBody()}
-          </TabsContent>
-        ))}
-      </Tabs>
+      <DataTable
+        tableId="outbound-orders"
+        caption={t('outbound.title')}
+        columns={columns}
+        rows={rows}
+        rowKey={(order) => order.id}
+        total={total}
+        loading={isLoading}
+        error={isError ? t('errors.UNKNOWN') : undefined}
+        empty={
+          <Empty
+            icon={<ArrowUpFromLine aria-hidden />}
+            // 「库里没有」和「筛掉了」是两种处境，文案与动作都要分开
+            title={filtered ? t('outbound.noMatch') : t('outbound.empty')}
+            action={
+              filtered ? (
+                <Button variant="secondary" onClick={clearFilters}>
+                  {t('common.clearFilters')}
+                </Button>
+              ) : (
+                <Button asChild variant="primary">
+                  <Link to="/outbound/new">{t('outbound.newOutbound')}</Link>
+                </Button>
+              )
+            }
+          />
+        }
+        onRowClick={(order) => navigate(`/outbound/${order.id}`)}
+        getRowLabel={(order) => `${order.outboundNo} ${t(`outbound.statuses.${order.status}`)}`}
+        rowActions={(order) => (
+          // 行本身可点：菜单触发器与菜单项都不能把点击冒泡成「进入详情」
+          <div
+            className="flex items-center justify-end"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={`${t('common.actions')} ${order.outboundNo}`}
+                >
+                  <Ellipsis aria-hidden className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onSelect={() => navigate(`/outbound/${order.id}`)}>
+                  <Eye aria-hidden className="size-3.5" />
+                  {t('outbound.detail')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+        stickyFirstColumn
+        maxHeight="calc(100dvh - 15rem)"
+        toolbar={
+          <FilterBar
+            searchValue={q}
+            onSearchChange={setQ}
+            searchPlaceholder={t('outbound.searchPlaceholder')}
+            extra={
+              <>
+                <Select
+                  value={type}
+                  onValueChange={(next) => setType(next as OutboundType | '')}
+                  className="w-32"
+                  aria-label={t('outbound.type')}
+                >
+                  <option value="">{t('outbound.allTypes')}</option>
+                  {OUTBOUND_TYPES.map((v) => (
+                    <option key={v} value={v}>
+                      {t(`outbound.types.${v}`)}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  value={status}
+                  onValueChange={(next) => setStatus(next as OutboundStatus | '')}
+                  className="w-32"
+                  aria-label={t('outbound.status')}
+                >
+                  <option value="">{t('outbound.allStatuses')}</option>
+                  {OUTBOUND_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {t(`outbound.statuses.${s}`)}
+                    </option>
+                  ))}
+                </Select>
+              </>
+            }
+            right={<RefreshButton queryKey={['outbound-orders', 'list']} />}
+          />
+        }
+        footer={
+          <TablePager
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+          />
+        }
+      />
     </div>
   );
 }

@@ -19,6 +19,7 @@ export function createReturnsRepo(
   const { shipments, sales } = deps;
   const returns: ReturnRepository = {
     async list(query: ReturnListQuery): Promise<ReturnListResult> {
+      const q = query.q?.trim();
       const where = (alias: string): string => {
         const parts: string[] = [];
         if (query.status) parts.push(`${alias}status = ${quote(query.status)}`);
@@ -29,13 +30,24 @@ export function createReturnsRepo(
            `(${alias}from_unit_id = ${quote(query.scopeUnitId)} OR ${alias}to_unit_id = ${quote(query.scopeUnitId)})`,
           );
         }
+        // 关键字：单号或发起/接收单位名（列表/计数查询均已 LEFT JOIN business_units fu/tu）。
+        if (q) {
+          parts.push(
+            `(${alias}return_no ILIKE ${quote(`%${q}%`)}
+              OR fu.name ILIKE ${quote(`%${q}%`)}
+              OR tu.name ILIKE ${quote(`%${q}%`)})`,
+          );
+        }
         return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
       };
       const size = Math.min(Math.max(query.size ?? 20, 1), 50);
       const page = Math.max(query.page ?? 1, 1);
       const offset = (page - 1) * size;
       const totalResult = await exec.query(
-        `SELECT count(*)::int AS n FROM return_orders${where('')}`,
+        `SELECT count(*)::int AS n FROM return_orders ro
+           LEFT JOIN business_units fu ON fu.id = ro.from_unit_id
+           LEFT JOIN business_units tu ON tu.id = ro.to_unit_id
+           ${where('ro.')}`,
       );
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(

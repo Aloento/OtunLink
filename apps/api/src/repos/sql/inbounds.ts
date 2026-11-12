@@ -16,21 +16,30 @@ export function createInboundsRepo(
   const { shipments } = deps;
   const inbounds: InboundRepository = {
     async list(query: InboundListQuery): Promise<InboundListResult> {
+      const q = query.q?.trim();
       const where = (alias: string): string => {
         const parts: string[] = [];
         if (query.status) parts.push(`${alias}status = ${quote(query.status)}`);
         if (query.warehouseUnitId) parts.push(`${alias}warehouse_unit_id = ${quote(query.warehouseUnitId)}`);
+        // 关键字：单号或往来单位名（列表/计数查询均已 LEFT JOIN business_units cp）。
+        if (q) {
+          parts.push(`(${alias}inbound_no ILIKE ${quote(`%${q}%`)} OR cp.name ILIKE ${quote(`%${q}%`)})`);
+        }
         return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
       };
       const size = Math.min(Math.max(query.size ?? 20, 1), 50);
       const page = Math.max(query.page ?? 1, 1);
       const offset = (page - 1) * size;
       const totalResult = await exec.query(
-        `SELECT count(*)::int AS n FROM inbound_orders${where('')}`,
+        `SELECT count(*)::int AS n FROM inbound_orders io
+           LEFT JOIN business_units cp ON cp.id = io.counterparty_unit_id
+           ${where('io.')}`,
       );
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(
-        `SELECT io.*, bu.name AS warehouse_name, cp.name AS counterparty_name, s.shipment_no
+        `SELECT io.*, bu.name AS warehouse_name, cp.name AS counterparty_name, s.shipment_no,
+                (SELECT count(*)::int FROM inbound_order_items li WHERE li.inbound_order_id = io.id) AS item_count,
+                (SELECT COALESCE(sum(li.qty), 0) FROM inbound_order_items li WHERE li.inbound_order_id = io.id) AS total_qty
          FROM inbound_orders io
          LEFT JOIN business_units bu ON bu.id = io.warehouse_unit_id
          LEFT JOIN business_units cp ON cp.id = io.counterparty_unit_id

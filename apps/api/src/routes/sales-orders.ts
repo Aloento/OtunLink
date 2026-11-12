@@ -56,6 +56,7 @@ export function salesOrdersRouter(): Hono<AppEnv> {
       | undefined;
     const page = parsePositiveInt(c.req.query('page'), 1);
     const size = parsePositiveInt(c.req.query('size'), 20, 50);
+    const q = c.req.query('q')?.trim() || undefined;
     const scope = unitScopeFilter(c.get('auth'));
     const user = c.get('auth').user!;
 
@@ -66,10 +67,11 @@ export function salesOrdersRouter(): Hono<AppEnv> {
             page,
             size,
             status,
+            q,
             buyerUnitId: user.scopeUnitId!,
             sellerUnitIds: await loadPartnerWarehouseIds(repos, user.scopeUnitId!),
           })
-        : await repos.sales.list({ page, size, status, unitId: scope?.unitId });
+        : await repos.sales.list({ page, size, status, q, unitId: scope?.unitId });
     const items = await hydrateList(repos, result.items);
     return ok(c, { ...result, items });
   });

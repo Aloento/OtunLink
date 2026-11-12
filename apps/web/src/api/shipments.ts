@@ -15,6 +15,7 @@ import { apiDelete, apiGet, apiPatch, apiPost } from './http';
 // 发货单 API 客户端：/shipments、/reviews。
 
 export interface ShipmentListQuery {
+  q?: string;
   status?: ShipmentStatus;
   page?: number;
   size?: number;
@@ -35,6 +36,7 @@ export type ShipmentUpdateInput = Partial<ShipmentCreateInput>;
 
 function toQuery(params: ShipmentListQuery): string {
   const search = new URLSearchParams();
+  if (params.q) search.set('q', params.q);
   if (params.status) search.set('status', params.status);
   if (params.page !== undefined) search.set('page', String(params.page));
   if (params.size !== undefined) search.set('size', String(params.size));

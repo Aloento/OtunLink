@@ -74,3 +74,36 @@ export function DropdownMenuSeparator({
     />
   );
 }
+
+/**
+ * 复选项：用于「列显示」这类多选菜单。
+ * Radix 用 menuitemcheckbox 语义，勾选状态由 aria-checked 表达，
+ * 读屏会念「已勾选」，不依赖左侧的勾号图形。
+ */
+export function DropdownMenuCheckboxItem({
+  className,
+  children,
+  ...props
+}: ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      className={cn(
+        'flex cursor-pointer select-none items-center gap-2 rounded-md border border-transparent px-3 py-1.5 text-sm text-ink-soft',
+        'data-[highlighted]:border-brand-600 data-[highlighted]:bg-brand-50 data-[highlighted]:text-ink',
+        'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
+        className,
+      )}
+      {...props}
+    >
+      <DropdownMenuPrimitive.ItemIndicator>
+        <span aria-hidden className="size-3.5">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 8.5 6.2 11.5 13 4.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </DropdownMenuPrimitive.ItemIndicator>
+      <span className="size-3.5" aria-hidden />
+      {children}
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+}

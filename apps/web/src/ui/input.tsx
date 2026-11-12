@@ -7,7 +7,7 @@ import { cn } from '../lib/cn';
 // （autofill、输入法、密码管理等都不需要额外实现）。
 
 export const inputClass =
-  'block w-full min-w-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-ink ' +
+  'block w-full min-w-0 rounded-[var(--radius-control)] border border-line-strong bg-surface px-2 py-1 text-[13px] text-ink ' +
   'placeholder:text-ink-subtle ' +
   'hover:border-line-hover ' +
   'focus-visible:border-brand-600 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-600 ' +
@@ -18,5 +18,5 @@ export const Input = forwardRef<HTMLInputElement, ComponentProps<'input'>>(funct
   { className, ...props },
   ref,
 ) {
-  return <input ref={ref} className={cn(inputClass, 'min-h-10', className)} {...props} />;
+  return <input ref={ref} className={cn(inputClass, 'min-h-8', className)} {...props} />;
 });

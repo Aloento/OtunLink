@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../index';
 import { createMemoryRepos } from '../repos/memory';
-import type { ItemRecord, TokenClaims, UnitRecord, UserRecord } from '../types';
+import type {
+  ItemRecord,
+  OutboundOrderRecord,
+  TokenClaims,
+  UnitRecord,
+  UserRecord,
+} from '../types';
 
 const now = new Date('2025-01-01T00:00:00.000Z');
 
@@ -738,5 +744,90 @@ describe(' 手动出库单', () => {
     });
     expect(patched.status).toBe(409);
     expect(await patched.json()).toMatchObject({ error: { code: 'INSUFFICIENT_STOCK' } });
+  });
+});
+
+// ── 列表关键字搜索（q）───────────────────────────────────────────────
+// 语义：q 按单号命中，列表联表带出的往来单位名也命中；大小写不敏感，空串视为未传。
+describe('出库单列表关键字搜索 q', () => {
+  const searchAdmin = user({ entraSub: 'q-admin', role: 'ADMIN' });
+  const searchUnits = [
+    unit({ id: COLLECTOR_UNIT, type: 'COLLECTOR', name: '上海集货部' }),
+    unit({ id: WAREHOUSE_UNIT, type: 'WAREHOUSE', name: '匈牙利仓库' }),
+    unit({ id: RETAIL_UNIT, type: 'RETAILER', name: '零售门店一' }),
+  ];
+
+  function outbound(partial: Partial<OutboundOrderRecord> & { id: string }): OutboundOrderRecord {
+    return {
+      outboundNo: `OB-${partial.id}`,
+      type: 'NORMAL',
+      warehouseUnitId: WAREHOUSE_UNIT,
+      counterpartyUnitId: COLLECTOR_UNIT,
+      status: 'DRAFT',
+      lossReason: null,
+      photoFileIds: [],
+      remark: null,
+      postedBy: null,
+      postedAt: null,
+      createdBy: null,
+      createdAt: now,
+      updatedAt: now,
+      ...partial,
+    };
+  }
+
+  const outbounds = [
+    outbound({ id: '00000000-0000-4000-8000-0000000000f1', outboundNo: 'OB-20250101-0001' }),
+    outbound({
+      id: '00000000-0000-4000-8000-0000000000f2',
+      outboundNo: 'OB-20250102-0002',
+      counterpartyUnitId: RETAIL_UNIT,
+    }),
+    outbound({
+      id: '00000000-0000-4000-8000-0000000000f3',
+      outboundNo: 'OB-20250103-0003',
+      counterpartyUnitId: null,
+      status: 'POSTED',
+    }),
+  ];
+
+  async function list(query: string) {
+    const repos = createMemoryRepos({
+      users: [searchAdmin],
+      units: searchUnits,
+      items,
+      outbounds,
+    });
+    const app = createApp({
+      verifyToken: async (_env, token): Promise<TokenClaims> => ({ sub: token }),
+      getRepos: async () => repos,
+    });
+    const res = await app.request(`/api/v1/outbound-orders${query}`, { headers: auth('q-admin') });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { items: Array<{ outboundNo: string }>; total: number };
+    };
+    return { total: body.data.total, nos: body.data.items.map((row) => row.outboundNo) };
+  }
+
+  it('q 命中单号（大小写不敏感）且与 status 过滤并存', async () => {
+    expect(await list('?q=ob-20250102')).toEqual({ total: 1, nos: ['OB-20250102-0002'] });
+    expect(await list('?q=OB-&status=POSTED')).toEqual({ total: 1, nos: ['OB-20250103-0003'] });
+  });
+
+  it('q 命中往来单位名', async () => {
+    expect(await list('?q=零售门店')).toEqual({ total: 1, nos: ['OB-20250102-0002'] });
+    expect(await list('?q=集货部')).toEqual({ total: 1, nos: ['OB-20250101-0001'] });
+  });
+
+  it('q 不命中返回空列表', async () => {
+    expect(await list('?q=NOT-EXIST')).toEqual({ total: 0, nos: [] });
+  });
+
+  it('q 为空或纯空白时与不传一致', async () => {
+    const base = await list('');
+    expect(base.total).toBe(3);
+    expect(await list('?q=')).toEqual(base);
+    expect(await list('?q=%20%20')).toEqual(base);
   });
 });

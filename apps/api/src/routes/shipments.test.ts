@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../index';
 import { createMemoryRepos } from '../repos/memory';
-import type { ItemRecord, TokenClaims, UnitRecord, UserRecord } from '../types';
+import type { ItemRecord, ShipmentRecord, TokenClaims, UnitRecord, UserRecord } from '../types';
 
 const now = new Date('2025-01-01T00:00:00.000Z');
 
@@ -823,5 +823,70 @@ describe('shipments 收货点货与差异协商 ()', () => {
       body: JSON.stringify({ items: [{ shipmentItemId: itemId, reason: 'x' }] }),
     });
     expect(res.status).toBe(403);
+  });
+});
+
+// ── 列表关键字搜索（q）───────────────────────────────────────────────
+// 语义：q 按单号模糊匹配（大小写不敏感），空串视为未传；不得影响既有 status/scope 过滤。
+describe('发货单列表关键字搜索 q', () => {
+  const searchAdmin = user({ entraSub: 'q-admin', role: 'ADMIN' });
+
+  function shipment(partial: Partial<ShipmentRecord> & { id: string }): ShipmentRecord {
+    return {
+      shipmentNo: `SH-${partial.id}`,
+      shipperUnitId: COLLECTOR_UNIT,
+      receiverUnitId: WAREHOUSE_UNIT,
+      status: 'DRAFT',
+      boxesCount: 1,
+      currency: 'CNY',
+      expectedArrivalDate: null,
+      remark: null,
+      sentAt: null,
+      countVersion: 0,
+      createdBy: null,
+      createdAt: now,
+      updatedAt: now,
+      ...partial,
+    };
+  }
+
+  const shipments = [
+    shipment({ id: '00000000-0000-4000-8000-0000000000d1', shipmentNo: 'SH-20250101-0001' }),
+    shipment({ id: '00000000-0000-4000-8000-0000000000d2', shipmentNo: 'SH-20250102-0002' }),
+    shipment({
+      id: '00000000-0000-4000-8000-0000000000d3',
+      shipmentNo: 'SH-20250103-0003',
+      status: 'SENT',
+    }),
+  ];
+
+  async function list(query: string) {
+    const repos = createMemoryRepos({ users: [searchAdmin], units, items, shipments });
+    const app = createApp({
+      verifyToken: async (_env, token): Promise<TokenClaims> => ({ sub: token }),
+      getRepos: async () => repos,
+    });
+    const res = await app.request(`/api/v1/shipments${query}`, { headers: auth('q-admin') });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { items: Array<{ shipmentNo: string }>; total: number };
+    };
+    return { total: body.data.total, nos: body.data.items.map((row) => row.shipmentNo) };
+  }
+
+  it('q 命中单号（大小写不敏感）且与 status 过滤并存', async () => {
+    expect(await list('?q=sh-20250102')).toEqual({ total: 1, nos: ['SH-20250102-0002'] });
+    expect(await list('?q=SH-&status=SENT')).toEqual({ total: 1, nos: ['SH-20250103-0003'] });
+  });
+
+  it('q 不命中返回空列表', async () => {
+    expect(await list('?q=NOT-EXIST')).toEqual({ total: 0, nos: [] });
+  });
+
+  it('q 为空或纯空白时与不传一致', async () => {
+    const base = await list('');
+    expect(base.total).toBe(3);
+    expect(await list('?q=')).toEqual(base);
+    expect(await list('?q=%20%20')).toEqual(base);
   });
 });

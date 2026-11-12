@@ -1,0 +1,11 @@
+# 统一 LF：Windows 上的编辑工具默认写 CRLF，会把只改一行的文件变成整文件 diff。
+* text=auto eol=lf
+
+# 二进制资源不做换行转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary

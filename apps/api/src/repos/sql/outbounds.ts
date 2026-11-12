@@ -10,6 +10,7 @@ import { nextOutboundNo } from './sequences';
 export function createOutboundsRepo(exec: SqlExecutor): OutboundRepository {
   const outbounds: OutboundRepository = {
     async list(query: OutboundListQuery): Promise<OutboundListResult> {
+      const q = query.q?.trim();
       const where = (alias: string): string => {
         const parts: string[] = [];
         if (query.status) parts.push(`${alias}status = ${quote(query.status)}`);
@@ -17,17 +18,25 @@ export function createOutboundsRepo(exec: SqlExecutor): OutboundRepository {
         if (query.warehouseUnitId) {
           parts.push(`${alias}warehouse_unit_id = ${quote(query.warehouseUnitId)}`);
         }
+        // 关键字：单号或往来单位名（列表/计数查询均已 LEFT JOIN business_units cp）。
+        if (q) {
+          parts.push(`(${alias}outbound_no ILIKE ${quote(`%${q}%`)} OR cp.name ILIKE ${quote(`%${q}%`)})`);
+        }
         return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
       };
       const size = Math.min(Math.max(query.size ?? 20, 1), 50);
       const page = Math.max(query.page ?? 1, 1);
       const offset = (page - 1) * size;
       const totalResult = await exec.query(
-        `SELECT count(*)::int AS n FROM outbound_orders${where('')}`,
+        `SELECT count(*)::int AS n FROM outbound_orders oo
+           LEFT JOIN business_units cp ON cp.id = oo.counterparty_unit_id
+           ${where('oo.')}`,
       );
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(
-        `SELECT oo.*, bu.name AS warehouse_name, cp.name AS counterparty_name
+        `SELECT oo.*, bu.name AS warehouse_name, cp.name AS counterparty_name,
+                (SELECT count(*)::int FROM outbound_order_items lo WHERE lo.outbound_order_id = oo.id) AS item_count,
+                (SELECT COALESCE(sum(lo.qty), 0) FROM outbound_order_items lo WHERE lo.outbound_order_id = oo.id) AS total_qty
          FROM outbound_orders oo
          LEFT JOIN business_units bu ON bu.id = oo.warehouse_unit_id
          LEFT JOIN business_units cp ON cp.id = oo.counterparty_unit_id

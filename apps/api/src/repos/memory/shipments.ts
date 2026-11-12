@@ -91,8 +91,10 @@ export class MemoryShipmentRepository implements ShipmentRepository {
   }
 
   async list(query: ShipmentListQuery): Promise<ShipmentListResult> {
+    const q = query.q?.trim().toLowerCase();
     const all = [...this.rows.values()]
       .filter((row) => (query.status ? row.status === query.status : true))
+      .filter((row) => (!q ? true : row.shipmentNo.toLowerCase().includes(q)))
       .filter((row) =>
         query.scopeUnitId
           ? row.shipperUnitId === query.scopeUnitId || row.receiverUnitId === query.scopeUnitId

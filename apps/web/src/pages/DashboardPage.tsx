@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { ArrowRight, Bell, ClipboardList } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -8,11 +9,12 @@ import { getDashboardTodos, listNotifications } from '../api/notifications';
 import { RefreshButton } from '../components/RefreshButton';
 import { useLocale } from '../i18n/LocaleProvider';
 import { formatDateTime } from '../i18n/format';
-import { Card, CardHeader } from '../ui/card';
+import { Skeleton } from '../ui/skeleton';
+import { StatCard } from '../ui/stat';
 import { PageHeader } from '../ui/page-header';
-import { Spinner } from '../ui/spinner';
 
-// 工作台：按角色 + scope 聚合待办（GET /dashboard/todos），并展示最近通知。
+// 工作台：先给「有多少活要干」，再给「最近发生了什么」。
+// 待办数字是这一页的主角：卡片可点直达对应列表，数字用 tabular-nums 避免抖动。
 export function DashboardPage() {
   const { t } = useTranslation();
   const { locale } = useLocale();
@@ -23,17 +25,18 @@ export function DashboardPage() {
   });
   const recentNotificationsQuery = useQuery({
     queryKey: ['notifications', 'dashboard'],
-    queryFn: () => listNotifications({ page: 1, size: 5 }),
+    queryFn: () => listNotifications({ page: 1, size: 6 }),
   });
 
-  const items = todosQuery.data?.items ?? [];
+  const todos = todosQuery.data?.items ?? [];
   const recentNotifications = recentNotificationsQuery.data?.items ?? [];
-
   const isLoading = todosQuery.isLoading || recentNotificationsQuery.isLoading;
   const isError = todosQuery.isError || recentNotificationsQuery.isError;
 
+  const pending = todos.reduce((sum, todo) => sum + todo.count, 0);
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={t('dashboard.title')}
         description={t('dashboard.description')}
@@ -45,72 +48,110 @@ export function DashboardPage() {
         }
       />
 
-      {isLoading ? (
-        <Spinner label={t('common.loading')} />
-      ) : isError ? (
-        <p role="alert" className="text-sm text-danger-600">
+      {isError ? (
+        <p role="alert" className="rounded-[var(--radius-card)] border border-danger-200 bg-danger-50 px-3 py-2 text-xs text-danger-600">
           {t('errors.UNKNOWN')}
         </p>
-      ) : (
-        <>
-          <Card>
-            <CardHeader title={t('dashboard.overview')} />
-            {items.length === 0 ? (
-              <p className="text-sm text-ink-subtle">{t('dashboard.empty')}</p>
-            ) : (
-              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {items.map((todo) => (
-                  <TodoCard key={todo.key} todo={todo} />
-                ))}
-              </ul>
-            )}
-          </Card>
+      ) : null}
 
-          <Card>
-            <CardHeader
-              title={t('dashboard.recentNotifications')}
-              actions={
-                <Link to="/notifications" className="text-sm text-brand-700 hover:underline">
-                  {t('notifications.title')}
-                </Link>
-              }
-            />
-            {recentNotifications.length === 0 ? (
-              <p className="text-sm text-ink-subtle">{t('dashboard.noRecentNotifications')}</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {recentNotifications.map((notification) => (
-                  <li
-                    key={notification.id}
-                    className="flex items-start justify-between gap-3 border-b border-line pb-2 last:border-b-0 last:pb-0"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium text-ink">{notification.title}</div>
-                      {notification.content && (
-                        <div className="text-sm text-ink-muted">{notification.content}</div>
-                      )}
-                    </div>
-                    <span className="shrink-0 text-xs text-ink-subtle">
-                      {formatDateTime(notification.createdAt, locale)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </>
-      )}
+      <section aria-labelledby="dashboard-todos" className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between">
+          <h2 id="dashboard-todos" className="text-[13px] font-semibold text-ink">
+            {t('dashboard.overview')}
+          </h2>
+          {pending > 0 ? (
+            <span className="text-[11px] text-ink-subtle">
+              {t('dashboard.pendingTotal', { count: pending, defaultValue: '' })}
+            </span>
+          ) : null}
+        </div>
+
+        {isLoading ? (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 4 }, (_, index) => (
+              <Skeleton key={index} className="h-[74px] w-full" />
+            ))}
+          </div>
+        ) : todos.length === 0 ? (
+          <p className="rounded-[var(--radius-card)] border border-line bg-surface px-3 py-6 text-center text-xs text-ink-muted">
+            {t('dashboard.empty')}
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {todos.map((todo) => (
+              <TodoCard key={todo.key} todo={todo} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section aria-labelledby="dashboard-activity" className="flex min-w-0 flex-col gap-2">
+        <div className="flex items-baseline justify-between">
+          <h2 id="dashboard-activity" className="text-[13px] font-semibold text-ink">
+            {t('dashboard.recentNotifications')}
+          </h2>
+          <Link
+            to="/notifications"
+            className="inline-flex items-center gap-1 text-[11px] text-brand-700 hover:underline"
+          >
+            {t('notifications.title')}
+            <ArrowRight aria-hidden className="size-3" />
+          </Link>
+        </div>
+
+        <div className="rounded-[var(--radius-card)] border border-line bg-surface">
+          {isLoading ? (
+            <div className="flex flex-col gap-2 p-3">
+              {Array.from({ length: 4 }, (_, index) => (
+                <Skeleton key={index} className="h-8 w-full" />
+              ))}
+            </div>
+          ) : recentNotifications.length === 0 ? (
+            <p className="px-3 py-6 text-center text-xs text-ink-muted">
+              {t('dashboard.noRecentNotifications')}
+            </p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {recentNotifications.map((notification) => (
+                <li key={notification.id} className="flex items-start gap-2 px-3 py-2">
+                  <Bell aria-hidden className="mt-0.5 size-3.5 shrink-0 text-ink-subtle" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium text-ink">{notification.title}</p>
+                    {notification.content ? (
+                      <p className="line-clamp-2 text-xs text-ink-muted">{notification.content}</p>
+                    ) : null}
+                  </div>
+                  <span className="shrink-0 text-[11px] tabular-nums text-ink-subtle">
+                    {formatDateTime(notification.createdAt, locale)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
 
 function TodoCard({ todo }: { todo: DashboardTodoItem }) {
   return (
-    <li className="rounded-lg border border-line bg-surface-muted p-4">
-      <Link to={todo.link} className="flex flex-col gap-2 hover:underline">
-        <span className="text-sm text-ink-muted">{todo.label}</span>
-        <span className="text-2xl font-semibold tabular-nums text-ink">{todo.count}</span>
-      </Link>
-    </li>
+    <Link
+      to={todo.link}
+      className="group rounded-[var(--radius-card)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+    >
+      <StatCard
+        label={todo.label}
+        value={todo.count}
+        tone={todo.count > 0 ? 'warning' : 'neutral'}
+        icon={<ClipboardList aria-hidden />}
+        meta={
+          <span className="inline-flex items-center gap-1 text-brand-700 opacity-0 transition-opacity group-hover:opacity-100">
+            去处理
+            <ArrowRight aria-hidden className="size-3" />
+          </span>
+        }
+      />
+    </Link>
   );
 }

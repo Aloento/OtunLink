@@ -143,8 +143,10 @@ export class MemorySalesRepository implements SalesRepository {
   }
 
   async list(query: SalesListQuery): Promise<SalesListResult> {
+    const q = query.q?.trim().toLowerCase();
     const all = [...this.rows.values()]
       .filter((row) => (query.status ? row.status === query.status : true))
+      .filter((row) => (!q ? true : row.salesNo.toLowerCase().includes(q)))
       .filter((row) =>
         query.unitId ? row.sellerUnitId === query.unitId || row.buyerUnitId === query.unitId : true,
       )

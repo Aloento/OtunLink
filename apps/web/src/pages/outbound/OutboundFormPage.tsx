@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import type { FileDto, OutboundCreateInput, OutboundType } from '@otunlink/shared';
+import type { FileDto, ItemDto, OutboundCreateInput, OutboundType } from '@otunlink/shared';
 
 import { errorI18nKey, isApiError } from '../../api/http';
 import { listItems } from '../../api/items';
@@ -18,7 +18,7 @@ import { ImageUpload } from '../../components/ImageUpload';
 import { RefreshButton } from '../../components/RefreshButton';
 import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
 import { Button } from '../../ui/button';
-import { Combobox } from '../../ui/combobox';
+import { EntityPicker } from '../../ui/entity-picker';
 import { Field } from '../../ui/field';
 import { Input } from '../../ui/input';
 import { PageHeader } from '../../ui/page-header';
@@ -100,10 +100,11 @@ export function OutboundFormPage() {
     const prefilled = parsePrefill(searchParams.get('prefill'));
     return prefilled.length > 0 ? prefilled : [emptyLine()];
   });
-  const [itemSearch, setItemSearch] = useState('');
-  // 每行选择器里显示的文本（物品名），与共享的服务端搜索词 itemSearch 分开：
-  // 查询键仍然是 ['items','picker',itemSearch]，输入即触发服务端过滤。
+  // 每行选择器触发器上显示的文本（物品名）：选中后写入，编辑态回填时由详情补齐。
   const [lineQueries, setLineQueries] = useState<Record<string, string>>({});
+  // 选择器搜到的物品按 id 留档：选中后要用单位回填数量标签，
+  // 不能回头去「当前这一页结果」里找——那一页随时会被下一次搜索替换掉。
+  const [itemIndex, setItemIndex] = useState<Record<string, ItemDto>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,10 +113,24 @@ export function OutboundFormPage() {
     queryFn: () => listUnits(),
   });
 
-  const { data: itemPage, isFetching: itemsFetching } = useQuery({
-    queryKey: ['items', 'picker', itemSearch],
-    queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
-  });
+  // 搜索走服务端（EntityPicker 每次改词/翻页都调这里）：物品再多也能搜到，
+  // 不再是「只筛第一页 50 条」。
+  const searchItems = async (query: string, page: number) => {
+    const data = await listItems({ q: query || undefined, page, size: 50 });
+    setItemIndex((prev) => {
+      const next = { ...prev };
+      for (const item of data.items) next[item.id] = item;
+      return next;
+    });
+    return {
+      items: data.items.map((item) => ({
+        id: item.id,
+        label: item.name,
+        meta: [item.sku, unitLabel(t, specUnitOf(item), item.minSaleUnit)].filter(Boolean).join(' · '),
+      })),
+      total: data.total,
+    };
+  };
 
   const { data: stockPage, isLoading: stockLoading } = useQuery({
     queryKey: ['stock', 'batchPicker', warehouseUnitId],
@@ -163,7 +178,7 @@ export function OutboundFormPage() {
       batchId: item.batchId ?? '',
     }));
     setLines(restored);
-    // 每行物品选择器的显示文本要一起回填，否则编辑态看到的是空输入框（后端 DTO 带 itemName）。
+    // 每行物品选择器的显示文本要一起回填，否则编辑态看到的是「未选择」（后端 DTO 带 itemName）。
     setLineQueries(
       Object.fromEntries(
         restored.map((line, index) => [line.key, detail.items[index]?.itemName ?? '']),
@@ -281,12 +296,6 @@ export function OutboundFormPage() {
 
   if (unitsLoading || (isEdit && detailLoading)) return <Spinner label={t('common.loading')} />;
 
-  const itemOptions = (itemPage?.items ?? []).map((item) => ({
-    value: item.id,
-    label: item.name,
-    description: item.sku ?? undefined,
-  }));
-
   // 头部字段按类型不同（报损多出原因/附图），共用同一段渲染逻辑分别放进各面板。
   const renderHeader = (kind: OutboundType) => (
     <>
@@ -377,7 +386,7 @@ export function OutboundFormPage() {
           <h2 className="text-base font-semibold text-ink">{t('outbound.items')}</h2>
           <div className="flex flex-wrap items-center gap-2">
             <RefreshButton
-              queryKey={['items', 'picker']}
+              queryKey={['items']}
               additionalKeys={[['stock', 'batchPicker'], ['units', 'list']]}
             />
             <Button
@@ -393,7 +402,7 @@ export function OutboundFormPage() {
         {lines.map((line, index) => {
           const batchOptions = (stockPage?.items ?? []).filter((row) => row.itemId === line.itemId);
           const excess = lineExcess(line);
-          const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
+          const item = itemIndex[line.itemId];
           const unit = specUnitOf(item);
           const unitSuffix = unit ? ` (${unitLabel(t, unit, item?.minSaleUnit)})` : '';
 
@@ -404,23 +413,17 @@ export function OutboundFormPage() {
             >
               <div className={`${LINE_GRID_CLASS} sm:grid-cols-3`}>
                 <Field label={t('outbound.itemName')} required>
-                  <Combobox
-                    value={lineQueries[line.key] ?? ''}
-                    onValueChange={(next) => {
-                      setLineQueries((prev) => ({ ...prev, [line.key]: next }));
-                      setItemSearch(next);
-                    }}
-                    options={itemOptions}
-                    onSelect={(option) => {
-                      setLine(line.key, 'itemId', option.value);
+                  <EntityPicker
+                    value={line.itemId}
+                    displayValue={lineQueries[line.key]}
+                    title={t('items.title')}
+                    searchPlaceholder={t('items.itemSearchPlaceholder')}
+                    onSearch={searchItems}
+                    onChange={(option) => {
+                      setLine(line.key, 'itemId', option.id);
                       setLineQueries((prev) => ({ ...prev, [line.key]: option.label }));
                     }}
-                    placeholder={t('items.itemSearchPlaceholder')}
-                    loading={itemsFetching}
-                    loadingText={t('common.loading')}
-                    emptyText={t('items.empty')}
-                    aria-label={t('outbound.itemName')}
-                    className="min-w-0"
+                    className="w-full min-w-0"
                   />
                 </Field>
                 {/* 超出可用量：只有用户填了数量才可能出现，交给 Field 的 error 走 aria-describedby。 */}
@@ -461,7 +464,7 @@ export function OutboundFormPage() {
                   size="icon"
                   variant="ghost"
                   // 每行一个图标按钮：把行标识拼进可访问名称（物品名，未选时退行号）。
-                  aria-label={`${t('common.remove')} ${item?.name ?? index + 1}`}
+                  aria-label={`${t('common.remove')} ${lineQueries[line.key] || index + 1}`}
                   icon={<Trash2 aria-hidden className="size-4" />}
                   disabled={lines.length === 1}
                   onClick={() => removeLine(line.key)}
