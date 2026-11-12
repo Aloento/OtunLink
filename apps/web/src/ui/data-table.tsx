@@ -212,7 +212,15 @@ export function DataTable<T>({
     <div className={cn('flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface', className)}>
       {toolbar ? <div className="shrink-0 border-b border-line">{toolbar}</div> : null}
 
-      <div className={cn('relative min-h-0 flex-1 overflow-auto app-scroll')} style={maxHeight ? { maxHeight } : undefined}>
+      <div
+        // 可横向滚动的表格容器必须是可聚焦的 region 且有名字，
+        // 否则键盘用户没法滚到右侧的列（see: responsive-table）
+        role="region"
+        aria-label={caption ?? ariaLabel}
+        tabIndex={0}
+        className={cn('relative min-h-0 flex-1 overflow-auto app-scroll focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600')}
+        style={maxHeight ? { maxHeight } : undefined}
+      >
         <table className="app-table" aria-label={caption ? undefined : ariaLabel}>
           {caption ? <caption className="sr-only">{caption}</caption> : null}
           <thead>
@@ -228,7 +236,7 @@ export function DataTable<T>({
                       key={header.id}
                       scope="col"
                       // aria-sort 只加在可排序列上：念出来就是「已按数量降序排列」
-                      aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : canSort ? 'none' : undefined}
+                      aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : undefined}
                       style={{ width: header.getSize() }}
                       className={cn('relative', align === 'end' && 'text-end', isSticky && 'app-table-sticky')}
                     >

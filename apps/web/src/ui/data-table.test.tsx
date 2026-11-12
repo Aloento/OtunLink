@@ -56,8 +56,8 @@ describe('DataTable', () => {
     );
 
     const header = screen.getByRole('columnheader', { name: /数量/ });
-    // 未排序时是 aria-sort="none"（可排序但还没排）
-    expect(header.getAttribute('aria-sort')).toBe('none');
+    // 指南要求：只有当前排序列才带 aria-sort，未排序时不留 aria-sort="none"
+    expect(header.getAttribute('aria-sort')).toBeNull();
 
     fireEvent.click(within(header).getByRole('button'));
     expect(header.getAttribute('aria-sort')).toBe('ascending');
