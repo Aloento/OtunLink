@@ -11,6 +11,7 @@
     "dev:api:local": "pnpm --filter @otunlink/api dev:local",
     "dev:web": "pnpm --filter @otunlink/web dev",
     "check:i18n-keys": "node scripts/check-i18n-keys.mjs",
+    "check:ui": "bash scripts/check-ui-stack.sh",
     "smoke:sql": "node scripts/smoke-sql.mjs"
   }
 }

@@ -43,13 +43,7 @@ interface OrderSummary {
   qty: number;
 }
 
-// 列表接口只返回单据主表字段，明细行数与数量合计只存在于详情里。
-// 为了这两列显示真数据，这里按当前页的行批量取详情并汇总：每张单据用自己的 id 做 key，
-// 与详情页共享缓存（staleTime 5 分钟），翻页回来不重复请求，单行失败也只是这一行显示「—」。
-// 后端在 list 响应里补 itemCount / totalQty 之后，这段 fan-out 应整体删掉（见 docs/ui-redesign.md §3）。
-// 出库单列表：手工出库（NORMAL）与报损（LOSS），草稿可过账。
-// 结构与入库单列表一致：页头 → 筛选条 → 数据表 → 分页条；类型筛选从 Tab 换成下拉，
-// 与状态筛选并排放在筛选条里，切换任一筛选都回第 1 页。
+// 明细行数与数量合计由列表接口聚合返回（itemCount / totalQty），前端不再逐单拉详情。
 export function OutboundListPage() {
   const { t } = useTranslation();
   const { locale } = useLocale();

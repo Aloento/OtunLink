@@ -33,3 +33,9 @@ jobs:
 
       - name: Build
         run: pnpm -r build
+
+      # 静态护栏：i18n key 是否都有定义、UI 栈是否被退回（自建模态/暗色/第二套 primitives）
+      - name: Guards
+        run: |
+          pnpm check:i18n-keys
+          pnpm check:ui

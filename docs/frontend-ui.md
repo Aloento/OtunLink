@@ -3,6 +3,30 @@
 > 本文件是 `apps/web` 的 UI 层唯一约定来源。所有页面/组件迁移与后续新增都必须遵循。
 > 变更 UI 基础组件前先改本文件。
 
+## 0. 设计基调与不变量
+
+目标：一屏看更多行、操作路径更短、找数据不靠翻页。动任何页面前先确认这五条：
+
+1. **只做日间模式**：不写 `dark:`，不监听 `prefers-color-scheme`。
+2. **模态一律原生 `<dialog>`** + `showModal()`：不加 `role="dialog"` / `aria-modal`，
+   不手写焦点陷阱。
+3. **少量枚举用原生 `<select>`，大量记录用 `EntityPicker`**：不要用 `<Select>`
+   装「前 100 条」，搜不到就等于数据丢了。
+4. **不改业务逻辑、i18n key 语义、导出名**：只改表现与交互。
+5. **不引入第二套 primitives**：`radix-ui` 伞包、Base UI、另一套表单库都不进依赖。
+
+视觉基线：
+
+| 维度 | 取值 |
+| --- | --- |
+| 画布 | `bg-canvas` `#f4f6f8`（冷灰，衬托白色数据面板） |
+| 面板 | `bg-surface` + `border-line` 1px，**不用阴影** |
+| 字号 | 正文 13px、次要 12px、标签 11px；页标题 17px、区块标题 13px |
+| 数字 | `tabular-nums`；金额/数量列 `align: 'end'`，表头一起右对齐 |
+| 动效 | 120–150ms 的颜色/透明度过渡，不加位移与缩放 |
+
+**禁止**：渐变、大阴影、药丸按钮、彩色大图标、卡片套卡片、用横向滚动兜住列。
+
 ## 1. 技术栈
 
 | 层 | 选择 | 说明 |
@@ -281,40 +305,17 @@ Tooltip 不是唯一信息来源：触发元素自身仍需 `aria-label`。
 业务/管理分组）。**不要再往底栏里塞第 5 个页面**，也不要靠横向滚动藏入口。
 
 
-## 5. Fluent → 本栈 迁移对照
+## 5. 与旧栈（Fluent UI）的关系
 
-| 旧 | 新 |
-| --- | --- |
-| `<Title1 as="h1">` | `<PageHeader title=…>` 或 `<h1 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">` |
-| `<Title3>` / `<Text as="h2" weight="semibold" size={400}>` | `<h2 className="text-[13px] font-semibold text-ink">` |
-| `<Body1>` | `<p className="text-sm text-ink-muted">` |
-| `<Text size={200}>` / `<Caption1>` | `<span className="text-xs text-ink-subtle">` |
-| `<Text className="text-red-600">`（错误） | `<p role="alert" className="text-sm text-danger-600">` |
-| `<Text className="text-amber-700">` | `<p className="text-sm text-warning-700">` |
-| `<Button appearance="primary">` | `variant="primary"` |
-| `<Button appearance="secondary">` | `variant="secondary"`（默认） |
-| `<Button appearance="subtle">` | `variant="subtle"` |
-| `<Button size="small">` | `size="sm"` |
-| `<Spinner label=…>` | `<Spinner label=…>` |
-| `<Input onChange={(_, d) => d.value}>` | `<Input onChange={(e) => e.target.value}>` |
-| `<Select value onChange={(_, d) => d.value}>` | `<Select value onValueChange={…}>` |
-| `<Textarea resize="vertical">` | `<Textarea>`（默认 `resize-y`） |
-| `<Field label required>` | `<Field label required>` |
-| `<Badge appearance="tint" color="success\|danger\|warning">` | `<Badge tone="success\|danger\|warning">` |
-| `<Card>` | `<Card>` |
-| `<Dialog><DialogSurface><DialogBody>…` | `<Dialog><DialogContent><DialogHeader/>…` |
-| `<TabList selectedValue onTabSelect>` + `<Tab value>` | `<Tabs value onValueChange>` + `<TabsList>`/`<TabsTrigger>`/`<TabsContent>` |
-| `<Combobox freeform onOptionSelect>` + `<Option>` | `<Combobox … onSelect={(o) => …}>` |
-| `<Checkbox onChange={(_, d) => d.checked}>` | `<Checkbox onChange={(e) => e.currentTarget.checked}>` |
-| `window.confirm(…)` | `<ConfirmDialog tone="danger" busy onConfirm=…>` |
-| 手写「← / →」分页 | `<Pagination page totalPages onChange totalLabel>` |
+Fluent UI 已于 `07418d9` 全量移除。翻旧 PR / 旧代码时的写法对照看那一次提交的 diff，
+不值得再维护一张逐项映射表：剩下的存量代码已经全部是本栈写法。
 
 ## 6. 硬性规则
 
 1. **不改业务逻辑**：API 调用、查询键、权限判断、状态机、i18n key、路由路径全部保持原样。
 2. **不改对外签名**：`src/components/*` 的导出名与 props 不变，只换内部实现。
 3. **依赖已锁定**：TanStack Table/Virtual、cmdk、sonner、若干 Radix 原语。
-   新增前先读 `docs/frontend-ui-audit.md` 的取舍；样式先进 `index.css` 的
+   新增前先读本文件 §1 的取舍；样式先进 `index.css` 的
    `@theme`/组件层，不要在组件里堆任意值。
 4. **文案全部走 i18n**：不新增硬编码中文/英文（新增 key 时同步 `resources/zh-CN.ts` 与 `en.ts`）。
 5. **可访问性**：表单控件必须有 label 或 `aria-label`；图标按钮必须有 `aria-label`；

@@ -6,9 +6,9 @@
 
 ## 技术栈
 
-- **前端**：Vite + React + TypeScript + Fluent UI v9 + Tailwind + react-i18next + MSAL + TanStack Query
+- **前端**：Vite + React + TypeScript + Tailwind CSS v4 + Radix 原语 + TanStack Table/Query + react-i18next + MSAL
 - **后端**：Hono（Cloudflare Workers）+ Drizzle ORM + Hyperdrive（私有 PostgreSQL）+ S3 兼容 OBS（图片）+ KV（JWKS 缓存）
-- **部署**：Cloudflare Pages（前端）/ Workers（API）；CI：GitHub Actions（typecheck + test + build）
+- **部署**：Cloudflare Pages（前端）/ Workers（API）；CI：GitHub Actions（typecheck + test + build + UI 护栏）
 
 ## 目录结构
 
