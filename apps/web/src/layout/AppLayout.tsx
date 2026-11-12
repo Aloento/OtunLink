@@ -11,9 +11,9 @@ import {
   Rows3,
   Search,
 } from 'lucide-react';
-import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import type { AppLocale } from '@otunlink/shared';
 
@@ -28,6 +28,7 @@ import { MobileNav } from './MobileNav';
 import { MOBILE_QUERY, useMediaQuery } from '../lib/useMediaQuery';
 import { usePersistentState } from '../lib/usePersistentState';
 import { canAccessPermissions } from '../routes/access';
+import { navKeyForPath } from '../routes/document-title';
 import { NAV_ICONS } from '../routes/nav-icons';
 import { NAV_ADMIN, NAV_MAIN, ROUTES, type RouteKey } from '../routes/routes';
 import { Badge } from '../ui/badge';
@@ -195,6 +196,28 @@ export function AppLayout() {
 
   const nav = permittedRoutes(me?.role ?? null);
   const roleLabel = me?.role ? t(`roles.${me.role}`) : t('common.notAssigned');
+
+  // 「当前页面叫什么是浏览器标签页和读屏的第一句信息」：详情页按最长前缀归到所属模块。
+  const location = useLocation();
+  const currentNavKey = navKeyForPath(location.pathname);
+  const currentTitle = currentNavKey ? t(`nav.${ROUTES[currentNavKey].navKey}`) : null;
+
+  useEffect(() => {
+    document.title = currentTitle ? `${currentTitle} · ${t('app.name')}` : t('app.name');
+  }, [currentTitle, t]);
+
+  // 路由切换后把焦点移到内容起点：否则键盘/读屏用户仍停在刚点的导航项上，
+  // 新页面的出现不会被播报（html 指南：新视图就位时把焦点移到内容开头）。
+  const mainRef = useRef<HTMLElement | null>(null);
+  const firstRoute = useRef(true);
+  useEffect(() => {
+    if (firstRoute.current) {
+      firstRoute.current = false;
+      return;
+    }
+    mainRef.current?.focus();
+    window.scrollTo({ top: 0 });
+  }, [location.pathname]);
 
   const unread = useQuery({
     queryKey: ['notifications', 'unread-count'],
@@ -375,8 +398,9 @@ export function AppLayout() {
 
         <main
           id="main"
+          ref={mainRef}
           tabIndex={-1}
-          className="min-w-0 flex-1 px-3 pb-20 pt-3 md:px-4 md:pb-4"
+          className="min-w-0 flex-1 px-3 pb-20 pt-3 outline-none md:px-4 md:pb-4"
         >
           <Outlet />
         </main>
