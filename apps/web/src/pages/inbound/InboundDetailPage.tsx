@@ -105,11 +105,12 @@ export function InboundDetailPage() {
       header: t('inbound.batchNo'),
       render: (item) => item.batchNo ?? <span className="text-ink-subtle">—</span>,
     },
-    { key: 'qty', header: t('inbound.qty'), render: (item) => <span className="block text-end tabular-nums">{item.qty}</span> },
+    { key: 'qty', header: t('inbound.qty'), align: 'end', render: (item) => item.qty },
     {
       key: 'unitCost',
       header: t('inbound.unitCost'),
-      render: (item) => <span className="block text-end tabular-nums">{item.unitCost}</span>,
+      align: 'end',
+      render: (item) => item.unitCost,
     },
     {
       key: 'productionDate',

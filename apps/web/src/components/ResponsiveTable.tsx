@@ -14,6 +14,11 @@ export interface ResponsiveTableColumn<T> {
   key: string;
   header: string;
   render: (item: T) => ReactNode;
+  /**
+   * 列对齐。数字/金额列用 'end'：表头与单元格**同时**右对齐，
+   * 才不会出现「表头靠左、内容靠右」的错位。
+   */
+  align?: 'end';
 }
 
 export function ResponsiveTable<T>({
@@ -70,7 +75,9 @@ export function ResponsiveTable<T>({
         <TableHeader>
           <TableRow>
             {columns.map((col) => (
-              <TableHead key={col.key}>{col.header}</TableHead>
+              <TableHead key={col.key} className={col.align === 'end' ? 'text-end' : undefined}>
+                {col.header}
+              </TableHead>
             ))}
             {actions ? <TableHead className="text-end">{t('common.actions')}</TableHead> : null}
           </TableRow>
@@ -79,7 +86,9 @@ export function ResponsiveTable<T>({
           {items.map((item) => (
             <TableRow key={rowKey(item)} className="hover:bg-surface-muted/60">
               {columns.map((col) => (
-                <TableCell key={col.key}>{col.render(item)}</TableCell>
+                <TableCell key={col.key} className={col.align === 'end' ? 'text-end tabular-nums' : undefined}>
+                  {col.render(item)}
+                </TableCell>
               ))}
               {actions ? (
                 <TableCell>

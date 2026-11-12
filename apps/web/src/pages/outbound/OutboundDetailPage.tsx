@@ -114,13 +114,12 @@ export function OutboundDetailPage() {
           </span>
         ),
     },
-    { key: 'qty', header: t('outbound.qty'), render: (item) => <span className="block text-end tabular-nums">{item.qty}</span> },
+    { key: 'qty', header: t('outbound.qty'), align: 'end', render: (item) => item.qty },
     {
       key: 'unitCost',
       header: t('outbound.unitCost'),
-      render: (item) => (
-        <span className="block text-end tabular-nums">{item.unitCost ?? '—'}</span>
-      ),
+      align: 'end',
+      render: (item) => item.unitCost ?? '—',
     },
   ];
 

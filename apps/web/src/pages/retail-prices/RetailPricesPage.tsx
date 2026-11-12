@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { History, Pencil, Tags } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,11 +18,12 @@ import { listUnits } from '../../api/units';
 import { refreshAfterWrite } from '../../api/queryClient';
 import { useSession } from '../../auth/SessionProvider';
 import { RefreshButton } from '../../components/RefreshButton';
-import { ResponsiveTable, type ResponsiveTableColumn } from '../../components/ResponsiveTable';
 import { formatDateTime } from '../../i18n/format';
 import { useLocale } from '../../i18n/LocaleProvider';
 import { unitLabel } from '../../i18n/units';
+import { useDebouncedValue } from '../../lib/useDebouncedValue';
 import { Button } from '../../ui/button';
+import { DataTable, TableCount, type DataTableColumn } from '../../ui/data-table';
 import {
   Dialog,
   DialogBody,
@@ -30,7 +32,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../ui/dialog';
+import { Empty } from '../../ui/empty';
+import { EntityPicker } from '../../ui/entity-picker';
 import { Field } from '../../ui/field';
+import { FilterBar } from '../../ui/filter-bar';
 import { Input } from '../../ui/input';
 import { PageHeader } from '../../ui/page-header';
 import { Select } from '../../ui/select';
@@ -39,6 +44,8 @@ import { Spinner } from '../../ui/spinner';
 const CURRENCIES = ['CNY', 'USD', 'EUR'] as const;
 
 // 零售价管理：仓库 × 物品当前价 + 历史留痕；unit_cost 仅只读展示。
+// 接口一次返回全部当前价（数据量 = 仓库 × 物品，远小于单据量），所以这里用客户端
+// 排序 + 客户端关键词筛选是「真排序」，不会出现只排当前页的假象。
 export function RetailPricesPage() {
   const { t } = useTranslation();
   const { locale } = useLocale();
@@ -47,13 +54,16 @@ export function RetailPricesPage() {
 
   const [unitId, setUnitId] = useState('');
   const [itemId, setItemId] = useState('');
+  const [itemLabel, setItemLabel] = useState('');
+  const [q, setQ] = useState('');
+  const debouncedQ = useDebouncedValue(q, 200);
   const [draft, setDraft] = useState<{
     mode: 'edit' | 'create';
     id?: string;
     unitId: string;
     itemId: string;
-    unitName: string | null;
     itemName: string | null;
+    itemLabel?: string;
   } | null>(null);
   const [priceInput, setPriceInput] = useState('');
   const [currencyInput, setCurrencyInput] = useState<string>('CNY');
@@ -66,10 +76,6 @@ export function RetailPricesPage() {
   const partnershipsQuery = useQuery({
     queryKey: ['partnerships', 'list'],
     queryFn: () => listPartnerships(),
-  });
-  const { data: itemPage } = useQuery({
-    queryKey: ['items', 'picker', ''],
-    queryFn: () => listItems({ size: 100 }),
   });
 
   const isRetailer = me?.role === 'RETAILER';
@@ -110,13 +116,23 @@ export function RetailPricesPage() {
 
   const canWrite = hasPermission(me?.role, Permissions.RETAIL_PRICES_WRITE);
 
+  const allRows = pricesQuery.data?.items ?? [];
+  const rows = useMemo(() => {
+    const keyword = debouncedQ.trim().toLowerCase();
+    if (!keyword) return allRows;
+    return allRows.filter((row) =>
+      [row.unitName, row.itemName, row.currency, row.price]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(keyword)),
+    );
+  }, [allRows, debouncedQ]);
+
   const openEdit = (row: RetailPriceDto) => {
     setDraft({
       mode: 'edit',
       id: row.id,
       unitId: row.unitId,
       itemId: row.itemId,
-      unitName: row.unitName,
       itemName: row.itemName,
     });
     setPriceInput(row.price);
@@ -124,13 +140,7 @@ export function RetailPricesPage() {
   };
 
   const openCreate = () => {
-    setDraft({
-      mode: 'create',
-      unitId: unitId || '',
-      itemId: itemId || '',
-      unitName: null,
-      itemName: null,
-    });
+    setDraft({ mode: 'create', unitId, itemId, itemName: null });
     setPriceInput('');
     setCurrencyInput('CNY');
   };
@@ -140,54 +150,85 @@ export function RetailPricesPage() {
     Boolean(priceInput.trim()) &&
     (draft!.mode === 'edit' || (Boolean(draft!.unitId) && Boolean(draft!.itemId)));
 
-  const columns: ResponsiveTableColumn<RetailPriceDto>[] = [
-    { key: 'unit', header: t('retailPrices.unit'), render: (row) => row.unitName ?? row.unitId },
-    { key: 'item', header: t('retailPrices.item'), render: (row) => row.itemName ?? row.itemId },
-    { key: 'spec', header: t('retailPrices.spec'), render: (row) => unitLabel(t, row.spec, row.minSaleUnit) },
+  const columns: DataTableColumn<RetailPriceDto>[] = [
     {
-      key: 'price',
+      id: 'item',
+      header: t('retailPrices.item'),
+      width: 240,
+      minWidth: 160,
+      sticky: true,
+      hideable: false,
+      sortable: true,
+      sortValue: (row) => row.itemName ?? row.itemId,
+      cell: (row) => row.itemName ?? row.itemId,
+    },
+    {
+      id: 'unit',
+      header: t('retailPrices.unit'),
+      width: 180,
+      sortable: true,
+      sortValue: (row) => row.unitName ?? row.unitId,
+      cell: (row) => row.unitName ?? row.unitId,
+    },
+    {
+      id: 'spec',
+      header: t('retailPrices.spec'),
+      width: 140,
+      cell: (row) => unitLabel(t, row.spec, row.minSaleUnit),
+    },
+    {
+      id: 'price',
       header: t('retailPrices.price'),
-      // 金额右对齐 + 等宽数字，便于逐行比较价位。
-      render: (row) => (
-        <span className="block text-end tabular-nums">{`${row.currency} ${row.price}`}</span>
-      ),
+      width: 140,
+      align: 'end',
+      sortable: true,
+      sortValue: (row) => Number(row.price),
+      cell: (row) => `${row.currency} ${row.price}`,
     },
     {
-      key: 'unitCost',
+      id: 'unitCost',
       header: t('retailPrices.unitCost'),
-      render: (row) => (
-        <span className="block text-end tabular-nums">{row.unitCost === null ? '—' : row.unitCost}</span>
-      ),
+      width: 120,
+      align: 'end',
+      sortable: true,
+      sortValue: (row) => (row.unitCost === null ? null : Number(row.unitCost)),
+      cell: (row) => (row.unitCost === null ? '—' : row.unitCost),
     },
     {
-      key: 'updatedByName',
+      id: 'updatedByName',
       header: t('retailPrices.updatedByName'),
-      render: (row) => row.updatedByName ?? row.updatedBy ?? '—',
+      width: 140,
+      cell: (row) => row.updatedByName ?? row.updatedBy ?? '—',
     },
     {
-      key: 'updatedAt',
+      id: 'updatedAt',
       header: t('retailPrices.updatedAt'),
-      render: (row) => formatDateTime(row.updatedAt, locale),
+      width: 168,
+      sortable: true,
+      sortValue: (row) => row.updatedAt,
+      cell: (row) => formatDateTime(row.updatedAt, locale),
     },
   ];
 
-  const historyColumns: ResponsiveTableColumn<RetailPriceHistoryDto>[] = [
+  const historyColumns: DataTableColumn<RetailPriceHistoryDto>[] = [
     {
-      key: 'updatedAt',
+      id: 'updatedAt',
       header: t('retailPrices.updatedAt'),
-      render: (row) => formatDateTime(row.updatedAt, locale),
+      width: 168,
+      cell: (row) => formatDateTime(row.updatedAt, locale),
     },
     {
-      key: 'price',
+      id: 'price',
       header: t('retailPrices.price'),
-      render: (row) => (
-        <span className="block text-end tabular-nums">{`${row.currency} ${row.price}`}</span>
-      ),
+      width: 140,
+      align: 'end',
+      cell: (row) => `${row.currency} ${row.price}`,
     },
     {
-      key: 'updatedByName',
+      id: 'updatedByName',
       header: t('retailPrices.updatedByName'),
-      render: (row) => row.updatedByName ?? row.updatedBy ?? '—',
+      width: 140,
+      cell: (row) => row.updatedByName ?? row.updatedBy ?? '—',
     },
   ];
 
@@ -198,93 +239,124 @@ export function RetailPricesPage() {
     : null;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-3">
       <PageHeader
         title={t('retailPrices.title')}
+        description={t('retailPrices.unitCostHint')}
         actions={
-          <>
-            <RefreshButton
-              queryKey={['retail-prices']}
-              additionalKeys={[['items', 'picker'], ['units', 'list'], ['partnerships', 'list']]}
-            />
-            <p className="text-xs text-ink-subtle">{t('retailPrices.unitCostHint')}</p>
-            {canWrite && (
-              <Button variant="primary" onClick={openCreate}>
-                {t('retailPrices.add')}
-              </Button>
-            )}
-          </>
+          canWrite ? (
+            <Button variant="primary" onClick={openCreate}>
+              {t('retailPrices.add')}
+            </Button>
+          ) : undefined
         }
       />
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <Select
-          value={unitId}
-          onValueChange={setUnitId}
-          className="w-full sm:w-56"
-          aria-label={t('retailPrices.unit')}
-        >
-          <option value="">{t('retailPrices.allUnits')}</option>
-          {warehouses.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
-            </option>
-          ))}
-        </Select>
-        <Select
-          value={itemId}
-          onValueChange={setItemId}
-          className="w-full sm:w-56"
-          aria-label={t('retailPrices.item')}
-        >
-          <option value="">{t('retailPrices.allItems')}</option>
-          {(itemPage?.items ?? []).map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </Select>
-      </div>
-
-      {pricesQuery.isLoading ? (
-        <Spinner label={t('common.loading')} />
-      ) : pricesQuery.isError ? (
-        <p role="alert" className="text-sm text-danger-600">
-          {t('errors.UNKNOWN')}
-        </p>
-      ) : (
-        <ResponsiveTable
-          columns={columns}
-          items={pricesQuery.data?.items ?? []}
-          rowKey={(row) => row.id}
-          emptyText={t('retailPrices.empty')}
-          label={t('retailPrices.title')}
-          actions={(row) => (
-            <div className="flex flex-wrap items-center gap-2">
+      <DataTable
+        tableId="retail-prices"
+        caption={t('retailPrices.title')}
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.id}
+        total={rows.length}
+        loading={pricesQuery.isLoading}
+        error={pricesQuery.isError ? t('errors.UNKNOWN') : undefined}
+        empty={
+          debouncedQ ? (
+            <Empty
+              icon={<Tags aria-hidden />}
+              title={t('common.picker.empty')}
+              description={t('common.picker.emptyHint')}
+              action={
+                <Button variant="secondary" onClick={() => setQ('')}>
+                  {t('common.clearFilters')}
+                </Button>
+              }
+            />
+          ) : (
+            <Empty icon={<Tags aria-hidden />} title={t('retailPrices.empty')} />
+          )
+        }
+        getRowLabel={(row) => `${row.itemName ?? row.itemId} ${row.unitName ?? row.unitId}`}
+        sortMode="client"
+        initialSorting={[{ id: 'updatedAt', desc: true }]}
+        stickyFirstColumn
+        maxHeight="calc(100dvh - 15rem)"
+        rowActions={(row) => (
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              // 每行都有同名按钮：把物品名拼进可访问名称，否则读屏只听到一串无法区分的「历史」。
+              aria-label={`${t('retailPrices.history')} ${row.itemName ?? row.itemId}`}
+              icon={<History aria-hidden />}
+              onClick={() => setHistoryOf(row)}
+            >
+              {t('retailPrices.history')}
+            </Button>
+            {canWrite && (
               <Button
                 size="sm"
                 variant="secondary"
-                // 每行都有「历史 / 编辑」：把物品名拼进可访问名称，否则屏幕阅读器只听到
-                // 同一串无法区分的按钮名。
-                aria-label={`${t('retailPrices.history')} ${row.itemName ?? row.itemId}`}
-                onClick={() => setHistoryOf(row)}
+                aria-label={`${t('retailPrices.edit')} ${row.itemName ?? row.itemId}`}
+                icon={<Pencil aria-hidden />}
+                onClick={() => openEdit(row)}
               >
-                {t('retailPrices.history')}
+                {t('retailPrices.edit')}
               </Button>
-              {canWrite && (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  aria-label={`${t('retailPrices.edit')} ${row.itemName ?? row.itemId}`}
-                  onClick={() => openEdit(row)}
+            )}
+          </div>
+        )}
+        toolbar={
+          <FilterBar
+            searchValue={q}
+            onSearchChange={setQ}
+            searchPlaceholder={t('retailPrices.searchPlaceholder')}
+            extra={
+              <>
+                <Select
+                  value={unitId}
+                  onValueChange={setUnitId}
+                  className="w-44"
+                  aria-label={t('retailPrices.unit')}
                 >
-                  {t('retailPrices.edit')}
-                </Button>
-              )}
-            </div>
-          )}
-        />
-      )}
+                  <option value="">{t('retailPrices.allUnits')}</option>
+                  {warehouses.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </Select>
+                <EntityPicker
+                  value={itemId}
+                  displayValue={itemLabel || undefined}
+                  title={t('retailPrices.item')}
+                  placeholder={t('retailPrices.allItems')}
+                  aria-label={t('retailPrices.item')}
+                  className="w-48"
+                  onSearch={async (keyword, pickerPage) => {
+                    const result = await listItems({ q: keyword || undefined, page: pickerPage, size: 50 });
+                    return {
+                      total: result.total,
+                      items: result.items.map((item) => ({
+                        id: item.id,
+                        label: item.name,
+                        meta: [item.sku, item.barcode].filter(Boolean).join(' · ') || undefined,
+                      })),
+                    };
+                  }}
+                  onChange={(option) => {
+                    setItemId(option.id);
+                    setItemLabel(option.label);
+                  }}
+                />
+              </>
+            }
+            right={<RefreshButton queryKey={['retail-prices']} additionalKeys={[['units', 'list'], ['partnerships', 'list']]} />}
+          />
+        }
+        footer={<TableCount total={rows.length} shown={rows.length} />}
+      />
 
       <Dialog
         open={draft !== null}
@@ -304,18 +376,15 @@ export function RetailPricesPage() {
               <div className="flex flex-col gap-3">
                 {draft.mode === 'edit' ? (
                   <p className="text-sm text-ink-soft">
-                    {draft.unitName ?? draft.unitId} · {draft.itemName ?? draft.itemId}
+                    {warehouses.find((w) => w.id === draft.unitId)?.name ?? draft.unitId} ·{' '}
+                    {draft.itemName ?? draft.itemId}
                   </p>
                 ) : (
                   <>
                     <Field label={t('retailPrices.unit')} required>
                       <Select
                         value={draft.unitId}
-                        onValueChange={(value) =>
-                          setDraft((prev) =>
-                            prev ? { ...prev, unitId: value, unitName: null } : prev,
-                          )
-                        }
+                        onValueChange={(value) => setDraft((prev) => (prev ? { ...prev, unitId: value } : prev))}
                       >
                         <option value="">{t('retailPrices.selectUnit')}</option>
                         {warehouses.map((u) => (
@@ -326,21 +395,33 @@ export function RetailPricesPage() {
                       </Select>
                     </Field>
                     <Field label={t('retailPrices.item')} required>
-                      <Select
+                      <EntityPicker
                         value={draft.itemId}
-                        onValueChange={(value) =>
+                        displayValue={draft.itemLabel}
+                        title={t('retailPrices.item')}
+                        placeholder={t('retailPrices.selectItem')}
+                        aria-label={t('retailPrices.item')}
+                        onSearch={async (keyword, pickerPage) => {
+                          const result = await listItems({
+                            q: keyword || undefined,
+                            page: pickerPage,
+                            size: 50,
+                          });
+                          return {
+                            total: result.total,
+                            items: result.items.map((item) => ({
+                              id: item.id,
+                              label: item.name,
+                              meta: [item.sku, item.barcode].filter(Boolean).join(' · ') || undefined,
+                            })),
+                          };
+                        }}
+                        onChange={(option) =>
                           setDraft((prev) =>
-                            prev ? { ...prev, itemId: value, itemName: null } : prev,
+                            prev ? { ...prev, itemId: option.id, itemName: option.label, itemLabel: option.label } : prev,
                           )
                         }
-                      >
-                        <option value="">{t('retailPrices.selectItem')}</option>
-                        {(itemPage?.items ?? []).map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                          </option>
-                        ))}
-                      </Select>
+                      />
                     </Field>
                   </>
                 )}
@@ -393,7 +474,7 @@ export function RetailPricesPage() {
         }}
         closeLabel={t('common.close')}
       >
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{t('retailPrices.historyTitle')}</DialogTitle>
           </DialogHeader>
@@ -401,12 +482,15 @@ export function RetailPricesPage() {
             {historyQuery.isLoading ? (
               <Spinner label={t('common.loading')} />
             ) : (
-              <ResponsiveTable
+              <DataTable
+                tableId="retail-price-history"
+                caption={t('retailPrices.historyTitle')}
                 columns={historyColumns}
-                items={historyQuery.data?.items ?? []}
+                rows={historyQuery.data?.items ?? []}
                 rowKey={(row) => row.id}
-                emptyText={t('retailPrices.noHistory')}
-                label={t('retailPrices.historyTitle')}
+                total={historyQuery.data?.items.length ?? 0}
+                empty={<Empty title={t('retailPrices.noHistory')} />}
+                maxHeight="40vh"
               />
             )}
           </DialogBody>

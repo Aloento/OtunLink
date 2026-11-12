@@ -895,6 +895,8 @@ export interface StockListQuery {
   unitIds?: string[];
   itemId?: string;
   batchId?: string;
+  /** 关键词：物品名称 / SKU / 条码 / 批次号。 */
+  q?: string;
 }
 
 export interface StockListResult {
@@ -912,6 +914,8 @@ export interface StockMovementListQuery {
   unitIds?: string[];
   itemId?: string;
   batchId?: string;
+  /** 关键词：物品名称 / SKU / 条码 / 批次号。 */
+  q?: string;
 }
 
 export interface StockMovementListResult {

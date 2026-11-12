@@ -1,5 +1,6 @@
 import { Search, X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { cn } from '../lib/cn';
 
@@ -25,6 +26,7 @@ export function FilterBar({
   resultText?: ReactNode;
   className?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div className={cn('flex flex-wrap items-center gap-2 px-3 py-2', className)}>
       {onSearchChange ? (
@@ -49,7 +51,7 @@ export function FilterBar({
             <button
               type="button"
               onClick={() => onSearchChange('')}
-              aria-label="清除搜索"
+              aria-label={t('common.picker.clearSearch')}
               className="absolute end-1 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-[4px] text-ink-subtle hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-600"
             >
               <X aria-hidden className="size-3.5" />

@@ -328,11 +328,11 @@ export function AppLayout() {
               type="button"
               onClick={() => setCollapsed((prev) => !prev)}
               className="inline-flex h-8 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] text-ink-subtle hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-600"
-              aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
+              aria-label={collapsed ? t('common.sidebarExpand') : t('common.sidebarCollapse')}
               aria-expanded={!collapsed}
             >
               {collapsed ? <ChevronsRight aria-hidden className="size-4" /> : <ChevronsLeft aria-hidden className="size-4" />}
-              {collapsed ? null : <span className="text-xs">收起</span>}
+              {collapsed ? null : <span className="text-xs">{t('common.collapse')}</span>}
             </button>
           </div>
         </aside>
@@ -349,7 +349,7 @@ export function AppLayout() {
             <button
               type="button"
               onClick={() => setCollapsed((prev) => !prev)}
-              aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
+              aria-label={collapsed ? t('common.sidebarExpand') : t('common.sidebarCollapse')}
               className="inline-flex size-8 items-center justify-center rounded-[var(--radius-control)] text-ink-subtle hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-600"
             >
               <PanelLeft aria-hidden className="size-4" />

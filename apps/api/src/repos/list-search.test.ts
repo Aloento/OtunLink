@@ -86,6 +86,31 @@ describe('SQL 通道：列表关键字搜索 q', () => {
     expect(list).toContain("ro.return_no ILIKE '%RT-1%'");
   });
 
+  it('库存台账：物品名 / SKU / 条码 / 批次号命中；计数查询自带 items+batches 联表', async () => {
+    const [count, list] = await listStatements((repos) =>
+      repos.stock.list({ unitId: 'wh-1', q: 'A-1' }),
+    );
+    // 计数若不自带 JOIN items/batches，i.name、b.batch_no 会指向不存在的表 —— 这正是
+    // 之前发货单聚合踩过的坑（单测绿、线上 500），所以这里逐条钉住。
+    expect(count).toContain('FROM stock s');
+    expect(count).toContain('JOIN items i ON i.id = s.item_id');
+    expect(count).toContain('JOIN batches b ON b.id = s.batch_id');
+    expect(count).toContain("s.unit_id = 'wh-1'");
+    expect(count).toContain(
+      "(i.name ILIKE '%A-1%' OR i.sku ILIKE '%A-1%' OR i.barcode ILIKE '%A-1%' OR b.batch_no ILIKE '%A-1%')",
+    );
+    expect(list).toContain('i.name ILIKE');
+  });
+
+  it('库存流水：计数与列表使用同一谓词', async () => {
+    const [count, list] = await listStatements((repos) => repos.stock.listMovements({ q: 'B-9' }));
+    expect(count).toContain('FROM stock_movements m');
+    expect(count).toContain('LEFT JOIN items i ON i.id = m.item_id');
+    expect(count).toContain('LEFT JOIN batches b ON b.id = m.batch_id');
+    expect(count).toContain("b.batch_no ILIKE '%B-9%'");
+    expect(list).toContain("b.batch_no ILIKE '%B-9%'");
+  });
+
   it('空串/纯空白 q 视为未传，不产生 ILIKE', async () => {
     for (const q of ['', '   ']) {
       const [count, list] = await listStatements((repos) => repos.shipments.list({ q }));

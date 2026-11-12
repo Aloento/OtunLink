@@ -64,7 +64,39 @@ const queries = {
     ORDER BY ro.created_at DESC LIMIT 1`,
   'items.list（搜索谓词涉及的列）': `SELECT id, name, sku, barcode, category, status FROM items
     WHERE name ILIKE '%a%' OR sku ILIKE '%a%' ORDER BY updated_at DESC LIMIT 1`,
-  'stock.list（库存）': `SELECT s.*, i.name FROM stock s LEFT JOIN items i ON i.id = s.item_id LIMIT 1`,
+  // 下面四条与 apps/api/src/repos/sql/stock.ts 同形：计数与列表必须用同一套 JOIN，
+  // 关键词谓词同时引用 items/batches —— 少一个 JOIN 就会在线上变成「列不存在」。
+  'stock.list count（含 items+batches 联表）': `SELECT count(*)::int AS n
+    FROM stock s
+    JOIN items i ON i.id = s.item_id
+    JOIN batches b ON b.id = s.batch_id
+    WHERE s.qty > 0 AND (i.name ILIKE '%a%' OR i.sku ILIKE '%a%' OR i.barcode ILIKE '%a%' OR b.batch_no ILIKE '%a%')`,
+  'stock.list（库存 + 关键词）': `SELECT s.*, bu.name AS unit_name, i.name AS item_name,
+      CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+      i.min_sale_unit AS min_sale_unit,
+      b.batch_no, b.production_date, b.expiry_date
+    FROM stock s
+    JOIN business_units bu ON bu.id = s.unit_id
+    JOIN items i ON i.id = s.item_id
+    JOIN batches b ON b.id = s.batch_id
+    WHERE s.qty > 0 AND (i.name ILIKE '%a%' OR i.sku ILIKE '%a%' OR i.barcode ILIKE '%a%' OR b.batch_no ILIKE '%a%')
+    ORDER BY bu.name ASC, i.name ASC, b.expiry_date ASC NULLS LAST, s.batch_id ASC
+    LIMIT 1`,
+  'stock.listMovements count（含 items+batches 联表）': `SELECT count(*)::int AS n
+    FROM stock_movements m
+    LEFT JOIN items i ON i.id = m.item_id
+    LEFT JOIN batches b ON b.id = m.batch_id
+    WHERE (i.name ILIKE '%a%' OR i.sku ILIKE '%a%' OR i.barcode ILIKE '%a%' OR b.batch_no ILIKE '%a%')`,
+  'stock.listMovements（流水 + 关键词）': `SELECT m.*, bu.name AS unit_name, i.name AS item_name,
+      CASE WHEN i.min_sale_unit = 'INNER' THEN i.inner_unit ELSE i.spec_unit END AS spec,
+      i.min_sale_unit AS min_sale_unit, b.batch_no
+    FROM stock_movements m
+    LEFT JOIN business_units bu ON bu.id = m.unit_id
+    LEFT JOIN items i ON i.id = m.item_id
+    LEFT JOIN batches b ON b.id = m.batch_id
+    WHERE (i.name ILIKE '%a%' OR i.sku ILIKE '%a%' OR i.barcode ILIKE '%a%' OR b.batch_no ILIKE '%a%')
+    ORDER BY m.created_at DESC, m.id DESC
+    LIMIT 1`,
 };
 
 let failed = 0;

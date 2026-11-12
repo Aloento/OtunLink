@@ -56,6 +56,8 @@ export interface EntityPickerProps {
   columns?: PickerColumn[];
   disabled?: boolean;
   required?: boolean;
+  /** 触发器自身的可访问名。筛选栏里的「全部物品」按钮单靠文本说不清筛的是什么。 */
+  'aria-label'?: string;
   'aria-describedby'?: string;
   'aria-invalid'?: boolean;
   className?: string;
@@ -170,12 +172,13 @@ export function EntityPicker({
         id={id}
         disabled={disabled}
         aria-haspopup="dialog"
+        aria-label={aria['aria-label']}
         aria-required={required || undefined}
         aria-describedby={aria['aria-describedby']}
         aria-invalid={aria['aria-invalid']}
         onClick={() => setOpen(true)}
         className={cn(
-          'flex h-8 w-full min-w-0 items-center justify-between gap-2 rounded-[var(--radius-control)] border border-line-strong bg-surface px-2 text-start text-[13px]',
+          'flex min-h-8 w-full min-w-0 items-center justify-between gap-2 rounded-[var(--radius-control)] border border-line-strong bg-surface px-2 text-start text-[13px]',
           'hover:border-line-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-600',
           'disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-subtle',
           className,
@@ -247,7 +250,7 @@ export function EntityPicker({
                 style={{ gridTemplateColumns: `minmax(0,1fr) ${columns.map((c) => c.width ?? '6rem').join(' ')}` }}
                 aria-hidden
               >
-                <span>名称</span>
+                <span>{t('common.picker.name')}</span>
                 {columns.map((column) => (
                   <span key={column.label} className="truncate">
                     {column.label}

@@ -22,6 +22,7 @@ export function stockRouter(): Hono<AppEnv> {
     const unitId = c.req.query('unitId')?.trim() ?? undefined;
     const itemId = c.req.query('itemId')?.trim() ?? undefined;
     const batchId = c.req.query('batchId')?.trim() ?? undefined;
+    const q = c.req.query('q')?.trim() ?? '';
     const page = parsePositiveInt(c.req.query('page'), 1);
     const size = parsePositiveInt(c.req.query('size'), 20, 50);
 
@@ -36,6 +37,7 @@ export function stockRouter(): Hono<AppEnv> {
       unitIds: scope.unitIds,
       itemId: itemId || undefined,
       batchId: batchId || undefined,
+      q: q || undefined,
     });
     const hideCost = c.get('auth').user?.role === 'RETAILER';
     return ok(c, {
@@ -51,6 +53,7 @@ export function stockRouter(): Hono<AppEnv> {
     const unitId = c.req.query('unitId')?.trim() ?? undefined;
     const itemId = c.req.query('itemId')?.trim() ?? undefined;
     const batchId = c.req.query('batchId')?.trim() ?? undefined;
+    const q = c.req.query('q')?.trim() ?? '';
     const page = parsePositiveInt(c.req.query('page'), 1);
     const size = parsePositiveInt(c.req.query('size'), 20, 50);
 
@@ -64,6 +67,7 @@ export function stockRouter(): Hono<AppEnv> {
       unitIds: scope.unitIds,
       itemId: itemId || undefined,
       batchId: batchId || undefined,
+      q: q || undefined,
     });
     const hideCost = c.get('auth').user?.role === 'RETAILER';
     return ok(c, {

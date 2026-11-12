@@ -166,7 +166,7 @@ export function DataTable<T>({
       // 第一次点击一律升序：TanStack 对数值列默认「先降序」，但 ERP 里点一下表头
       // 的预期是「从小到大」，降序再点一下就到。
       sortDescFirst: false,
-      meta: { align: column.align, sticky: column.sticky, className: column.className },
+      meta: { align: column.align ?? 'start', sticky: column.sticky, className: column.className },
     }));
 
     if (rowActions) {
@@ -237,7 +237,9 @@ export function DataTable<T>({
                       scope="col"
                       // aria-sort 只加在可排序列上：念出来就是「已按数量降序排列」
                       aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : undefined}
-                      style={{ width: header.getSize() }}
+                      // textAlign 用内联样式：表头样式写在 components 层，靠工具类去覆盖容易
+                      // 被层叠顺序翻盘，内联样式则永远与单元格一致。
+                      style={{ width: header.getSize(), textAlign: align === 'end' ? 'end' : 'start' }}
                       className={cn('relative', align === 'end' && 'text-end', isSticky && 'app-table-sticky')}
                     >
                       {canSort ? (
@@ -333,7 +335,10 @@ export function DataTable<T>({
                     return (
                       <td
                         key={cell.id}
-                        style={{ width: cell.column.getSize() }}
+                        style={{
+                          width: cell.column.getSize(),
+                          textAlign: meta?.align === 'end' ? 'end' : 'start',
+                        }}
                         className={cn(
                           'truncate',
                           meta?.align === 'end' && 'text-end',
@@ -396,12 +401,11 @@ export function DataTable<T>({
 
 /** 「第 21–40 条 / 共 1,204 条」——分页信息本身也是数据，不要只给页码。 */
 export function TableCount({ total, shown }: { total?: number; shown: number }) {
-  if (total === undefined) return <span>共 {shown} 条</span>;
+  const { t, i18n } = useTranslation();
+  const format = (value: number) => value.toLocaleString(i18n.language);
+  if (total === undefined) return <span>{t('common.tableShown', { shown: format(shown) })}</span>;
   return (
-    <span>
-      显示 <span className="font-medium text-ink">{shown}</span> 条 / 共{' '}
-      <span className="font-medium text-ink">{total.toLocaleString('zh-CN')}</span> 条
-    </span>
+    <span>{t('common.tableShownOfTotal', { shown: format(shown), total: format(total) })}</span>
   );
 }
 
@@ -423,18 +427,21 @@ export function TablePager({
   onPageSizeChange?: (size: number) => void;
   pageSizeOptions?: number[];
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const from = total === undefined ? 0 : (page - 1) * (pageSize ?? 0) + 1;
   const to = pageSize ? Math.min(page * pageSize, total ?? page * pageSize) : (total ?? 0);
+  const format = (value: number) => value.toLocaleString(i18n.language);
 
   return (
     <div className="flex w-full flex-wrap items-center justify-between gap-3">
       <div className="text-xs text-ink-muted">
         {total === undefined ? null : (
           <span>
-            第 <span className="font-medium text-ink">{total === 0 ? 0 : from}</span>–
-            <span className="font-medium text-ink">{to}</span> 条 / 共{' '}
-            <span className="font-medium text-ink">{total.toLocaleString('zh-CN')}</span> 条
+            {t('common.picker.range', {
+              from: format(total === 0 ? 0 : from),
+              to: format(to),
+              total: format(total),
+            })}
           </span>
         )}
       </div>

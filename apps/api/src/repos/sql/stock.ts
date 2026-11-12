@@ -14,13 +14,24 @@ export function createStockRepo(exec: SqlExecutor): StockRepository {
         else if (query.unitIds) parts.push(inClause(`${alias}unit_id`, query.unitIds));
         if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
         if (query.batchId) parts.push(`${alias}batch_id = ${quote(query.batchId)}`);
+        // 关键词同时匹配物品名 / SKU / 条码 / 批次号：现场最常见的是拿条码或批次号找货。
+        if (query.q) {
+          const like = quote(`%${query.q}%`);
+          parts.push(
+            `(i.name ILIKE ${like} OR i.sku ILIKE ${like} OR i.barcode ILIKE ${like} OR b.batch_no ILIKE ${like})`,
+          );
+        }
         return ` WHERE ${parts.join(' AND ')}`;
       };
       const size = Math.min(Math.max(query.size ?? 20, 1), 50);
       const page = Math.max(query.page ?? 1, 1);
       const offset = (page - 1) * size;
+      // 计数必须与列表用同一套 JOIN + WHERE：否则搜索命中的行数会与翻页对不上。
       const totalResult = await exec.query(
-        `SELECT count(*)::int AS n FROM stock${where('')}`,
+        `SELECT count(*)::int AS n
+         FROM stock s
+         JOIN items i ON i.id = s.item_id
+         JOIN batches b ON b.id = s.batch_id${where('s.')}`,
       );
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(
@@ -47,13 +58,22 @@ export function createStockRepo(exec: SqlExecutor): StockRepository {
         else if (query.unitIds) parts.push(inClause(`${alias}unit_id`, query.unitIds));
         if (query.itemId) parts.push(`${alias}item_id = ${quote(query.itemId)}`);
         if (query.batchId) parts.push(`${alias}batch_id = ${quote(query.batchId)}`);
+        if (query.q) {
+          const like = quote(`%${query.q}%`);
+          parts.push(
+            `(i.name ILIKE ${like} OR i.sku ILIKE ${like} OR i.barcode ILIKE ${like} OR b.batch_no ILIKE ${like})`,
+          );
+        }
         return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
       };
       const size = Math.min(Math.max(query.size ?? 20, 1), 50);
       const page = Math.max(query.page ?? 1, 1);
       const offset = (page - 1) * size;
       const totalResult = await exec.query(
-        `SELECT count(*)::int AS n FROM stock_movements${where('')}`,
+        `SELECT count(*)::int AS n
+         FROM stock_movements m
+         LEFT JOIN items i ON i.id = m.item_id
+         LEFT JOIN batches b ON b.id = m.batch_id${where('m.')}`,
       );
       const total = Number(totalResult.rows[0]?.n ?? 0);
       const { rows } = await exec.query(

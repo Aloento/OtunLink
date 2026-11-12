@@ -159,31 +159,28 @@ export function SalesDetailPage() {
     {
       key: 'qty',
       header: t('sales.qty'),
-      // 数量/金额右对齐 + 等宽数字，逐行比较时个位对齐。
-      render: (l) => <span className="block text-end tabular-nums">{l.qty}</span>,
+      // 数量/金额列由 align 统一右对齐：表头与内容同时靠右，逐行比较时个位对齐。
+      align: 'end',
+      render: (l) => l.qty,
     },
     {
       key: 'listPrice',
       header: t('sales.listPrice'),
-      render: (l) => (
-        <span className="block text-end tabular-nums">
-          {l.listPrice === null ? '—' : `${l.listPrice} ${l.listPriceCurrency ?? order.currency}`}
-        </span>
-      ),
+      align: 'end',
+      render: (l) =>
+        l.listPrice === null ? '—' : `${l.listPrice} ${l.listPriceCurrency ?? order.currency}`,
     },
     {
       key: 'price',
       header: t('sales.price'),
-      render: (l) => (
-        <span className="block text-end tabular-nums">
-          {l.price === null ? '—' : `${l.price} ${l.priceCurrency}`}
-        </span>
-      ),
+      align: 'end',
+      render: (l) => (l.price === null ? '—' : `${l.price} ${l.priceCurrency}`),
     },
     {
       key: 'lineTotal',
       header: t('sales.lineTotal'),
-      render: (l) => <span className="block text-end tabular-nums">{l.lineTotal ?? '—'}</span>,
+      align: 'end',
+      render: (l) => l.lineTotal ?? '—',
     },
     // 末列：拣货勾选。逐行勾掉已取到的货，买到哪件一眼可见。
     {
@@ -212,7 +209,8 @@ export function SalesDetailPage() {
     {
       key: 'qty',
       header: t('sales.allocatedQty'),
-      render: (l) => <span className="block text-end tabular-nums">{l.qty}</span>,
+      align: 'end',
+      render: (l) => l.qty,
     },
   ];
 

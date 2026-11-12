@@ -47,8 +47,18 @@ export class MemoryStockRepository implements StockRepository {
     return items;
   }
 
+  /** 关键词匹配：物品名 / SKU / 条码 / 批次号（与 SQL 实现的谓词保持一致）。 */
+  private async matchesQuery(itemId: string, batchId: string, q: string): Promise<boolean> {
+    const needle = q.toLowerCase();
+    const item = await this.itemRepo.findById(itemId);
+    const batch = this.ledger.batches.get(batchId) ?? null;
+    return [item?.name, item?.sku, item?.barcode, batch?.batchNo].some((value) =>
+      value ? value.toLowerCase().includes(needle) : false,
+    );
+  }
+
   async list(query: StockListQuery): Promise<StockListResult> {
-    const rows = [...this.ledger.stock.values()]
+    let rows = [...this.ledger.stock.values()]
       .filter((row) => row.qty > 0)
       .filter((row) =>
         query.unitId
@@ -58,10 +68,18 @@ export class MemoryStockRepository implements StockRepository {
             : true,
       )
       .filter((row) => (query.itemId ? row.itemId === query.itemId : true))
-      .filter((row) => (query.batchId ? row.batchId === query.batchId : true))
-      .sort((a, b) =>
-        `${a.unitId}|${a.itemId}|${a.batchId}`.localeCompare(`${b.unitId}|${b.itemId}|${b.batchId}`),
-      );
+      .filter((row) => (query.batchId ? row.batchId === query.batchId : true));
+    if (query.q) {
+      const keyword = query.q;
+      const matched: MemoryStockRecord[] = [];
+      for (const row of rows) {
+        if (await this.matchesQuery(row.itemId, row.batchId, keyword)) matched.push(row);
+      }
+      rows = matched;
+    }
+    rows = rows.sort((a, b) =>
+      `${a.unitId}|${a.itemId}|${a.batchId}`.localeCompare(`${b.unitId}|${b.itemId}|${b.batchId}`),
+    );
     const size = Math.min(Math.max(query.size ?? 20, 1), 50);
     const page = Math.max(query.page ?? 1, 1);
     const start = (page - 1) * size;
@@ -97,7 +115,7 @@ export class MemoryStockRepository implements StockRepository {
   }
 
   async listMovements(query: StockMovementListQuery): Promise<StockMovementListResult> {
-    const filtered = this.ledger.movements
+    let filtered = this.ledger.movements
       .filter((row) =>
         query.unitId
           ? row.unitId === query.unitId
@@ -106,8 +124,16 @@ export class MemoryStockRepository implements StockRepository {
             : true,
       )
       .filter((row) => (query.itemId ? row.itemId === query.itemId : true))
-      .filter((row) => (query.batchId ? row.batchId === query.batchId : true))
-      .reverse();
+      .filter((row) => (query.batchId ? row.batchId === query.batchId : true));
+    if (query.q) {
+      const keyword = query.q;
+      const matched: typeof filtered = [];
+      for (const row of filtered) {
+        if (await this.matchesQuery(row.itemId, row.batchId, keyword)) matched.push(row);
+      }
+      filtered = matched;
+    }
+    filtered = filtered.reverse();
     const size = Math.min(Math.max(query.size ?? 20, 1), 50);
     const page = Math.max(query.page ?? 1, 1);
     const start = (page - 1) * size;

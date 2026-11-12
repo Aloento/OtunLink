@@ -8,6 +8,8 @@ export interface StockListQuery {
   unitId?: string;
   itemId?: string;
   batchId?: string;
+  /** 关键词：物品名称 / SKU / 条码 / 批次号。 */
+  q?: string;
   page?: number;
   size?: number;
 }
@@ -16,6 +18,8 @@ export interface StockMovementListQuery {
   unitId?: string;
   itemId?: string;
   batchId?: string;
+  /** 关键词：物品名称 / SKU / 条码 / 批次号。 */
+  q?: string;
   page?: number;
   size?: number;
 }
@@ -25,6 +29,7 @@ function toQuery(params: StockListQuery | StockMovementListQuery): string {
   if (params.unitId) search.set('unitId', params.unitId);
   if (params.itemId) search.set('itemId', params.itemId);
   if (params.batchId) search.set('batchId', params.batchId);
+  if (params.q) search.set('q', params.q);
   if (params.page !== undefined) search.set('page', String(params.page));
   if (params.size !== undefined) search.set('size', String(params.size));
   const qs = search.toString();

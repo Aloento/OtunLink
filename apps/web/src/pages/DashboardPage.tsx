@@ -155,6 +155,7 @@ export function DashboardPage() {
 }
 
 function TodoCard({ todo }: { todo: DashboardTodoItem }) {
+  const { t } = useTranslation();
   return (
     <Link
       to={todo.link}
@@ -167,7 +168,7 @@ function TodoCard({ todo }: { todo: DashboardTodoItem }) {
         icon={<ClipboardList aria-hidden />}
         meta={
           <span className="inline-flex items-center gap-1 text-brand-700 opacity-0 transition-opacity group-hover:opacity-100">
-            去处理
+            {t('dashboard.goTo')}
             <ArrowRight aria-hidden className="size-3" />
           </span>
         }
