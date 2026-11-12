@@ -10,6 +10,7 @@
     "dev:api": "pnpm --filter @otunlink/api dev",
     "dev:api:local": "pnpm --filter @otunlink/api dev:local",
     "dev:web": "pnpm --filter @otunlink/web dev",
-    "check:i18n-keys": "node scripts/check-i18n-keys.mjs"
+    "check:i18n-keys": "node scripts/check-i18n-keys.mjs",
+    "smoke:sql": "node scripts/smoke-sql.mjs"
   }
 }
