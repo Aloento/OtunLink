@@ -127,8 +127,8 @@ describe('列对齐', () => {
       />,
     );
 
-    const headers = [...container.querySelectorAll('th')];
-    const cells = [...container.querySelectorAll('tbody td')];
+    const headers = [...container.querySelectorAll<HTMLTableCellElement>('th')];
+    const cells = [...container.querySelectorAll<HTMLTableCellElement>('tbody td')];
 
     expect(headers[0]?.style.getPropertyValue('--cell-align')).toBe('start');
     expect(headers[1]?.style.getPropertyValue('--cell-align')).toBe('end');
