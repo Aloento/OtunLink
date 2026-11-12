@@ -64,6 +64,7 @@ export const zhCN = {
     pagination: '分页',
     previousPage: '上一页',
     nextPage: '下一页',
+    retry: '重试',
     actions: '操作',
     search: '搜索',
     globalSearch: '搜索页面、物品、单据…',

@@ -5,10 +5,12 @@ import { Link } from 'react-router-dom';
 
 import type { DashboardTodoItem } from '@otunlink/shared';
 
+import { errorI18nKey, isApiError } from '../api/http';
 import { getDashboardTodos, listNotifications } from '../api/notifications';
 import { RefreshButton } from '../components/RefreshButton';
 import { useLocale } from '../i18n/LocaleProvider';
 import { formatDateTime } from '../i18n/format';
+import { Button } from '../ui/button';
 import { Skeleton } from '../ui/skeleton';
 import { StatCard } from '../ui/stat';
 import { PageHeader } from '../ui/page-header';
@@ -31,7 +33,19 @@ export function DashboardPage() {
   const todos = todosQuery.data?.items ?? [];
   const recentNotifications = recentNotificationsQuery.data?.items ?? [];
   const isLoading = todosQuery.isLoading || recentNotificationsQuery.isLoading;
+  const failed = todosQuery.error ?? recentNotificationsQuery.error;
   const isError = todosQuery.isError || recentNotificationsQuery.isError;
+  // 「发生未知错误」对用户没有任何信息量：能拿到 API 错误码就翻成可读文案，
+  // 同时给一个重试入口，不用刷新整页。
+  const errorText = failed
+    ? isApiError(failed)
+      ? t(errorI18nKey(failed.code))
+      : t('errors.UNKNOWN')
+    : t('errors.UNKNOWN');
+  const retry = () => {
+    void todosQuery.refetch();
+    void recentNotificationsQuery.refetch();
+  };
 
   const pending = todos.reduce((sum, todo) => sum + todo.count, 0);
 
@@ -49,9 +63,15 @@ export function DashboardPage() {
       />
 
       {isError ? (
-        <p role="alert" className="rounded-[var(--radius-card)] border border-danger-200 bg-danger-50 px-3 py-2 text-xs text-danger-600">
-          {t('errors.UNKNOWN')}
-        </p>
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-card)] border border-danger-200 bg-danger-50 px-3 py-2 text-xs text-danger-600"
+        >
+          <span>{errorText}</span>
+          <Button size="sm" variant="secondary" onClick={retry}>
+            {t('common.retry')}
+          </Button>
+        </div>
       ) : null}
 
       <section aria-labelledby="dashboard-todos" className="flex flex-col gap-2">

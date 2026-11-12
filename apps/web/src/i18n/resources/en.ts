@@ -68,6 +68,7 @@ export const en: TranslationSchema = {
     pagination: 'Pagination',
     previousPage: 'Previous page',
     nextPage: 'Next page',
+    retry: 'Retry',
     actions: 'Actions',
     search: 'Search',
     globalSearch: 'Search pages, items, orders…',
