@@ -9,7 +9,7 @@ import {
   type VisibilityState,
 } from '@tanstack/react-table';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, ChevronUp, Columns3 } from 'lucide-react';
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '../lib/cn';
@@ -237,10 +237,15 @@ export function DataTable<T>({
                       scope="col"
                       // aria-sort 只加在可排序列上：念出来就是「已按数量降序排列」
                       aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : undefined}
-                      // textAlign 用内联样式：表头样式写在 components 层，靠工具类去覆盖容易
-                      // 被层叠顺序翻盘，内联样式则永远与单元格一致。
-                      style={{ width: header.getSize(), textAlign: align === 'end' ? 'end' : 'start' }}
-                      className={cn('relative', align === 'end' && 'text-end', isSticky && 'app-table-sticky')}
+                      // 对齐通过自定义属性传给样式表：表头与单元格读同一个变量，
+                      // 既不会被层叠顺序翻盘，也不把静态样式写死在内联 style 里。
+                      style={
+                        {
+                          width: header.getSize(),
+                          '--cell-align': align === 'end' ? 'end' : 'start',
+                        } as CSSProperties
+                      }
+                      className={cn('relative', isSticky && 'app-table-sticky')}
                     >
                       {canSort ? (
                         <button
@@ -335,16 +340,13 @@ export function DataTable<T>({
                     return (
                       <td
                         key={cell.id}
-                        style={{
-                          width: cell.column.getSize(),
-                          textAlign: meta?.align === 'end' ? 'end' : 'start',
-                        }}
-                        className={cn(
-                          'truncate',
-                          meta?.align === 'end' && 'text-end',
-                          isSticky && 'app-table-sticky',
-                          meta?.className,
-                        )}
+                        style={
+                          {
+                            width: cell.column.getSize(),
+                            '--cell-align': meta?.align === 'end' ? 'end' : 'start',
+                          } as CSSProperties
+                        }
+                        className={cn('truncate', isSticky && 'app-table-sticky', meta?.className)}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>

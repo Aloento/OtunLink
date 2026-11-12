@@ -39,8 +39,9 @@ describe('DataTable', () => {
     expect(within(table).getAllByRole('row')).toHaveLength(3); // 表头 + 2 行
     expect(within(table).getByText('苹果')).toBeTruthy();
 
-    const qtyCell = within(table).getAllByRole('cell')[1]!;
-    expect(qtyCell.className).toContain('text-end');
+    const qtyCell = within(table).getAllByRole('cell')[1]! as HTMLTableCellElement;
+    // 对齐走列的 --cell-align（样式表统一取用），不再靠工具类
+    expect(qtyCell.style.getPropertyValue('--cell-align')).toBe('end');
   });
 
   it('客户端排序：点表头在升序/降序之间切换，并写 aria-sort', () => {
@@ -101,6 +102,41 @@ describe('DataTable', () => {
       <DataTable tableId="t5" caption="清单" columns={columns} rows={[]} rowKey={(r) => r.id} loading empty={<p>空</p>} />,
     );
     expect(screen.queryByText('空')).toBeNull();
+  });
+});
+
+describe('列对齐', () => {
+  // 回归：曾经表头用工具类、单元格用另一种写法，导致「表头靠左、数字靠右」。
+  // 现在两边都从列定义的 align 生成 --cell-align，必须完全一致。
+  it('表头与单元格携带同一个 --cell-align，且默认 start', () => {
+    const { container } = render(
+      <DataTable
+        tableId="t-align"
+        caption="清单"
+        columns={[
+          { id: 'name', header: '名称', cell: (row: { id: string; qty: string }) => row.id },
+          {
+            id: 'qty',
+            header: '数量',
+            align: 'end',
+            cell: (row: { id: string; qty: string }) => row.qty,
+          },
+        ]}
+        rows={[{ id: 'a', qty: '5' }]}
+        rowKey={(row) => row.id}
+      />,
+    );
+
+    const headers = [...container.querySelectorAll('th')];
+    const cells = [...container.querySelectorAll('tbody td')];
+
+    expect(headers[0]?.style.getPropertyValue('--cell-align')).toBe('start');
+    expect(headers[1]?.style.getPropertyValue('--cell-align')).toBe('end');
+    expect(cells[0]?.style.getPropertyValue('--cell-align')).toBe('start');
+    expect(cells[1]?.style.getPropertyValue('--cell-align')).toBe('end');
+    // 不再用工具类做对齐：两套机制并存时哪套生效取决于层叠顺序
+    expect(headers[1]?.className).not.toContain('text-end');
+    expect(cells[1]?.className).not.toContain('text-end');
   });
 });
 

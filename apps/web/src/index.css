@@ -350,13 +350,16 @@
     color: var(--color-ink-muted);
     font-weight: 600;
     font-size: 0.75rem; /* 12px */
-    text-align: start;
+    /* 对齐由列的 --cell-align 决定：表头与单元格共用同一个值，
+       不会出现「表头靠左、数字靠右」的错位。 */
+    text-align: var(--cell-align, start);
     white-space: nowrap;
   }
 
   .app-table tbody td {
     height: var(--row-h);
     padding: 0 var(--cell-x);
+    text-align: var(--cell-align, start);
     border-bottom: 1px solid var(--color-line);
     vertical-align: middle;
     /* 数字列上下对齐，金额不会因为字形宽度跳动 */
