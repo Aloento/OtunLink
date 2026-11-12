@@ -84,6 +84,9 @@ export const en: TranslationSchema = {
     sidebarExpand: 'Expand sidebar',
     sidebarCollapse: 'Collapse sidebar',
     collapse: 'Collapse',
+    mainNav: 'Main navigation',
+    more: 'More',
+    allFeatures: 'All features',
     tableShown: '{{shown}} rows',
     tableShownOfTotal: 'Showing {{shown}} of {{total}}',
     picker: {

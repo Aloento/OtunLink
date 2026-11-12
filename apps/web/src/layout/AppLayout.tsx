@@ -1,27 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowDownToLine,
-  ArrowUpFromLine,
   Bell,
-  Boxes,
-  Building2,
   ChevronDown,
   ChevronsLeft,
   ChevronsRight,
-  Handshake,
-  LayoutDashboard,
   Languages,
   LogOut,
   Package,
   PanelLeft,
-  ReceiptText,
   Rows3,
-  ScrollText,
   Search,
-  Tags,
-  Truck,
-  Undo2,
-  Users,
 } from 'lucide-react';
 import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,9 +24,11 @@ import { Copyright } from '../components/Copyright';
 import { useLocale } from '../i18n/LocaleProvider';
 import { cn } from '../lib/cn';
 import { useHotkeys } from '../lib/useHotkeys';
+import { MobileNav } from './MobileNav';
 import { useMediaQuery } from './useMediaQuery';
 import { usePersistentState } from '../lib/usePersistentState';
 import { canAccessPermissions } from '../routes/access';
+import { NAV_ICONS } from '../routes/nav-icons';
 import { NAV_ADMIN, NAV_MAIN, ROUTES, type RouteKey } from '../routes/routes';
 import { Badge } from '../ui/badge';
 import type { CommandAction, CommandGroup } from '../ui/command-palette';
@@ -63,24 +53,6 @@ const CommandPalette = lazy(() =>
 // ERP 的使用者一天要在十几个列表页之间跳，导航必须在第一屏、且位置永不变：
 // 侧栏不随滚动离开视口，内容区自己滚。
 // ---------------------------------------------------------------------------
-
-const NAV_ICONS: Partial<Record<RouteKey, ReactNode>> = {
-  dashboard: <LayoutDashboard aria-hidden className="size-4" />,
-  shipments: <Truck aria-hidden className="size-4" />,
-  items: <Package aria-hidden className="size-4" />,
-  inbound: <ArrowDownToLine aria-hidden className="size-4" />,
-  outbound: <ArrowUpFromLine aria-hidden className="size-4" />,
-  returns: <Undo2 aria-hidden className="size-4" />,
-  sales: <ReceiptText aria-hidden className="size-4" />,
-  partnerships: <Handshake aria-hidden className="size-4" />,
-  inventory: <Boxes aria-hidden className="size-4" />,
-  retailPrices: <Tags aria-hidden className="size-4" />,
-  adminUsers: <Users aria-hidden className="size-4" />,
-  adminUnits: <Building2 aria-hidden className="size-4" />,
-  adminAuditLogs: <ScrollText aria-hidden className="size-4" />,
-  adminTestEmail: <ScrollText aria-hidden className="size-4" />,
-  notifications: <Bell aria-hidden className="size-4" />,
-};
 
 function permittedRoutes(role: Parameters<typeof canAccessPermissions>[0]): {
   main: RouteKey[];
@@ -411,29 +383,7 @@ export function AppLayout() {
         )}
       </div>
 
-      {isMobile ? (
-        <nav
-          aria-label={t('common.search')}
-          className="fixed inset-x-0 bottom-0 z-20 flex gap-0.5 overflow-x-auto border-t border-line bg-surface px-1 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))]"
-        >
-          {[...nav.main, ...nav.admin].slice(0, 6).map((key) => (
-            <NavLink
-              key={key}
-              to={ROUTES[key].path}
-              end={ROUTES[key].path === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'flex min-w-14 flex-1 flex-col items-center gap-0.5 rounded-[var(--radius-control)] px-1 py-1 text-[10px]',
-                  isActive ? 'text-brand-700' : 'text-ink-subtle',
-                )
-              }
-            >
-              {NAV_ICONS[key]}
-              <span className="truncate">{t(`nav.${ROUTES[key].navKey}`)}</span>
-            </NavLink>
-          ))}
-        </nav>
-      ) : null}
+      {isMobile ? <MobileNav main={nav.main} admin={nav.admin} /> : null}
 
 
       {paletteOpen ? (

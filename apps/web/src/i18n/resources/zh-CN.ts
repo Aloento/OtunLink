@@ -80,6 +80,9 @@ export const zhCN = {
     sidebarExpand: '展开侧栏',
     sidebarCollapse: '收起侧栏',
     collapse: '收起',
+    mainNav: '主导航',
+    more: '更多',
+    allFeatures: '全部功能',
     tableShown: '共 {{shown}} 条',
     tableShownOfTotal: '显示 {{shown}} 条 / 共 {{total}} 条',
     picker: {
