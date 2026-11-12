@@ -18,6 +18,7 @@ import { specUnitOf, unitLabel } from '../../i18n/units';
 import { Button } from '../../ui/button';
 import { EntityPicker, type PickerOption } from '../../ui/entity-picker';
 import { Field } from '../../ui/field';
+import { FormActions } from '../../ui/form-actions';
 import { Input } from '../../ui/input';
 import { PageHeader } from '../../ui/page-header';
 import { Select } from '../../ui/select';
@@ -339,7 +340,7 @@ export function InboundFormPage() {
         })}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <FormActions>
         <Button variant="primary" loading={saving} onClick={() => void submit()}>
           {t('inbound.createAndPost')}
         </Button>
@@ -350,7 +351,7 @@ export function InboundFormPage() {
         >
           <Link to="/inbound">{t('inbound.cancel')}</Link>
         </Button>
-      </div>
+      </FormActions>
     </div>
   );
 }

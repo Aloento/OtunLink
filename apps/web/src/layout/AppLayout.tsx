@@ -25,7 +25,7 @@ import { useLocale } from '../i18n/LocaleProvider';
 import { cn } from '../lib/cn';
 import { useHotkeys } from '../lib/useHotkeys';
 import { MobileNav } from './MobileNav';
-import { useMediaQuery } from './useMediaQuery';
+import { MOBILE_QUERY, DESKTOP_QUERY, useMediaQuery } from '../lib/useMediaQuery';
 import { usePersistentState } from '../lib/usePersistentState';
 import { canAccessPermissions } from '../routes/access';
 import { NAV_ICONS } from '../routes/nav-icons';
@@ -186,8 +186,8 @@ export function AppLayout() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [density, setDensity] = useDensity();
 
-  const isDesktop = useMediaQuery('(min-width: 1025px)');
-  const isMobile = useMediaQuery('(max-width: 767px)');
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const isMobile = useMediaQuery(MOBILE_QUERY);
 
   const nav = permittedRoutes(me?.role ?? null);
   const roleLabel = me?.role ? t(`roles.${me.role}`) : t('common.notAssigned');

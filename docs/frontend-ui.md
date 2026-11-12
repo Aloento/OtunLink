@@ -209,12 +209,84 @@ Tooltip 不是唯一信息来源：触发元素自身仍需 `aria-label`。
 替代 `window.confirm`（阻塞、不可样式化、无法键盘聚焦到具体按钮）。
 `tone="danger"` 时初始焦点落在「取消」上，误触 Enter 不会执行危险操作。
 
+### DataTable（列表页主力）
+```tsx
+<DataTable
+  tableId="sales-orders"            // localStorage 命名空间：列宽/显隐/排序按此保存
+  caption={t('sales.title')}
+  columns={[{ id, header, cell, width, minWidth, align: 'end', sortable, sortValue, sticky, hideable }]}
+  rows={data?.items ?? []}
+  rowKey={(row) => row.id}
+  total={total}
+  loading={isLoading}
+  error={isError ? t('errors.UNKNOWN') : undefined}
+  empty={<Empty … />}
+  onRowClick={(row) => navigate(`/sales/${row.id}`)}
+  rowActions={(row) => <DropdownMenu … />}
+  toolbar={<FilterBar … />}
+  footer={<TablePager … />}
+  sortMode="none" | "client" | "server"
+  stickyFirstColumn
+  maxHeight="calc(100dvh - 15rem)"
+/>
+```
+- **服务端分页时不要给 `sortMode="client"`**：那会变成「只排当前页」的假排序。
+  要排序就接 `sortMode="server"` + 后端 `sort` 参数，或者整表加载后再用 client。
+- `sortValue` 是必填的客户端排序取值函数；不给则该列不可排。
+- 对齐只有一个来源：列的 `align`。组件把它写成 `--cell-align` 自定义属性，
+  样式表里 `<th>` 与 `<td>` 共用这个变量 —— **不要**在 `cell` 里塞
+  `className="text-end"`，那正是表头靠左、数字靠右的成因。
+- 手机上自动切成卡片列表（主列在卡片顶部，其余列变「标签 — 值」）。
+  不需要卡片时传 `mobileCards={false}`。
+
+### FilterBar / TablePager / TableCount
+列表页统一：`PageHeader` → `DataTable`（`toolbar=FilterBar`、`footer=TablePager`）。
+搜索框 250ms 防抖（`useDebouncedValue`），筛选变化必须把页码重置回 1。
+
+### EntityPicker（大量记录的单选）
+```tsx
+<EntityPicker
+  value={itemId}
+  displayValue={name}               // 编辑态回填的显示文本
+  title={t('sales.itemName')}
+  aria-label={t('sales.itemName')}
+  onSearch={async (q, page) => {
+    const result = await listItems({ q: q || undefined, page, size: 50 });
+    return { total: result.total, items: result.items.map((i) => ({ id: i.id, label: i.name, meta: i.sku })) };
+  }}
+  onChange={(option) => setItemId(option.id)}
+/>
+```
+**物品/客户这类上千条的记录一律用它，不要用 `<Select>` 装前 100 条** ——
+「下拉框里搜不到 = 数据丢了」是这套 UI 最初被推翻的原因。
+表单里每个行都要独立的选择器，不要共用一个搜索框。
+
+### Facts（详情页摘要）
+```tsx
+<Facts boxed items={[[t('sales.status'), …], [t('sales.totalAmount'), amount]]} />
+```
+`<dl>` + 标签左/值右；数字列自动 `tabular-nums`。新详情页不要再手写 `<dl>` 堆叠。
+
+### FormActions（表单吸底操作条）
+```tsx
+<FormActions hint={t('sales.saveDraftHint')}>
+  <Button variant="primary" loading={saving}>…</Button>
+  <Button asChild variant="secondary"><Link …>…</Link></Button>
+</FormActions>
+```
+小屏会自动抬到底部导航之上（`bottom-[calc(3.75rem+env(safe-area-inset-bottom))]`）。
+
+### MobileNav（手机底部导航）
+4 个主入口（取角色可见 `nav.main` 前四个）+「更多」（原生 `<dialog>` 列全量、按
+业务/管理分组）。**不要再往底栏里塞第 5 个页面**，也不要靠横向滚动藏入口。
+
+
 ## 5. Fluent → 本栈 迁移对照
 
 | 旧 | 新 |
 | --- | --- |
 | `<Title1 as="h1">` | `<PageHeader title=…>` 或 `<h1 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">` |
-| `<Title3>` / `<Text as="h2" weight="semibold" size={400}>` | `<h2 className="text-base font-semibold text-ink">` |
+| `<Title3>` / `<Text as="h2" weight="semibold" size={400}>` | `<h2 className="text-[13px] font-semibold text-ink">` |
 | `<Body1>` | `<p className="text-sm text-ink-muted">` |
 | `<Text size={200}>` / `<Caption1>` | `<span className="text-xs text-ink-subtle">` |
 | `<Text className="text-red-600">`（错误） | `<p role="alert" className="text-sm text-danger-600">` |
@@ -241,10 +313,17 @@ Tooltip 不是唯一信息来源：触发元素自身仍需 `aria-label`。
 
 1. **不改业务逻辑**：API 调用、查询键、权限判断、状态机、i18n key、路由路径全部保持原样。
 2. **不改对外签名**：`src/components/*` 的导出名与 props 不变，只换内部实现。
-3. **不新增依赖**，不改 `package.json` / `vite.config.ts` / `index.css`。
+3. **依赖已锁定**：TanStack Table/Virtual、cmdk、sonner、若干 Radix 原语。
+   新增前先读 `docs/frontend-ui-audit.md` 的取舍；样式先进 `index.css` 的
+   `@theme`/组件层，不要在组件里堆任意值。
 4. **文案全部走 i18n**：不新增硬编码中文/英文（新增 key 时同步 `resources/zh-CN.ts` 与 `en.ts`）。
 5. **可访问性**：表单控件必须有 label 或 `aria-label`；图标按钮必须有 `aria-label`；
    错误提示加 `role="alert"`；不要用 `<div onClick>` 代替 `<button>`。
-6. **响应式**：先用移动端优先的类，再在 `sm:`/`md:`/`lg:` 上增强；栅格里的控件要能缩（`min-w-0`）。
+6. **响应式**：移动端优先，再在 `sm:`/`md:`/`lg:` 上增强；栅格里的控件要能缩
+   （`min-w-0`）。断点值只用 `lib/useMediaQuery.ts` 的 `MOBILE_QUERY` /
+   `DESKTOP_QUERY`，不要在别处再写一遍 `767px`。手机上的表格由 DataTable
+   自动切成卡片，**不要**用横向滚动兜住多出来的列。
 7. **不要用 `dark:`**，不要用 `prefers-color-scheme`。
 8. 页面外层统一 `flex flex-col gap-4` / `gap-6`，与现有节奏保持一致。
+9. **数字列对齐**：列定义写 `align: 'end'`，表头与单元格会一起右对齐；
+   禁止在 `cell` 内部单独加 `text-end`。

@@ -140,6 +140,49 @@ describe('列对齐', () => {
   });
 });
 
+describe('手机视图', () => {
+  it('窄屏渲染卡片列表而非横向滚动表格，主列在卡片顶部', () => {
+    const original = window.matchMedia;
+    // 只让手机断点命中，其它查询保持 false
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+
+    try {
+      render(
+        <DataTable
+          tableId="t-mobile"
+          caption="销售单"
+          columns={[
+            { id: 'no', header: '单号', sticky: true, cell: (row: { id: string; qty: string }) => row.id },
+            { id: 'qty', header: '数量', align: 'end', cell: (row: { id: string; qty: string }) => row.qty },
+          ]}
+          rows={[{ id: 'SO-1', qty: '5' }]}
+          rowKey={(row) => row.id}
+        />,
+      );
+
+      expect(screen.queryByRole('table')).toBeNull();
+      const list = screen.getByRole('list', { name: '销售单' });
+      const items = within(list).getAllByRole('listitem');
+      expect(items).toHaveLength(1);
+      // 主列（sticky）放在卡片顶部，其余列是标签/值
+      expect(within(items[0]!).getByText('SO-1')).toBeTruthy();
+      expect(within(items[0]!).getByText('数量')).toBeTruthy();
+      expect(within(items[0]!).getByText('5')).toBeTruthy();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+});
+
 describe('TablePager', () => {
   it('显示区间与总条数，并按边界禁用箭头', () => {
     const onChange = vi.fn();

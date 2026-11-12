@@ -20,6 +20,7 @@ import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid
 import { Button } from '../../ui/button';
 import { EntityPicker } from '../../ui/entity-picker';
 import { Field } from '../../ui/field';
+import { FormActions } from '../../ui/form-actions';
 import { Input } from '../../ui/input';
 import { PageHeader } from '../../ui/page-header';
 import { Select } from '../../ui/select';
@@ -477,7 +478,7 @@ export function OutboundFormPage() {
         {stockLoading && <Spinner size="sm" label={t('common.loading')} />}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <FormActions>
         <Button variant="primary" loading={saving} onClick={() => void submit()}>
           {t('outbound.create')}
         </Button>
@@ -488,7 +489,7 @@ export function OutboundFormPage() {
         >
           <Link to={isEdit ? `/outbound/${params.id}` : '/outbound'}>{t('outbound.cancel')}</Link>
         </Button>
-      </div>
+      </FormActions>
     </div>
   );
 }

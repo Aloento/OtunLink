@@ -17,6 +17,7 @@ import { specUnitOf, unitLabel } from '../../i18n/units';
 import { Button } from '../../ui/button';
 import { EntityPicker, type PickerOption } from '../../ui/entity-picker';
 import { Field } from '../../ui/field';
+import { FormActions } from '../../ui/form-actions';
 import { Input } from '../../ui/input';
 import { PageHeader } from '../../ui/page-header';
 import { Select } from '../../ui/select';
@@ -526,7 +527,7 @@ export function ShipmentFormPage() {
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <FormActions>
         <Button
           variant="primary"
           disabled={saving || !form.shipperUnitId || !form.receiverUnitId}
@@ -542,7 +543,7 @@ export function ShipmentFormPage() {
         >
           <Link to={isEdit ? `/shipments/${params.id}` : '/shipments'}>{t('shipments.cancel')}</Link>
         </Button>
-      </div>
+      </FormActions>
     </div>
   );
 }

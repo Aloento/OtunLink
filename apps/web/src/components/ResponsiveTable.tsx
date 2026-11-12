@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useMediaQuery } from '../layout/useMediaQuery';
+import { MOBILE_QUERY, useMediaQuery } from '../lib/useMediaQuery';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRegion, TableRow } from '../ui/table';
 
 // 响应式数据容器：桌面/平板渲染表格，手机（<768）渲染卡片列表。
@@ -39,7 +39,7 @@ export function ResponsiveTable<T>({
   label?: string;
 }) {
   const { t } = useTranslation();
-  const isMobile = useMediaQuery('(max-width: 767px)');
+  const isMobile = useMediaQuery(MOBILE_QUERY);
 
   if (items.length === 0) {
     return <p className="text-sm text-ink-subtle">{emptyText}</p>;

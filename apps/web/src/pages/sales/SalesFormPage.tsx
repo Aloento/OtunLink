@@ -9,6 +9,7 @@ import {
   SALES_SOURCES,
   type Currency,
   type DeliveryMethod,
+  type ItemDto,
   type RetailPriceDto,
   type SalesOrderCreateInput,
   type SalesOrderPatchInput,
@@ -28,6 +29,8 @@ import { specUnitOf, unitLabel } from '../../i18n/units';
 import { RefreshButton } from '../../components/RefreshButton';
 import { FIELD_OVERFLOW_GUARD, LINE_GRID_CLASS } from '../../components/lineGrid';
 import { Button } from '../../ui/button';
+import { EntityPicker } from '../../ui/entity-picker';
+import { FormActions } from '../../ui/form-actions';
 import { Field } from '../../ui/field';
 import { Input } from '../../ui/input';
 import { PageHeader } from '../../ui/page-header';
@@ -78,7 +81,6 @@ export function SalesFormPage() {
   const [carrier, setCarrier] = useState('');
   const [trackingNo, setTrackingNo] = useState('');
   const [lines, setLines] = useState<LineState[]>([emptyLine()]);
-  const [itemSearch, setItemSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lineErrors, setLineErrors] = useState<ExtractedSalesLineError[] | null>(null);
@@ -92,10 +94,15 @@ export function SalesFormPage() {
     queryFn: () => listPartnerships(),
   });
 
-  const { data: itemPage } = useQuery({
-    queryKey: ['items', 'picker', itemSearch],
-    queryFn: () => listItems({ q: itemSearch || undefined, size: 50 }),
-  });
+  // 选过的物品信息（名称/规格单位）：模态选择器只在「选择」这一刻拿到完整 DTO，
+  // 行上要显示名称与单位，所以按 itemId 存一份。编辑态用单据明细回填。
+  const [pickedItems, setPickedItems] = useState<Record<string, ItemDto>>({});
+  const rememberItems = (items: ItemDto[]) =>
+    setPickedItems((prev) => {
+      const next = { ...prev };
+      for (const item of items) next[item.id] = item;
+      return next;
+    });
 
   const { data: stockBatches } = useQuery({
     queryKey: ['stock', 'batches', sellerUnitId],
@@ -128,8 +135,7 @@ export function SalesFormPage() {
   const retailCurrencyOf = (itemId: string): string | undefined =>
     retailPriceByItem.get(itemId)?.currency;
 
-  const itemNameOf = (itemId: string): string =>
-    (itemPage?.items ?? []).find((candidate) => candidate.id === itemId)?.name ?? '—';
+  const itemNameOf = (itemId: string): string => pickedItems[itemId]?.name ?? itemId;
 
   const detailQuery = useQuery({
     queryKey: ['sales-orders', id],
@@ -171,6 +177,20 @@ export function SalesFormPage() {
       setRemark(order.remark ?? '');
       setCarrier(order.carrier ?? '');
       setTrackingNo(order.trackingNo ?? '');
+      // 明细行自带 itemName/spec/minSaleUnit：编辑态直接回填索引，不必再拉物品
+      setPickedItems((prev) => {
+        const next = { ...prev };
+        for (const line of order.items) {
+          next[line.itemId] = {
+            ...(next[line.itemId] ?? ({} as ItemDto)),
+            id: line.itemId,
+            name: line.itemName ?? line.itemId,
+            specUnit: (line.spec ?? 'PIECE') as ItemDto['specUnit'],
+            minSaleUnit: (line.minSaleUnit ?? 'PIECE') as ItemDto['minSaleUnit'],
+          } as ItemDto;
+        }
+        return next;
+      });
       setLines(
         order.items.length > 0
           ? order.items.map((line) => ({
@@ -440,14 +460,6 @@ export function SalesFormPage() {
               queryKey={['items', 'picker']}
               additionalKeys={[['stock', 'batches'], ['units', 'list'], ['partnerships', 'list']]}
             />
-            <Input
-              value={itemSearch}
-              placeholder={t('items.itemSearchPlaceholder')}
-              // 占位符不能当名字：输入框自己要有可访问名称。
-              aria-label={t('items.itemSearchPlaceholder')}
-              onChange={(e) => setItemSearch(e.target.value)}
-              className="w-40 sm:w-44"
-            />
             <Button size="sm" variant="secondary" onClick={() => setLines((prev) => [...prev, emptyLine()])}>
               {t('sales.addLine')}
             </Button>
@@ -458,24 +470,31 @@ export function SalesFormPage() {
           <div key={line.key} className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-3">
             <div className={`${LINE_GRID_CLASS} sm:grid-cols-[1fr_1fr_1fr_auto]`}>
               <Field className="min-w-0" label={t('sales.itemName')} required>
-                <Select
-                  className="w-full"
+                <EntityPicker
                   value={line.itemId}
-                  onValueChange={(next) => setLine(line.key, 'itemId', next)}
-                >
-                  <option value="">—</option>
-                  {(itemPage?.items ?? []).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                      {item.sku ? ` · ${item.sku}` : ''}
-                    </option>
-                  ))}
-                </Select>
+                  displayValue={pickedItems[line.itemId]?.name}
+                  title={t('sales.itemName')}
+                  placeholder={t('common.picker.select')}
+                  aria-label={t('sales.itemName')}
+                  onSearch={async (keyword, pickerPage) => {
+                    const result = await listItems({ q: keyword || undefined, page: pickerPage, size: 50 });
+                    rememberItems(result.items);
+                    return {
+                      total: result.total,
+                      items: result.items.map((item) => ({
+                        id: item.id,
+                        label: item.name,
+                        meta: [item.sku, item.barcode].filter(Boolean).join(' · ') || undefined,
+                      })),
+                    };
+                  }}
+                  onChange={(option) => setLine(line.key, 'itemId', option.id)}
+                />
               </Field>
               <Field
                 className="min-w-0"
                 label={`${t('sales.qty')}${(() => {
-                  const item = (itemPage?.items ?? []).find((candidate) => candidate.id === line.itemId);
+                  const item = pickedItems[line.itemId];
                   const unit = specUnitOf(item);
                   return unit ? ` (${unitLabel(t, unit, item?.minSaleUnit)})` : '';
                 })()}`}
@@ -534,24 +553,21 @@ export function SalesFormPage() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant="primary" loading={saving} onClick={() => void submit()}>
-            {isEdit ? t('sales.create') : t('sales.saveDraft')}
-          </Button>
-          <Button asChild variant="secondary">
-            <Link
-              to={isEdit ? `/sales/${id}` : '/sales'}
-              aria-disabled={saving || undefined}
-              tabIndex={saving ? -1 : undefined}
-              className={saving ? 'pointer-events-none opacity-50' : undefined}
-            >
-              {t('sales.cancel')}
-            </Link>
-          </Button>
-        </div>
-        {!isEdit && <p className="text-xs text-ink-subtle">{t('sales.saveDraftHint')}</p>}
-      </div>
+      <FormActions hint={!isEdit ? t('sales.saveDraftHint') : undefined}>
+        <Button variant="primary" loading={saving} onClick={() => void submit()}>
+          {isEdit ? t('sales.create') : t('sales.saveDraft')}
+        </Button>
+        <Button asChild variant="secondary">
+          <Link
+            to={isEdit ? `/sales/${id}` : '/sales'}
+            aria-disabled={saving || undefined}
+            tabIndex={saving ? -1 : undefined}
+            className={saving ? 'pointer-events-none opacity-50' : undefined}
+          >
+            {t('sales.cancel')}
+          </Link>
+        </Button>
+      </FormActions>
     </div>
   );
 }

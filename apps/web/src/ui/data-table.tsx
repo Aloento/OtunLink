@@ -13,9 +13,10 @@ import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '../lib/cn';
+import { MOBILE_QUERY, useMediaQuery } from '../lib/useMediaQuery';
 import { usePersistentState } from '../lib/usePersistentState';
 import { Empty } from './empty';
-import { SkeletonRows } from './skeleton';
+import { Skeleton, SkeletonRows } from './skeleton';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -105,6 +106,11 @@ interface DataTableProps<T> {
   getRowLabel?: (row: T) => string;
   /** 没有 caption 时的可访问名称（表格也需要名字，否则读屏只报「表格 5 行 8 列」）。 */
   ariaLabel?: string;
+  /**
+   * 手机上把表格换成卡片列表（默认开）。窄屏横向滚动表格的问题是：第一列之外的
+   * 列默认在视口外，用户既不知道有几列，也很难把一行读完整。
+   */
+  mobileCards?: boolean;
 }
 
 export function DataTable<T>({
@@ -131,8 +137,10 @@ export function DataTable<T>({
   maxHeight,
   getRowLabel,
   ariaLabel,
+  mobileCards = true,
 }: DataTableProps<T>) {
   const { t } = useTranslation();
+  const isMobile = useMediaQuery(MOBILE_QUERY);
   const [columnVisibility, setColumnVisibility] = usePersistentState<VisibilityState>(
     `table:${tableId}:columns`,
     {},
@@ -206,6 +214,81 @@ export function DataTable<T>({
   const visibleLeafColumns = table.getVisibleLeafColumns();
   const visibleColumnCount = visibleLeafColumns.length;
   const showEmpty = !loading && !error && rows.length === 0;
+
+  // 手机视图：同一份列定义渲染成卡片，主列（sticky 的那列，通常是单号/物品）
+  // 放在卡片顶部，其余列变成「标签 — 值」两列，不再需要横向滚动。
+  if (isMobile && mobileCards) {
+    const visibleIds = new Set(visibleLeafColumns.map((column) => column.id));
+    const primaryColumn = columns.find((column) => column.sticky) ?? columns[0];
+    const detailColumns = columns.filter(
+      (column) => column !== primaryColumn && visibleIds.has(column.id),
+    );
+
+    return (
+      <div
+        className={cn(
+          'flex min-w-0 flex-col rounded-[var(--radius-card)] border border-line bg-surface',
+          className,
+        )}
+      >
+        {toolbar}
+        {loading && rows.length === 0 ? (
+          <div className="flex flex-col gap-2 p-2">
+            {Array.from({ length: 6 }, (_, index) => (
+              <Skeleton key={index} className="h-16 w-full" />
+            ))}
+          </div>
+        ) : null}
+        {!loading && error ? (
+          <p role="alert" className="px-3 py-8 text-center text-sm text-danger-600">
+            {error}
+          </p>
+        ) : null}
+        {showEmpty ? <div className="p-2">{empty ?? <Empty title={t('common.noResults')} />}</div> : null}
+        {rows.length > 0 ? (
+          <ul role="list" aria-label={caption ?? ariaLabel} className="flex flex-col gap-2 p-2">
+            {rows.map((row) => (
+              <li
+                key={rowKey(row)}
+                // 鼠标用户点卡片任意位置即可进入详情；键盘用户走主列里的链接，
+                // 不把整张卡片做成 role="button"（会和卡片内的按钮/链接冲突）。
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                className={cn(
+                  'rounded-[var(--radius-card)] border border-line bg-surface p-3',
+                  onRowClick && 'cursor-pointer hover:border-line-hover',
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 text-[13px] font-medium text-ink">
+                    {primaryColumn?.cell(row)}
+                  </div>
+                  {rowActions ? <div className="shrink-0">{rowActions(row)}</div> : null}
+                </div>
+                {detailColumns.length > 0 ? (
+                  <dl className="mt-2 flex flex-col gap-1">
+                    {detailColumns.map((column) => (
+                      <div key={column.id} className="flex items-baseline justify-between gap-3">
+                        <dt className="shrink-0 text-[11px] text-ink-subtle">{column.header}</dt>
+                        <dd
+                          className={cn(
+                            'min-w-0 text-end text-[13px] text-ink',
+                            column.align === 'end' && 'tabular-nums',
+                          )}
+                        >
+                          {column.cell(row)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {footer}
+      </div>
+    );
+  }
   const hideableColumns = columns.filter((column) => column.hideable !== false);
 
   return (
